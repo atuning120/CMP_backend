@@ -5,6 +5,7 @@ import { AuthController } from './interface/http/controllers/auth.controller';
 import { LoginOperadorUseCase } from './application/use-cases/login-operador.use-case';
 import { LoginWebUseCase } from './application/use-cases/login-web.use-case';
 import { RegisterOperadorUseCase } from './application/use-cases/register-operador.use-case';
+import { JwtStrategy } from './infrastructure/strategies/jwt.strategy';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { OperadoresModule } from '../operadores/operadores.module';
 
@@ -22,7 +23,7 @@ import { OperadoresModule } from '../operadores/operadores.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [LoginOperadorUseCase, LoginWebUseCase, RegisterOperadorUseCase],
+  providers: [LoginOperadorUseCase, LoginWebUseCase, RegisterOperadorUseCase, JwtStrategy],
   exports: [JwtModule],
 })
 export class AuthModule { }
