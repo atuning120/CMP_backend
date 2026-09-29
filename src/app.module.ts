@@ -3,6 +3,14 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { TurnosModule } from './modules/turnos/turnos.module';
+import { AlertasModule } from './modules/alertas/alertas.module';
+import { GeocercasModule } from './modules/geocercas/geocercas.module';
+import { MaquinasModule } from './modules/maquinas/maquinas.module';
+import { EvidenciasModule } from './modules/evidencias/evidencias.module';
+import { OperadoresModule } from './modules/operadores/operadores.module';
+import { TrackingModule } from './modules/tracking/tracking.module';
+import { UsuariosModule } from './modules/usuarios/usuarios.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -20,8 +28,16 @@ import { TurnosModule } from './modules/turnos/turnos.module';
       synchronize: false, // Las migraciones se encargarán del esquema, no sincronizar automático en dev/prod reales.
     }),
     TurnosModule,
+    AlertasModule,
+    GeocercasModule,
+    MaquinasModule,
+    EvidenciasModule,
+    OperadoresModule,
+    TrackingModule,
+    UsuariosModule,
+    AuthModule,
   ],
   controllers: [],
   providers: [],
 })
-export class AppModule {}
+export class AppModule { }
