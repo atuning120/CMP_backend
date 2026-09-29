@@ -1,6 +1,6 @@
 import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { LoginOperadorUseCase } from '../../../application/use-cases/login-operador.use-case';
-import { LoginOperadorRequestDto } from '../dtos/login-operador.request.dto';
+import { LoginRequestDto } from '../dtos/login-operador.request.dto';
 import { RegisterOperadorRequestDto } from '../dtos/register-operador.request.dto';
 import { LoginWebRequestDto } from '../dtos/login-web.request.dto';
 import { LoginWebUseCase } from '../../../application/use-cases/login-web.use-case';
@@ -21,7 +21,7 @@ export class AuthController {
 
   @Post('login/operador')
   @HttpCode(HttpStatus.OK)
-  async loginOperador(@Body() body: LoginOperadorRequestDto) {
+  async loginOperador(@Body() body: LoginRequestDto) {
     return this.loginOperadorUseCase.execute(body);
   }
 

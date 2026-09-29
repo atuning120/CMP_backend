@@ -5,7 +5,7 @@ import { USUARIO_REPOSITORY } from '../../../usuarios/domain/repositories/usuari
 import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import { OPERADOR_REPOSITORY } from '../../../operadores/domain/repositories/operador.repository.port';
 import type { OperadorRepositoryPort } from '../../../operadores/domain/repositories/operador.repository.port';
-import { LoginOperadorRequestDto } from '../../interface/http/dtos/login-operador.request.dto';
+import { LoginRequestDto } from '../../interface/http/dtos/login-operador.request.dto';
 
 @Injectable()
 export class LoginOperadorUseCase {
@@ -17,19 +17,30 @@ export class LoginOperadorUseCase {
     private readonly jwtService: JwtService,
   ) {}
 
-  async execute(dto: LoginOperadorRequestDto): Promise<{ accessToken: string }> {
-    // 1. Buscar al operador por RUT
-    const operador = await this.operadorRepo.findByRut(dto.rut);
-    if (!operador) {
-      throw new UnauthorizedException('Credenciales inválidas');
-    }
-    
-    if (operador.estado !== 'ACTIVO') {
-      throw new UnauthorizedException('Operador inactivo');
+  async execute(dto: LoginRequestDto): Promise<{ accessToken: string }> {
+    if (!dto.rut && !dto.email) {
+      throw new UnauthorizedException('Debe proporcionar RUT o Email para iniciar sesión');
     }
 
-    // 2. Buscar al usuario asociado a este operador
-    const usuario = await this.usuarioRepo.findByIdOperador(operador.idOperador);
+    let usuario;
+    let idOperador: number | null = null;
+
+    // 1. Buscar por RUT o Email
+    if (dto.rut) {
+      const operador = await this.operadorRepo.findByRut(dto.rut);
+      if (!operador || operador.estado !== 'ACTIVO') {
+        throw new UnauthorizedException('Credenciales inválidas o operador inactivo');
+      }
+      idOperador = operador.idOperador;
+      usuario = await this.usuarioRepo.findByIdOperador(operador.idOperador);
+    } else if (dto.email) {
+      usuario = await this.usuarioRepo.findByEmail(dto.email);
+      if (usuario) {
+        idOperador = usuario.idOperador;
+      }
+    }
+
+    // 2. Verificar usuario
     if (!usuario) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
@@ -45,7 +56,7 @@ export class LoginOperadorUseCase {
     }
 
     // 4. Generar JWT
-    const payload = { sub: usuario.idUsuario, rol: usuario.rol, idOperador: operador.idOperador };
+    const payload = { sub: usuario.idUsuario, rol: usuario.rol, idOperador: idOperador };
     const accessToken = this.jwtService.sign(payload);
 
     return { accessToken };
