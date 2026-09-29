@@ -11,13 +11,14 @@ export class UsuarioPostgresqlRepository implements UsuarioRepositoryPort {
     private readonly ormRepo: Repository<UsuarioOrmEntity>,
   ) {}
 
-  async findByEmail(email: string): Promise<{ idUsuario: number; rol: string; passwordHash: string | null } | null> {
+  async findByEmail(email: string): Promise<{ idUsuario: number; rol: string; passwordHash: string | null; idOperador: number | null } | null> {
     const usuario = await this.ormRepo.findOne({ where: { email, activo: true } });
     if (!usuario) return null;
     return {
       idUsuario: usuario.id_usuario,
       rol: usuario.rol,
       passwordHash: usuario.password_hash,
+      idOperador: usuario.id_operador,
     };
   }
 
