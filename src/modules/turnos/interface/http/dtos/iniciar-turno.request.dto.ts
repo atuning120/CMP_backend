@@ -1,5 +1,5 @@
 export class IniciarTurnoRequestDto {
-  idOperador: string;
-  idMaquina: string;
+  idOperador: number;
+  idMaquina: number;
   horometroInicial: number;
 }

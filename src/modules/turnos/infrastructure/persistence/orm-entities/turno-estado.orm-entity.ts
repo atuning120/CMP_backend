@@ -1,24 +1,27 @@
-import { Entity, PrimaryColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { TurnoOrmEntity } from './turno.orm-entity';
 
-@Entity('turno_estados')
+@Entity('turno_estado')
 export class TurnoEstadoOrmEntity {
-  @PrimaryColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn({ name: 'id_turno_estado' })
+  id_turno_estado: number;
 
-  @Column('uuid')
-  id_turno: string;
+  @Column('integer', { name: 'id_turno' })
+  id_turno: number;
 
   @ManyToOne(() => TurnoOrmEntity)
   @JoinColumn({ name: 'id_turno' })
   turno: TurnoOrmEntity;
 
-  @Column('varchar')
-  id_estado_operacional: string;
+  @Column('integer', { name: 'id_estado' })
+  id_estado: number;
 
-  @Column('timestamp')
-  fecha_inicio: Date;
+  @Column('timestamp with time zone', { name: 'inicio' })
+  inicio: Date;
 
-  @Column('timestamp', { nullable: true })
-  fecha_fin: Date | null;
+  @Column('timestamp with time zone', { name: 'fin', nullable: true })
+  fin: Date | null;
+
+  @Column('text', { name: 'comentario', nullable: true })
+  comentario: string | null;
 }

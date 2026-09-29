@@ -12,37 +12,39 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
     private readonly ormRepository: Repository<TurnoOrmEntity>,
   ) {}
 
-  async save(turno: Turno): Promise<void> {
+  async save(turno: Turno): Promise<Turno> {
     const ormEntity = this.ormRepository.create({
-      id: turno.id,
+      id_turno: turno.id ?? undefined, // Undefined lets TypeORM rely on DB defaults (nextval)
       id_operador: turno.idOperador,
       id_maquina: turno.idMaquina,
-      fecha_inicio: turno.fechaInicio,
-      fecha_fin: turno.fechaFin,
+      fecha_turno: turno.fechaInicio, // Asumiendo fecha de inicio como fecha de turno para simplificar
+      hora_inicio: turno.fechaInicio,
+      hora_termino: turno.fechaFin,
       horometro_inicial: turno.horometroInicial,
       horometro_final: turno.horometroFinal,
-      estado_actual: turno.estadoActual,
+      estado: turno.estadoActual,
     });
-    await this.ormRepository.save(ormEntity);
+    const saved = await this.ormRepository.save(ormEntity);
+    return this.mapToDomain(saved);
   }
 
-  async findById(id: string): Promise<Turno | null> {
-    const ormEntity = await this.ormRepository.findOne({ where: { id } });
+  async findById(id: number): Promise<Turno | null> {
+    const ormEntity = await this.ormRepository.findOne({ where: { id_turno: id } });
     if (!ormEntity) return null;
     return this.mapToDomain(ormEntity);
   }
 
-  async findActivoByMaquina(idMaquina: string): Promise<Turno | null> {
+  async findActivoByMaquina(idMaquina: number): Promise<Turno | null> {
     const ormEntity = await this.ormRepository.findOne({
-      where: { id_maquina: idMaquina, fecha_fin: IsNull() },
+      where: { id_maquina: idMaquina, hora_termino: IsNull() },
     });
     if (!ormEntity) return null;
     return this.mapToDomain(ormEntity);
   }
 
-  async findActivoByOperador(idOperador: string): Promise<Turno | null> {
+  async findActivoByOperador(idOperador: number): Promise<Turno | null> {
     const ormEntity = await this.ormRepository.findOne({
-      where: { id_operador: idOperador, fecha_fin: IsNull() },
+      where: { id_operador: idOperador, hora_termino: IsNull() },
     });
     if (!ormEntity) return null;
     return this.mapToDomain(ormEntity);
@@ -50,14 +52,14 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
 
   private mapToDomain(ormEntity: TurnoOrmEntity): Turno {
     return new Turno(
-      ormEntity.id,
+      ormEntity.id_turno,
       ormEntity.id_operador,
       ormEntity.id_maquina,
-      ormEntity.fecha_inicio,
-      ormEntity.fecha_fin,
-      ormEntity.horometro_inicial,
-      ormEntity.horometro_final,
-      ormEntity.estado_actual,
+      ormEntity.hora_inicio,
+      ormEntity.hora_termino,
+      Number(ormEntity.horometro_inicial),
+      ormEntity.horometro_final ? Number(ormEntity.horometro_final) : null,
+      ormEntity.estado,
     );
   }
 }

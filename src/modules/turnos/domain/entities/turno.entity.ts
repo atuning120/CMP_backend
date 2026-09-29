@@ -1,8 +1,8 @@
 export class Turno {
   constructor(
-    public readonly id: string,
-    public readonly idOperador: string,
-    public readonly idMaquina: string,
+    public id: number | null,
+    public readonly idOperador: number,
+    public readonly idMaquina: number,
     public readonly fechaInicio: Date,
     public fechaFin: Date | null,
     public horometroInicial: number,

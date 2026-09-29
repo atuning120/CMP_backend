@@ -1,28 +1,31 @@
-import { Entity, PrimaryColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-@Entity('turnos')
+@Entity('turno')
 export class TurnoOrmEntity {
-  @PrimaryColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn({ name: 'id_turno' })
+  id_turno: number;
 
-  @Column('uuid')
-  id_operador: string;
+  @Column('integer', { name: 'id_operador' })
+  id_operador: number;
 
-  @Column('uuid')
-  id_maquina: string;
+  @Column('integer', { name: 'id_maquina' })
+  id_maquina: number;
 
-  @Column('timestamp')
-  fecha_inicio: Date;
+  @Column('date', { name: 'fecha_turno' })
+  fecha_turno: Date;
 
-  @Column('timestamp', { nullable: true })
-  fecha_fin: Date | null;
+  @Column('timestamp with time zone', { name: 'hora_inicio' })
+  hora_inicio: Date;
 
-  @Column('float')
+  @Column('timestamp with time zone', { name: 'hora_termino', nullable: true })
+  hora_termino: Date | null;
+
+  @Column('numeric', { name: 'horometro_inicial', precision: 10, scale: 2 })
   horometro_inicial: number;
 
-  @Column('float', { nullable: true })
+  @Column('numeric', { name: 'horometro_final', precision: 10, scale: 2, nullable: true })
   horometro_final: number | null;
 
-  @Column('varchar')
-  estado_actual: string;
+  @Column('varchar', { name: 'estado', length: 20 })
+  estado: string;
 }

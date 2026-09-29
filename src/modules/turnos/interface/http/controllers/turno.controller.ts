@@ -14,12 +14,16 @@ export class TurnoController {
   @Post('iniciar')
   @HttpCode(HttpStatus.CREATED)
   async iniciar(@Body() body: IniciarTurnoRequestDto) {
-    const turno = await this.iniciarTurnoUseCase.execute({
-      idOperador: body.idOperador,
-      idMaquina: body.idMaquina,
-      horometroInicial: body.horometroInicial,
-    });
-    return { id: turno.id, estado: turno.estadoActual };
+    try {
+      const turno = await this.iniciarTurnoUseCase.execute({
+        idOperador: body.idOperador,
+        idMaquina: body.idMaquina,
+        horometroInicial: body.horometroInicial,
+      });
+      return { id: turno.id, estado: turno.estadoActual };
+    } catch (error: any) {
+      return { error: error.message, stack: error.stack };
+    }
   }
 
   @Post('finalizar')
