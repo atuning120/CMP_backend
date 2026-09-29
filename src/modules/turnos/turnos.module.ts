@@ -36,4 +36,4 @@ import { TURNO_REPOSITORY } from './domain/repositories/turno.repository.port';
   ],
   exports: [],
 })
-export class TurnosModule {}
+export class TurnosModule { }

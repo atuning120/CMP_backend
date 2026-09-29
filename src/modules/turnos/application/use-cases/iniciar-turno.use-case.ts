@@ -3,7 +3,6 @@ import { TURNO_REPOSITORY } from '../../domain/repositories/turno.repository.por
 import type { TurnoRepositoryPort } from '../../domain/repositories/turno.repository.port';
 import { IniciarTurnoDto } from '../dtos/iniciar-turno.dto';
 import { Turno } from '../../domain/entities/turno.entity';
-import { randomUUID } from 'crypto';
 
 @Injectable()
 export class IniciarTurnoUseCase {
@@ -24,7 +23,7 @@ export class IniciarTurnoUseCase {
     }
 
     const nuevoTurno = new Turno(
-      randomUUID(),
+      null, // DB autogenerates id_turno
       dto.idOperador,
       dto.idMaquina,
       new Date(),
@@ -34,7 +33,7 @@ export class IniciarTurnoUseCase {
       'EN_CURSO',
     );
 
-    await this.turnoRepo.save(nuevoTurno);
-    return nuevoTurno;
+    const guardado = await this.turnoRepo.save(nuevoTurno);
+    return guardado;
   }
 }

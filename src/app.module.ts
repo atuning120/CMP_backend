@@ -15,6 +15,7 @@ import { TurnosModule } from './modules/turnos/turnos.module';
       username: process.env.DB_USER || 'cmp_user',
       password: process.env.DB_PASSWORD || 'cmp_pass',
       database: process.env.DB_NAME || 'cmp_db',
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
       autoLoadEntities: true,
       synchronize: false, // Las migraciones se encargarán del esquema, no sincronizar automático en dev/prod reales.
     }),

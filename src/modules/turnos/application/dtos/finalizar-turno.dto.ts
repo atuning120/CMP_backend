@@ -1,4 +1,4 @@
 export class FinalizarTurnoDto {
-  idTurno: string;
+  idTurno: number;
   horometroFinal: number;
 }
