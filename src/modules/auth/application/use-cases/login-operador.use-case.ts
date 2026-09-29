@@ -1,10 +1,10 @@
 import { Injectable, Inject, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { USUARIO_REPOSITORY } from '../../domain/repositories/usuario.repository.port';
-import type { UsuarioRepositoryPort } from '../../domain/repositories/usuario.repository.port';
-import { OPERADOR_REPOSITORY } from '../../domain/repositories/operador.repository.port';
-import type { OperadorRepositoryPort } from '../../domain/repositories/operador.repository.port';
+import { USUARIO_REPOSITORY } from '../../../usuarios/domain/repositories/usuario.repository.port';
+import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
+import { OPERADOR_REPOSITORY } from '../../../operadores/domain/repositories/operador.repository.port';
+import type { OperadorRepositoryPort } from '../../../operadores/domain/repositories/operador.repository.port';
 import { LoginOperadorRequestDto } from '../../interface/http/dtos/login-operador.request.dto';
 
 @Injectable()

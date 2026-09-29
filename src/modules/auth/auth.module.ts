@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './interface/http/controllers/auth.controller';
 import { LoginOperadorUseCase } from './application/use-cases/login-operador.use-case';
 import { LoginWebUseCase } from './application/use-cases/login-web.use-case';
+import { RegisterOperadorUseCase } from './application/use-cases/register-operador.use-case';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { OperadoresModule } from '../operadores/operadores.module';
 
@@ -16,12 +17,12 @@ import { OperadoresModule } from '../operadores/operadores.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET', 'super_secret_dev_key'),
-        signOptions: { expiresIn: config.get<string>('JWT_EXPIRES_IN', '1h') },
+        signOptions: { expiresIn: config.get<string>('JWT_EXPIRES_IN', '1h') as any },
       }),
     }),
   ],
   controllers: [AuthController],
-  providers: [LoginOperadorUseCase, LoginWebUseCase],
+  providers: [LoginOperadorUseCase, LoginWebUseCase, RegisterOperadorUseCase],
   exports: [JwtModule],
 })
-export class AuthModule {}
+export class AuthModule { }

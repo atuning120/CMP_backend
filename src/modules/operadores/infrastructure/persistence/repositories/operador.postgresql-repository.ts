@@ -19,4 +19,16 @@ export class OperadorPostgresqlRepository implements OperadorRepositoryPort {
       estado: operador.estado ?? 'ACTIVO',
     };
   }
+
+  async create(data: { nombre: string; apellido: string; rut: string; telefono: string; estado: string }): Promise<number> {
+    const entity = this.ormRepo.create({
+      nombre: data.nombre,
+      apellido: data.apellido,
+      rut: data.rut,
+      telefono: data.telefono,
+      estado: data.estado,
+    });
+    const saved = await this.ormRepo.save(entity);
+    return saved.id_operador;
+  }
 }

@@ -30,4 +30,19 @@ export class UsuarioPostgresqlRepository implements UsuarioRepositoryPort {
       passwordHash: usuario.password_hash,
     };
   }
+
+  async create(data: { email: string; nombre: string; rol: string; proveedorAuth: string; activo: boolean; idOperador: number | null; passwordHash: string | null }): Promise<number> {
+    const entity = this.ormRepo.create({
+      email: data.email,
+      nombre: data.nombre,
+      rol: data.rol,
+      proveedor_auth: data.proveedorAuth,
+      activo: data.activo,
+      id_operador: data.idOperador,
+      password_hash: data.passwordHash,
+      creado_en: new Date(),
+    });
+    const saved = await this.ormRepo.save(entity);
+    return saved.id_usuario;
+  }
 }

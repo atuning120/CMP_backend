@@ -1,10 +1,10 @@
 import { Injectable, Inject, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as jwksClient from 'jwks-rsa';
+import jwksClient from 'jwks-rsa';
 import * as jwt from 'jsonwebtoken';
-import { USUARIO_REPOSITORY } from '../../domain/repositories/usuario.repository.port';
-import type { UsuarioRepositoryPort } from '../../domain/repositories/usuario.repository.port';
+import { USUARIO_REPOSITORY } from '../../../usuarios/domain/repositories/usuario.repository.port';
+import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import { LoginWebRequestDto } from '../../interface/http/dtos/login-web.request.dto';
 
 @Injectable()
