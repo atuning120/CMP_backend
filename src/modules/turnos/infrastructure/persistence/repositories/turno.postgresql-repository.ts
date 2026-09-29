@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
-import { TurnoRepositoryPort } from '../../domain/repositories/turno.repository.port';
-import { Turno } from '../../domain/entities/turno.entity';
-import { TurnoOrmEntity } from './orm-entities/turno.orm-entity';
+import type { TurnoRepositoryPort } from '../../../domain/repositories/turno.repository.port';
+import { Turno } from '../../../domain/entities/turno.entity';
+import { TurnoOrmEntity } from '../orm-entities/turno.orm-entity';
 
 @Injectable()
 export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
