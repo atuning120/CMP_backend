@@ -1,0 +1,782 @@
+{
+  "alerta": [
+    {
+      "table_name": "alerta",
+      "column_name": "id_alerta",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "alerta",
+      "column_name": "id_gps",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "alerta",
+      "column_name": "id_maquina",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "alerta",
+      "column_name": "tipo",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "alerta",
+      "column_name": "fecha",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "alerta",
+      "column_name": "detalle",
+      "data_type": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "alerta",
+      "column_name": "atendida",
+      "data_type": "boolean",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "alerta",
+      "column_name": "atendida_por",
+      "data_type": "integer",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "alerta",
+      "column_name": "atendida_en",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES"
+    }
+  ],
+  "area": [
+    {
+      "table_name": "area",
+      "column_name": "id_area",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "area",
+      "column_name": "nombre",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "area",
+      "column_name": "descripcion",
+      "data_type": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "area",
+      "column_name": "poligono",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "area",
+      "column_name": "estado",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "area",
+      "column_name": "creado_en",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "area",
+      "column_name": "modificado_en",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "area",
+      "column_name": "modificado_por",
+      "data_type": "integer",
+      "is_nullable": "YES"
+    }
+  ],
+  "asignacion_gps": [
+    {
+      "table_name": "asignacion_gps",
+      "column_name": "id_asignacion",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "asignacion_gps",
+      "column_name": "id_gps",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "asignacion_gps",
+      "column_name": "id_maquina",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "asignacion_gps",
+      "column_name": "vigente_desde",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "asignacion_gps",
+      "column_name": "vigente_hasta",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES"
+    }
+  ],
+  "auditoria_geocerca": [
+    {
+      "table_name": "auditoria_geocerca",
+      "column_name": "id_auditoria",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "auditoria_geocerca",
+      "column_name": "entidad",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "auditoria_geocerca",
+      "column_name": "id_entidad",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "auditoria_geocerca",
+      "column_name": "accion",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "auditoria_geocerca",
+      "column_name": "poligono_anterior",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "auditoria_geocerca",
+      "column_name": "id_usuario",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "auditoria_geocerca",
+      "column_name": "fecha",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    }
+  ],
+  "dispositivo_gps": [
+    {
+      "table_name": "dispositivo_gps",
+      "column_name": "id_gps",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "dispositivo_gps",
+      "column_name": "imei",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "dispositivo_gps",
+      "column_name": "modelo",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "dispositivo_gps",
+      "column_name": "numero_sim",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "dispositivo_gps",
+      "column_name": "estado",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    }
+  ],
+  "estado_operacional": [
+    {
+      "table_name": "estado_operacional",
+      "column_name": "id_estado",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "estado_operacional",
+      "column_name": "nombre",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "estado_operacional",
+      "column_name": "categoria",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "estado_operacional",
+      "column_name": "es_productivo",
+      "data_type": "boolean",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "estado_operacional",
+      "column_name": "activo",
+      "data_type": "boolean",
+      "is_nullable": "NO"
+    }
+  ],
+  "evidencia": [
+    {
+      "table_name": "evidencia",
+      "column_name": "id_evidencia",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "evidencia",
+      "column_name": "id_reporte",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "evidencia",
+      "column_name": "url_blob",
+      "data_type": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "evidencia",
+      "column_name": "fecha_hora",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "evidencia",
+      "column_name": "estado_sincronizacion",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    }
+  ],
+  "geography_columns": [
+    {
+      "table_name": "geography_columns",
+      "column_name": "f_table_catalog",
+      "data_type": "name",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "geography_columns",
+      "column_name": "f_table_schema",
+      "data_type": "name",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "geography_columns",
+      "column_name": "f_table_name",
+      "data_type": "name",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "geography_columns",
+      "column_name": "f_geography_column",
+      "data_type": "name",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "geography_columns",
+      "column_name": "coord_dimension",
+      "data_type": "integer",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "geography_columns",
+      "column_name": "srid",
+      "data_type": "integer",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "geography_columns",
+      "column_name": "type",
+      "data_type": "text",
+      "is_nullable": "YES"
+    }
+  ],
+  "geometry_columns": [
+    {
+      "table_name": "geometry_columns",
+      "column_name": "f_table_catalog",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "geometry_columns",
+      "column_name": "f_table_schema",
+      "data_type": "name",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "geometry_columns",
+      "column_name": "f_table_name",
+      "data_type": "name",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "geometry_columns",
+      "column_name": "f_geometry_column",
+      "data_type": "name",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "geometry_columns",
+      "column_name": "coord_dimension",
+      "data_type": "integer",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "geometry_columns",
+      "column_name": "srid",
+      "data_type": "integer",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "geometry_columns",
+      "column_name": "type",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    }
+  ],
+  "maquina": [
+    {
+      "table_name": "maquina",
+      "column_name": "id_maquina",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "maquina",
+      "column_name": "nombre",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "maquina",
+      "column_name": "marca",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "maquina",
+      "column_name": "modelo",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "maquina",
+      "column_name": "anio",
+      "data_type": "integer",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "maquina",
+      "column_name": "tipo_maquina",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "maquina",
+      "column_name": "estado",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    }
+  ],
+  "operador": [
+    {
+      "table_name": "operador",
+      "column_name": "id_operador",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "operador",
+      "column_name": "nombre",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "operador",
+      "column_name": "apellido",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "operador",
+      "column_name": "rut",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "operador",
+      "column_name": "telefono",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "operador",
+      "column_name": "estado",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    }
+  ],
+  "reporte_turno": [
+    {
+      "table_name": "reporte_turno",
+      "column_name": "id_reporte",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "reporte_turno",
+      "column_name": "id_turno",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "reporte_turno",
+      "column_name": "tipo",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "reporte_turno",
+      "column_name": "descripcion",
+      "data_type": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "reporte_turno",
+      "column_name": "fecha_hora",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "reporte_turno",
+      "column_name": "estado_sincronizacion",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    }
+  ],
+  "tracking_history": [
+    {
+      "table_name": "tracking_history",
+      "column_name": "id_history",
+      "data_type": "bigint",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "tracking_history",
+      "column_name": "timestamp",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "tracking_history",
+      "column_name": "id_gps",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "tracking_history",
+      "column_name": "id_maquina",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "tracking_history",
+      "column_name": "ubicacion",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "tracking_history",
+      "column_name": "velocidad",
+      "data_type": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "tracking_history",
+      "column_name": "heading",
+      "data_type": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "tracking_history",
+      "column_name": "nivel_bateria",
+      "data_type": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "tracking_history",
+      "column_name": "payload_crudo",
+      "data_type": "jsonb",
+      "is_nullable": "YES"
+    }
+  ],
+  "turno": [
+    {
+      "table_name": "turno",
+      "column_name": "id_turno",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno",
+      "column_name": "id_operador",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno",
+      "column_name": "id_maquina",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno",
+      "column_name": "fecha_turno",
+      "data_type": "date",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno",
+      "column_name": "hora_inicio",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno",
+      "column_name": "hora_termino",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "turno",
+      "column_name": "horometro_inicial",
+      "data_type": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno",
+      "column_name": "horometro_final",
+      "data_type": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "turno",
+      "column_name": "estado",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    }
+  ],
+  "turno_estado": [
+    {
+      "table_name": "turno_estado",
+      "column_name": "id_turno_estado",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno_estado",
+      "column_name": "id_turno",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno_estado",
+      "column_name": "id_estado",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno_estado",
+      "column_name": "inicio",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno_estado",
+      "column_name": "fin",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "turno_estado",
+      "column_name": "comentario",
+      "data_type": "text",
+      "is_nullable": "YES"
+    }
+  ],
+  "turno_ubicacion": [
+    {
+      "table_name": "turno_ubicacion",
+      "column_name": "id_turno_ubicacion",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno_ubicacion",
+      "column_name": "id_turno",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno_ubicacion",
+      "column_name": "id_area",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno_ubicacion",
+      "column_name": "id_zona",
+      "data_type": "integer",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "turno_ubicacion",
+      "column_name": "inicio",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "turno_ubicacion",
+      "column_name": "fin",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES"
+    }
+  ],
+  "usuario": [
+    {
+      "table_name": "usuario",
+      "column_name": "id_usuario",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "usuario",
+      "column_name": "email",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "usuario",
+      "column_name": "nombre",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "usuario",
+      "column_name": "rol",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "usuario",
+      "column_name": "proveedor_auth",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "usuario",
+      "column_name": "activo",
+      "data_type": "boolean",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "usuario",
+      "column_name": "id_operador",
+      "data_type": "integer",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "usuario",
+      "column_name": "creado_en",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    }
+  ],
+  "zona_trabajo": [
+    {
+      "table_name": "zona_trabajo",
+      "column_name": "id_zona",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "zona_trabajo",
+      "column_name": "id_area",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "zona_trabajo",
+      "column_name": "nombre",
+      "data_type": "character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "zona_trabajo",
+      "column_name": "descripcion",
+      "data_type": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "zona_trabajo",
+      "column_name": "poligono",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "zona_trabajo",
+      "column_name": "estado",
+      "data_type": "character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "zona_trabajo",
+      "column_name": "creado_en",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "zona_trabajo",
+      "column_name": "modificado_en",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "zona_trabajo",
+      "column_name": "modificado_por",
+      "data_type": "integer",
+      "is_nullable": "YES"
+    }
+  ]
+}

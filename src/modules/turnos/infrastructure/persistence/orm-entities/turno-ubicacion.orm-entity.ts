@@ -1,5 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
-import { TurnoOrmEntity } from './turno.orm-entity';
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity('turno_ubicacion')
 export class TurnoUbicacionOrmEntity {
@@ -8,10 +7,6 @@ export class TurnoUbicacionOrmEntity {
 
   @Column('integer', { name: 'id_turno' })
   id_turno: number;
-
-  @ManyToOne(() => TurnoOrmEntity)
-  @JoinColumn({ name: 'id_turno' })
-  turno: TurnoOrmEntity;
 
   @Column('integer', { name: 'id_area' })
   id_area: number;
@@ -24,4 +19,5 @@ export class TurnoUbicacionOrmEntity {
 
   @Column('timestamp with time zone', { name: 'fin', nullable: true })
   fin: Date | null;
+
 }

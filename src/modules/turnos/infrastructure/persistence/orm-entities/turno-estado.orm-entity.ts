@@ -1,5 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
-import { TurnoOrmEntity } from './turno.orm-entity';
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity('turno_estado')
 export class TurnoEstadoOrmEntity {
@@ -8,10 +7,6 @@ export class TurnoEstadoOrmEntity {
 
   @Column('integer', { name: 'id_turno' })
   id_turno: number;
-
-  @ManyToOne(() => TurnoOrmEntity)
-  @JoinColumn({ name: 'id_turno' })
-  turno: TurnoOrmEntity;
 
   @Column('integer', { name: 'id_estado' })
   id_estado: number;
@@ -24,4 +19,5 @@ export class TurnoEstadoOrmEntity {
 
   @Column('text', { name: 'comentario', nullable: true })
   comentario: string | null;
+
 }

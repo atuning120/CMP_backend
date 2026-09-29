@@ -59,7 +59,7 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
       ormEntity.hora_termino,
       Number(ormEntity.horometro_inicial),
       ormEntity.horometro_final ? Number(ormEntity.horometro_final) : null,
-      ormEntity.estado,
+      ormEntity.estado ?? 'EN_CURSO',
     );
   }
 }
