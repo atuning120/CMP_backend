@@ -2,6 +2,7 @@
 
 - DDL completo (fuente de verdad): [`database/schema.sql`](database/schema.sql)
 - Datos sintéticos de prueba: [`database/seed.sql`](database/seed.sql) (ejecutar después del schema)
+- Migraciones para bases ya creadas: [`database/migrations/`](database/migrations/) (en orden numérico)
 
 Base local desde cero:
 
@@ -24,6 +25,14 @@ erDiagram
         boolean activo
         int id_operador FK "nullable"
         timestamptz creado_en
+    }
+    REFRESH_TOKEN {
+        int id_refresh_token PK
+        int id_usuario FK
+        string token_hash UK "SHA-256 del token"
+        timestamptz creado_en
+        timestamptz expira_en
+        timestamptz revocado_en "null si vigente"
     }
     OPERADOR {
         int id_operador PK
@@ -118,6 +127,9 @@ erDiagram
         decimal horometro_inicial
         decimal horometro_final
         string estado "EN_CURSO, CERRADO, CERRADO_AUTO"
+        uuid id_cliente UK "generado en la app"
+        boolean conflicto
+        string conflicto_detalle
     }
     TURNO_UBICACION {
         int id_turno_ubicacion PK
@@ -133,6 +145,7 @@ erDiagram
         string categoria "PRODUCTIVO, DEMORA, MANTENCION"
         boolean es_productivo
         boolean activo
+        string descripcion
     }
     TURNO_ESTADO {
         int id_turno_estado PK
@@ -141,25 +154,29 @@ erDiagram
         timestamptz inicio
         timestamptz fin "null si vigente"
         string comentario
+        uuid id_cliente UK
     }
     REPORTE_TURNO {
         int id_reporte PK
         int id_turno FK
-        string tipo "INICIO o FIN"
+        string tipo "INICIO, FIN o NOVEDAD"
         string descripcion
         timestamptz fecha_hora
         string estado_sincronizacion
+        uuid id_cliente UK
     }
     EVIDENCIA {
         int id_evidencia PK
         int id_reporte FK
-        string url_blob
+        string url_blob "clave del archivo en el almacenamiento"
         timestamptz fecha_hora
         string estado_sincronizacion
+        uuid id_cliente UK
     }
 
     USUARIO |o--o| OPERADOR : "se vincula a"
     USUARIO ||--o{ AUDITORIA_GEOCERCA : "realiza"
+    USUARIO ||--o{ REFRESH_TOKEN : "mantiene sesiones"
     USUARIO |o--o{ AREA : "modifica"
     USUARIO |o--o{ ZONA_TRABAJO : "modifica"
     USUARIO |o--o{ ALERTA : "atiende"
@@ -196,7 +213,8 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `AUDITORIA_GEOCERCA` | Historial de cambios de áreas y zonas | `entidad` ∈ `AREA`, `ZONA`; `accion` ∈ `CREAR`, `EDITAR`, `DESACTIVAR`; `id_entidad` es polimórfico (sin FK) |
 | `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJA` |
 | `DISPOSITIVO_GPS` | Equipo de telemetría | `imei` UNIQUE |
-| `ESTADO_OPERACIONAL` | Catálogo de estados del turno | `categoria` ∈ `PRODUCTIVO`, `DEMORA`, `MANTENCION`; `activo` default `TRUE` |
+| `REFRESH_TOKEN` | Sesiones de la app móvil (un registro por emisión; se rotan en cada `/auth/refresh`) | `token_hash` UNIQUE (nunca se guarda el token en claro); `revocado_en` NULL = vigente |
+| `ESTADO_OPERACIONAL` | Catálogo de estados del turno (con `descripcion` para la app) | `categoria` ∈ `PRODUCTIVO`, `DEMORA`, `MANTENCION`; `activo` default `TRUE` |
 
 ### Maquinaria, telemetría y alertas
 
@@ -210,17 +228,18 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 
 | Tabla | Propósito | Restricciones |
 |---|---|---|
-| `TURNO` | Jornada de un operador en una máquina | `estado` ∈ `EN_CURSO`, `CERRADO`, `CERRADO_AUTO`; `hora_termino` y `horometro_final` NULL mientras está en curso |
+| `TURNO` | Jornada de un operador en una máquina | `estado` ∈ `EN_CURSO`, `CERRADO`, `CERRADO_AUTO`; `hora_termino` y `horometro_final` NULL mientras está en curso; `id_cliente` UNIQUE; `conflicto` default `FALSE` |
 | `TURNO_UBICACION` | Área/zona donde se desarrolla el turno (historial) | `id_zona` opcional; `fin` NULL = ubicación vigente |
-| `TURNO_ESTADO` | Historial de estados operacionales del turno | `fin` NULL = estado vigente |
-| `REPORTE_TURNO` | Reporte de apertura o cierre del turno | `tipo` ∈ `INICIO`, `FIN`; `estado_sincronizacion` (`SINCRONIZADO`, `PENDIENTE`, `ERROR_SINCRONIZACION`) |
-| `EVIDENCIA` | Foto adjunta a un reporte | `url_blob` NOT NULL |
+| `TURNO_ESTADO` | Historial de estados operacionales del turno | `fin` NULL = estado vigente; `id_cliente` UNIQUE |
+| `REPORTE_TURNO` | Reporte del turno: instrucciones al iniciar, novedades al cerrar o novedad durante el turno | `tipo` ∈ `INICIO`, `FIN`, `NOVEDAD`; `estado_sincronizacion` (`SINCRONIZADO`, `PENDIENTE`, `ERROR_SINCRONIZACION`); `id_cliente` UNIQUE |
+| `EVIDENCIA` | Foto adjunta a un reporte | `url_blob` NOT NULL (clave en el almacenamiento, p. ej. `turno-25/<uuid>.jpg`); `id_cliente` UNIQUE |
 
 ## Relaciones (foreign keys)
 
 | FK | Desde | Hacia | ON DELETE |
 |---|---|---|---|
 | `fk_usuario_operador` | `USUARIO.id_operador` | `OPERADOR.id_operador` | SET NULL |
+| `fk_refresh_usuario` | `REFRESH_TOKEN.id_usuario` | `USUARIO.id_usuario` | CASCADE |
 | `fk_area_usuario` | `AREA.modificado_por` | `USUARIO.id_usuario` | SET NULL |
 | `fk_zona_area` | `ZONA_TRABAJO.id_area` | `AREA.id_area` | CASCADE |
 | `fk_zona_usuario` | `ZONA_TRABAJO.modificado_por` | `USUARIO.id_usuario` | SET NULL |
@@ -247,6 +266,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | Tablas | Módulo (`src/modules/`) |
 |---|---|
 | `USUARIO` | `usuarios` |
+| `REFRESH_TOKEN` | `auth` |
 | `OPERADOR` | `operadores` |
 | `AREA`, `ZONA_TRABAJO`, `AUDITORIA_GEOCERCA` | `geocercas` |
 | `MAQUINA`, `DISPOSITIVO_GPS`, `ASIGNACION_GPS` | `maquinas` |
@@ -256,6 +276,13 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `REPORTE_TURNO`, `EVIDENCIA` | `evidencias` |
 
 ## Reglas de negocio sobre los datos
+
+- **Sincronización offline-first** (migración `002`): la app registra todo primero en su SQLite y lo envía después. `id_cliente` es el UUID que genera el teléfono; los endpoints son idempotentes por ese campo (reenviar no duplica). Las fechas (`hora_inicio`, `hora_termino`, `inicio`, `fecha_hora`) son las del momento real del evento, no las de la sincronización.
+- Si un inicio sincronizado tarde choca con el estado del servidor (máquina u operador con otro turno abierto, máquina/área/zona dadas de baja), el turno se acepta con `conflicto = TRUE` y el motivo en `conflicto_detalle`, para revisión del jefe de turno.
+- Un cierre real que llega después de que el servidor cerró el turno por 12 h lo corrige a `CERRADO` si ocurrió dentro de las 12 h; si ocurrió después, queda `CERRADO_AUTO` conservando `horometro_final`.
+- Al cerrar un turno se cierra también su `TURNO_ESTADO` vigente.
+
+- Sesión móvil: `/auth/login` entrega access token (JWT, `JWT_EXPIRES_IN`, por defecto 1 h) y refresh token (`REFRESH_TOKEN_TTL_DAYS`, por defecto 30 días). `/auth/refresh` revoca el token usado y emite uno nuevo; reutilizar un token rotado hace más de 60 s revoca todas las sesiones del usuario. `/auth/logout` revoca el token del dispositivo.
 
 - Un operador y una máquina tienen como máximo un `TURNO` con `hora_termino` NULL (validado en `IniciarTurnoUseCase`).
 - Un turno abierto más de 12 h pasa a `CERRADO_AUTO` con `hora_termino` = `hora_inicio` + 12 h y `horometro_final` NULL (`CerrarTurnosExcedidosUseCase` + scheduler cada 5 min).

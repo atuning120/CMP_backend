@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity('estado_operacional')
 export class EstadoOperacionalOrmEntity {
-  @Column('integer', { name: 'id_estado' })
+  @PrimaryGeneratedColumn({ name: 'id_estado' })
   id_estado: number;
 
   @Column('varchar', { name: 'nombre' })
@@ -16,5 +16,8 @@ export class EstadoOperacionalOrmEntity {
 
   @Column('boolean', { name: 'activo' })
   activo: boolean;
+
+  @Column('text', { name: 'descripcion', nullable: true })
+  descripcion: string | null;
 
 }

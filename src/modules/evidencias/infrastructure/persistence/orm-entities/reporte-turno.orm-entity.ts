@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity('reporte_turno')
 export class ReporteTurnoOrmEntity {
-  @Column('integer', { name: 'id_reporte' })
+  @PrimaryGeneratedColumn({ name: 'id_reporte' })
   id_reporte: number;
 
   @Column('integer', { name: 'id_turno' })
@@ -20,4 +20,6 @@ export class ReporteTurnoOrmEntity {
   @Column('varchar', { name: 'estado_sincronizacion', nullable: true })
   estado_sincronizacion: string | null;
 
+  @Column('uuid', { name: 'id_cliente', nullable: true })
+  id_cliente: string | null;
 }

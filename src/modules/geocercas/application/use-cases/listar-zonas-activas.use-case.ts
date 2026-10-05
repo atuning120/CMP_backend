@@ -9,6 +9,11 @@ export class ListarZonasActivasUseCase {
     private readonly geocercaRepo: GeocercaRepositoryPort,
   ) {}
 
+  // Sin área: todas las zonas activas (la app las descarga de una vez para tenerlas offline)
+  async todas(): Promise<ZonaTrabajoResumen[]> {
+    return this.geocercaRepo.findZonasActivas();
+  }
+
   async execute(idArea: number): Promise<ZonaTrabajoResumen[]> {
     const area = await this.geocercaRepo.findAreaById(idArea);
     if (!area) {

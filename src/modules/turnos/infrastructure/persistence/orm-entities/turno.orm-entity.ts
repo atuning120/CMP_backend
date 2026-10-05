@@ -29,4 +29,13 @@ export class TurnoOrmEntity {
   @Column('varchar', { name: 'estado', nullable: true })
   estado: string | null;
 
+  @Column('uuid', { name: 'id_cliente', nullable: true })
+  id_cliente: string | null;
+
+  @Column('boolean', { name: 'conflicto', default: false })
+  conflicto: boolean;
+
+  @Column('text', { name: 'conflicto_detalle', nullable: true })
+  conflicto_detalle: string | null;
+
 }

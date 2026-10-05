@@ -88,7 +88,8 @@ CREATE TABLE ESTADO_OPERACIONAL (
     nombre          VARCHAR(100) NOT NULL,
     categoria       VARCHAR(30) CHECK (categoria IN ('PRODUCTIVO', 'DEMORA', 'MANTENCION')),
     es_productivo   BOOLEAN NOT NULL,
-    activo          BOOLEAN NOT NULL DEFAULT TRUE
+    activo          BOOLEAN NOT NULL DEFAULT TRUE,
+    descripcion     TEXT -- qué significa el estado; la app la muestra en el botón "i"
 );
 
 CREATE TABLE ASIGNACION_GPS (
@@ -141,6 +142,9 @@ CREATE TABLE TURNO (
     horometro_inicial NUMERIC(10,2) NOT NULL,
     horometro_final   NUMERIC(10,2) NULL,
     estado            VARCHAR(20) CHECK (estado IN ('EN_CURSO', 'CERRADO', 'CERRADO_AUTO')),
+    id_cliente        UUID UNIQUE, -- generado en el teléfono; hace idempotente la sincronización offline
+    conflicto         BOOLEAN NOT NULL DEFAULT FALSE, -- aceptado pese a chocar con otro turno; revisar
+    conflicto_detalle TEXT,
     CONSTRAINT fk_turno_operador FOREIGN KEY (id_operador) REFERENCES OPERADOR(id_operador),
     CONSTRAINT fk_turno_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina)
 );
@@ -164,6 +168,7 @@ CREATE TABLE TURNO_ESTADO (
     inicio          TIMESTAMPTZ NOT NULL,
     fin             TIMESTAMPTZ NULL, -- null si vigente
     comentario      TEXT,
+    id_cliente      UUID UNIQUE,
     CONSTRAINT fk_testado_turno FOREIGN KEY (id_turno) REFERENCES TURNO(id_turno) ON DELETE CASCADE,
     CONSTRAINT fk_testado_estado FOREIGN KEY (id_estado) REFERENCES ESTADO_OPERACIONAL(id_estado)
 );
@@ -171,10 +176,11 @@ CREATE TABLE TURNO_ESTADO (
 CREATE TABLE REPORTE_TURNO (
     id_reporte            SERIAL PRIMARY KEY,
     id_turno              INT NOT NULL,
-    tipo                  VARCHAR(10) CHECK (tipo IN ('INICIO', 'FIN')),
+    tipo                  VARCHAR(10) CHECK (tipo IN ('INICIO', 'FIN', 'NOVEDAD')),
     descripcion           TEXT,
     fecha_hora            TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     estado_sincronizacion VARCHAR(30),
+    id_cliente            UUID UNIQUE,
     CONSTRAINT fk_reporte_turno FOREIGN KEY (id_turno) REFERENCES TURNO(id_turno) ON DELETE CASCADE
 );
 
@@ -184,5 +190,18 @@ CREATE TABLE EVIDENCIA (
     url_blob              TEXT NOT NULL,
     fecha_hora            TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     estado_sincronizacion VARCHAR(30),
+    id_cliente            UUID UNIQUE,
     CONSTRAINT fk_evidencia_reporte FOREIGN KEY (id_reporte) REFERENCES REPORTE_TURNO(id_reporte) ON DELETE CASCADE
 );
+
+CREATE TABLE REFRESH_TOKEN (
+    id_refresh_token  SERIAL PRIMARY KEY,
+    id_usuario        INT NOT NULL,
+    token_hash        CHAR(64) NOT NULL UNIQUE, -- SHA-256 (hex) del token; el token en claro solo lo tiene el dispositivo
+    creado_en         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expira_en         TIMESTAMPTZ NOT NULL,
+    revocado_en       TIMESTAMPTZ NULL, -- null si vigente
+    CONSTRAINT fk_refresh_usuario FOREIGN KEY (id_usuario) REFERENCES USUARIO(id_usuario) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_refresh_token_usuario ON REFRESH_TOKEN(id_usuario);

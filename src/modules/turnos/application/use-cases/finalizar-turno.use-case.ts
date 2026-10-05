@@ -4,6 +4,25 @@ import type { TurnoRepositoryPort } from '../../domain/repositories/turno.reposi
 import { FinalizarTurnoDto } from '../dtos/finalizar-turno.dto';
 import { Turno } from '../../domain/entities/turno.entity';
 import { turnoError } from '../turno.errors';
+import { fechaDelEvento, validarIdCliente } from '../datos-cliente';
+
+export const buscarTurnoDelOperador = async (
+  turnoRepo: TurnoRepositoryPort,
+  idOperador: number,
+  ref: { idTurno?: number | null; idClienteTurno?: string | null },
+): Promise<Turno> => {
+  const idClienteTurno = validarIdCliente(ref.idClienteTurno);
+  const turno = idClienteTurno
+    ? await turnoRepo.findByIdCliente(idClienteTurno)
+    : Number.isInteger(ref.idTurno)
+      ? await turnoRepo.findById(ref.idTurno!)
+      : null;
+  // Un operador solo puede operar sobre sus propios turnos; no se revela si el turno existe para otro.
+  if (!turno || turno.idOperador !== idOperador) {
+    throw turnoError('TURNO_NO_ENCONTRADO');
+  }
+  return turno;
+};
 
 @Injectable()
 export class FinalizarTurnoUseCase {
@@ -12,29 +31,27 @@ export class FinalizarTurnoUseCase {
     private readonly turnoRepo: TurnoRepositoryPort,
   ) {}
 
-  async execute(dto: FinalizarTurnoDto): Promise<Turno> {
-    const turno = await this.turnoRepo.findById(dto.idTurno);
-    // Un operador solo puede cerrar sus propios turnos; no se revela si el turno existe para otro.
-    if (!turno || turno.idOperador !== dto.idOperador) {
-      throw turnoError('TURNO_NO_ENCONTRADO');
+  /**
+   * Devuelve el turno cerrado. Si el cierre ocurrió después de las 12 h, el turno queda
+   * CERRADO_AUTO (con el horómetro informado); la app lo distingue por `estadoActual`.
+   */
+  async execute(dto: FinalizarTurnoDto, ahora: Date = new Date()): Promise<Turno> {
+    const turno = await buscarTurnoDelOperador(this.turnoRepo, dto.idOperador, dto);
+
+    // Reintento de un cierre ya aplicado (o cierre automático que ya registró el horómetro)
+    if (turno.estadoActual === 'CERRADO' || (turno.estadoActual === 'CERRADO_AUTO' && turno.horometroFinal !== null)) {
+      return turno;
     }
 
-    if (!turno.enCurso) {
-      throw turnoError(turno.estadoActual === 'CERRADO_AUTO' ? 'TURNO_CERRADO_AUTOMATICAMENTE' : 'TURNO_NO_ACTIVO');
-    }
-
-    const ahora = new Date();
-    if (turno.excedeDuracionMaxima(ahora)) {
-      turno.cerrarAutomaticamente();
-      await this.turnoRepo.save(turno);
-      throw turnoError('TURNO_CERRADO_AUTOMATICAMENTE');
-    }
-
+    const fechaFin = fechaDelEvento(dto.fechaFin, ahora);
     if (!Number.isFinite(dto.horometroFinal) || dto.horometroFinal < turno.horometroInicial) {
       throw turnoError('HOROMETRO_INVALIDO');
     }
+    if (fechaFin.getTime() < turno.fechaInicio.getTime()) {
+      throw turnoError('FECHA_INVALIDA');
+    }
 
-    turno.finalizar(ahora, dto.horometroFinal);
+    turno.finalizar(fechaFin, dto.horometroFinal);
     return this.turnoRepo.save(turno);
   }
 }

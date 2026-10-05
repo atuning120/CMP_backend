@@ -1,6 +1,7 @@
 -- =============================================================================
 -- Datos sintéticos de prueba (Mina Los Colorados / Planta MLC)
--- Ejecutar después de schema.sql. Los usuarios se crean sin password_hash.
+-- Ejecutar después de schema.sql. Los 20 usuarios sintéticos no tienen password_hash;
+-- para entrar a la app usar las cuentas del final del archivo.
 -- =============================================================================
 
 -- Inserción de 20 nuevos operadores en la tabla OPERADOR
@@ -193,6 +194,32 @@ INSERT INTO estado_operacional (nombre, categoria, es_productivo, activo) VALUES
 ('Mantención / Revisión y Diagnóstico GPS', 'MANTENCION', FALSE, TRUE),
 ('Demora / Espera Despeje por Tronadura', 'DEMORA', FALSE, FALSE),
 ('Mantención / Inmovilizado por Siniestro', 'MANTENCION', FALSE, FALSE);
+
+-- Descripciones del catálogo (botón "i" del panel de cambio de estado)
+UPDATE estado_operacional e SET descripcion = d.descripcion
+FROM (VALUES
+  ('Efectivo / Carguío y Excavación', 'Carga de mineral o estéril en camiones, tolvas o trenes, y excavación de frentes. Es la actividad productiva principal del equipo.'),
+  ('Efectivo / Empuje y Nivelación', 'Empuje de material con hoja y nivelación de canchas, rampas o plataformas de trabajo.'),
+  ('Efectivo / Traslado de Material', 'Transporte de material con el propio equipo entre puntos de la faena (acopios, botaderos, tolvas).'),
+  ('Efectivo / Peinado de Talud y Zanjado', 'Perfilado de taludes y construcción de zanjas de drenaje o seguridad.'),
+  ('Efectivo / Limpieza de Cancha y Pista', 'Retiro de derrames y material suelto en canchas, pistas o bajo correas para mantener la operación.'),
+  ('Demora / Relevo y Cambio de Turno', 'Entrega del equipo entre operadores al cambio de turno: traspaso de novedades y revisión rápida.'),
+  ('Demora / Colación y Descanso', 'Pausa programada de colación o descanso del operador. El equipo queda detenido.'),
+  ('Demora / Abastecimiento de Combustible', 'Traslado a la estación y carga de petróleo del equipo.'),
+  ('Demora / Traslado Interno Entre Zonas', 'Desplazamiento del equipo sin carga entre áreas o zonas de trabajo, sin realizar labor productiva.'),
+  ('Demora / Inspección Pre-Uso (Pre-Start)', 'Checklist de seguridad y revisión del equipo antes de comenzar a operar (niveles, luces, frenos, fugas).'),
+  ('Demora / Charla de Seguridad de 5 Minutos', 'Charla de seguridad del inicio de turno o de una tarea específica.'),
+  ('Demora / Espera de Camión / Transporte', 'Equipo disponible y operativo, pero detenido esperando camiones, tolva o tren para cargar.'),
+  ('Demora / Limpieza Excesiva de Balde / Oruga', 'Detención para limpiar material adherido al balde, hoja u orugas que impide operar con normalidad.'),
+  ('Demora / Espera Despeje por Tronadura', 'Equipo retirado del área y detenido mientras se realiza una tronadura y se autoriza el reingreso.'),
+  ('Mantención / Falla Mecánica Inesperada', 'Detención por una avería mecánica no programada (motor, transmisión, frenos u otra).'),
+  ('Mantención / Mantenimiento Programado', 'Mantención preventiva planificada según pauta del fabricante o del área de mantenimiento.'),
+  ('Mantención / Reparación de Neumático / Oruga', 'Cambio o reparación de neumáticos u orugas dañados.'),
+  ('Mantención / Falla de Sistema Hidráulico', 'Detención por fuga o falla del sistema hidráulico (mangueras, cilindros, bombas).'),
+  ('Mantención / Revisión y Diagnóstico GPS', 'Revisión del dispositivo GPS o de telemetría del equipo.'),
+  ('Mantención / Inmovilizado por Siniestro', 'Equipo detenido tras un incidente o accidente, a la espera de investigación o reparación.')
+) AS d(nombre, descripcion)
+WHERE e.nombre = d.nombre AND e.descripcion IS NULL;
 
 -- Inserción de 20 registros sintéticos para la tabla ASIGNACION_GPS
 INSERT INTO asignacion_gps (
@@ -437,3 +464,19 @@ INSERT INTO evidencia (
 (17, 'https://storage.azure.com/mlc-evidencias/reportes/2026/09/28/rep17_offline_app.jpg', '2026-09-28 08:00:00-03', 'PENDIENTE'),
 (18, 'https://storage.azure.com/mlc-evidencias/reportes/2026/09/28/rep18_sync_server.jpg', '2026-09-28 08:05:00-03', 'SINCRONIZADO'),
 (19, 'https://storage.azure.com/mlc-evidencias/reportes/2026/09/28/rep19_checklist_ok.jpg',  '2026-09-28 08:00:00-03', 'SINCRONIZADO');
+
+-- =============================================================================
+-- Cuentas de acceso a la app móvil (login online y, luego, offline)
+-- Coinciden con los perfiles de acceso rápido de Front-mobile (src/data/initialData.ts).
+-- password_hash = bcrypt (10 rondas, bcryptjs), igual que /auth/register/*:
+--   cristian.nunez@cmp.cl / 12345          -> OPERADOR (también por RUT 15.123.456-7)
+--   ana.rojas@cmp.cl      / miPassword123  -> JEFE_TURNO
+-- El login por RUT exige OPERADOR.estado = 'ACTIVO'.
+-- =============================================================================
+INSERT INTO operador (nombre, apellido, rut, telefono, estado) VALUES
+('Cristian', 'Núñez', '15.123.456-7', '+56912345678', 'ACTIVO');
+
+INSERT INTO usuario (email, password_hash, nombre, rol, proveedor_auth, activo, id_operador) VALUES
+('cristian.nunez@cmp.cl', '$2b$10$1JXHxZS4kex2ewivHKJpP.qnjqdZyJFqGpFgInXv9.O7ZrAlp3ld2', 'Cristian Núñez', 'OPERADOR', 'CREDENCIALES', TRUE,
+  (SELECT id_operador FROM operador WHERE rut = '15.123.456-7')),
+('ana.rojas@cmp.cl', '$2b$10$ClHyLi0S6n5jaksfiyGurO2dpKukR.RqoA5QXta7Gdifs6MrlyVhe', 'Ana Rojas', 'JEFE_TURNO', 'CREDENCIALES', TRUE, NULL);

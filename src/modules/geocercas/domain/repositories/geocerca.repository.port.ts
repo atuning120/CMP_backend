@@ -19,5 +19,6 @@ export interface GeocercaRepositoryPort {
   findAreasActivas(): Promise<AreaResumen[]>;
   findAreaById(idArea: number): Promise<AreaResumen | null>;
   findZonasActivasByArea(idArea: number): Promise<ZonaTrabajoResumen[]>;
+  findZonasActivas(): Promise<ZonaTrabajoResumen[]>;
   findZonaById(idZona: number): Promise<ZonaTrabajoResumen | null>;
 }

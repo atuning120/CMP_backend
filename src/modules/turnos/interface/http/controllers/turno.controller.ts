@@ -4,25 +4,13 @@ import { CurrentUser } from '../../../../auth/interface/http/decorators/current-
 import { IniciarTurnoUseCase } from '../../../application/use-cases/iniciar-turno.use-case';
 import { FinalizarTurnoUseCase } from '../../../application/use-cases/finalizar-turno.use-case';
 import { ObtenerTurnoActualUseCase } from '../../../application/use-cases/obtener-turno-actual.use-case';
-import { turnoError } from '../../../application/turno.errors';
+import { RegistrarEstadoUseCase } from '../../../application/use-cases/registrar-estado.use-case';
 import { IniciarTurnoRequestDto } from '../dtos/iniciar-turno.request.dto';
 import { FinalizarTurnoRequestDto } from '../dtos/finalizar-turno.request.dto';
-import { presentTurnoActual, presentTurnoCerrado } from '../presenters/turno.presenter';
-
-interface UsuarioAutenticado {
-  idUsuario: number;
-  rol: string;
-  idOperador?: number;
-}
-
-// El operador sale siempre del JWT: el turno pertenece a la persona, no a la sesión,
-// por lo que cerrar sesión no lo cierra y al volver a ingresar se recupera con GET /turnos/actual.
-const idOperadorDe = (user: UsuarioAutenticado): number => {
-  if (!user?.idOperador) {
-    throw turnoError('SIN_OPERADOR');
-  }
-  return user.idOperador;
-};
+import { RegistrarEstadoRequestDto } from '../dtos/registrar-estado.request.dto';
+import { presentTurnoActual, presentTurnoCerrado, presentTurnoEstado } from '../presenters/turno.presenter';
+import { idOperadorDe, numeroOpcional } from './usuario-autenticado';
+import type { UsuarioAutenticado } from './usuario-autenticado';
 
 @Controller('turnos')
 @UseGuards(JwtAuthGuard)
@@ -31,6 +19,7 @@ export class TurnoController {
     private readonly iniciarTurnoUseCase: IniciarTurnoUseCase,
     private readonly finalizarTurnoUseCase: FinalizarTurnoUseCase,
     private readonly obtenerTurnoActualUseCase: ObtenerTurnoActualUseCase,
+    private readonly registrarEstadoUseCase: RegistrarEstadoUseCase,
   ) { }
 
   @Get('actual')
@@ -50,7 +39,9 @@ export class TurnoController {
       idMaquina: Number(body.idMaquina),
       horometroInicial: Number(body.horometroInicial),
       idArea: Number(body.idArea),
-      idZona: body.idZona === undefined || body.idZona === null ? null : Number(body.idZona),
+      idZona: numeroOpcional(body.idZona),
+      idCliente: body.idCliente,
+      fechaInicio: body.fechaInicio,
     });
     return presentTurnoActual(result);
   }
@@ -63,9 +54,29 @@ export class TurnoController {
   ) {
     const turno = await this.finalizarTurnoUseCase.execute({
       idOperador: idOperadorDe(user),
-      idTurno: Number(body.idTurno),
+      idTurno: numeroOpcional(body.idTurno),
+      idClienteTurno: body.idClienteTurno,
       horometroFinal: Number(body.horometroFinal),
+      fechaFin: body.fechaFin,
     });
     return presentTurnoCerrado(turno);
+  }
+
+  @Post('estados')
+  @HttpCode(HttpStatus.CREATED)
+  async registrarEstado(
+    @Body() body: RegistrarEstadoRequestDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    const registro = await this.registrarEstadoUseCase.execute({
+      idOperador: idOperadorDe(user),
+      idTurno: numeroOpcional(body.idTurno),
+      idClienteTurno: body.idClienteTurno,
+      idCliente: body.idCliente,
+      idEstado: Number(body.idEstado),
+      inicio: body.inicio,
+      comentario: body.comentario,
+    });
+    return presentTurnoEstado(registro);
   }
 }
