@@ -4,7 +4,7 @@ NestJS 12 · TypeScript · TypeORM + PostgreSQL · JWT/Passport · Jest · pnpm
 
 - `src/modules/<name>/`: hexagonal layers `domain/` → `application/` → `infrastructure/` and `interface/http/`; `src/shared/` for cross-module code
 - Domain imports only `shared`. Use cases depend on `*.repository.port.ts`, never on ORM entities.
-- DB schema: `docs/database_schema.md`
+- DB schema: `docs/database_schema.md` (ER diagram, FKs, module mapping); DDL source of truth `docs/database/schema.sql`, test data `docs/database/seed.sql`. Tables and FKs are in graphify (`graphify explain "TURNO"`); SQL extraction needs `graphifyy[sql]`
 - Before finishing: `pnpm lint` and `pnpm test`
 
 ## graphify
