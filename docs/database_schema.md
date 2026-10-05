@@ -145,6 +145,7 @@ erDiagram
         string categoria "PRODUCTIVO, DEMORA, MANTENCION"
         boolean es_productivo
         boolean activo
+        string descripcion
     }
     TURNO_ESTADO {
         int id_turno_estado PK
@@ -213,7 +214,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJA` |
 | `DISPOSITIVO_GPS` | Equipo de telemetría | `imei` UNIQUE |
 | `REFRESH_TOKEN` | Sesiones de la app móvil (un registro por emisión; se rotan en cada `/auth/refresh`) | `token_hash` UNIQUE (nunca se guarda el token en claro); `revocado_en` NULL = vigente |
-| `ESTADO_OPERACIONAL` | Catálogo de estados del turno | `categoria` ∈ `PRODUCTIVO`, `DEMORA`, `MANTENCION`; `activo` default `TRUE` |
+| `ESTADO_OPERACIONAL` | Catálogo de estados del turno (con `descripcion` para la app) | `categoria` ∈ `PRODUCTIVO`, `DEMORA`, `MANTENCION`; `activo` default `TRUE` |
 
 ### Maquinaria, telemetría y alertas
 

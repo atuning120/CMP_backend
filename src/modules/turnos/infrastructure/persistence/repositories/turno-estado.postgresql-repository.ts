@@ -74,6 +74,7 @@ export class TurnoEstadoPostgresqlRepository implements TurnoEstadoRepositoryPor
       categoria: estado.categoria as CategoriaEstado | null,
       esProductivo: estado.es_productivo,
       activo: estado.activo,
+      descripcion: estado.descripcion,
     };
   }
 

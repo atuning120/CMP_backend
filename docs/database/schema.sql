@@ -88,7 +88,8 @@ CREATE TABLE ESTADO_OPERACIONAL (
     nombre          VARCHAR(100) NOT NULL,
     categoria       VARCHAR(30) CHECK (categoria IN ('PRODUCTIVO', 'DEMORA', 'MANTENCION')),
     es_productivo   BOOLEAN NOT NULL,
-    activo          BOOLEAN NOT NULL DEFAULT TRUE
+    activo          BOOLEAN NOT NULL DEFAULT TRUE,
+    descripcion     TEXT -- qué significa el estado; la app la muestra en el botón "i"
 );
 
 CREATE TABLE ASIGNACION_GPS (

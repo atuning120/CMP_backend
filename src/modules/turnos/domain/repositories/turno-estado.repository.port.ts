@@ -8,6 +8,7 @@ export interface EstadoOperacionalResumen {
   categoria: CategoriaEstado | null;
   esProductivo: boolean;
   activo: boolean;
+  descripcion: string | null;
 }
 
 export interface TurnoEstadoRegistro {

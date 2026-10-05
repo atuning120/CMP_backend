@@ -17,4 +17,7 @@ export class EstadoOperacionalOrmEntity {
   @Column('boolean', { name: 'activo' })
   activo: boolean;
 
+  @Column('text', { name: 'descripcion', nullable: true })
+  descripcion: string | null;
+
 }

@@ -35,7 +35,7 @@ const maquina: MaquinaResumen = {
 const area: AreaResumen = { idArea: 3, nombre: 'Área 03 - Chancado', descripcion: null, estado: 'ACTIVA' };
 const zona: ZonaTrabajoResumen = { idZona: 5, idArea: 3, nombre: 'Tolva 01', descripcion: null, estado: 'ACTIVA' };
 const ubicacionValida = { idArea: area.idArea, idZona: zona.idZona };
-const produccion: EstadoOperacionalResumen = { idEstado: 1, nombre: 'Producción', categoria: 'PRODUCTIVO', esProductivo: true, activo: true };
+const produccion: EstadoOperacionalResumen = { idEstado: 1, nombre: 'Producción', categoria: 'PRODUCTIVO', esProductivo: true, activo: true, descripcion: 'Carguío' };
 
 const turnoIniciadoHace = (horas: number, overrides: Partial<Turno> = {}) =>
   Object.assign(
