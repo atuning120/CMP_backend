@@ -16,7 +16,7 @@ export class AlmacenamientoLocal implements AlmacenamientoArchivosPort {
     this.base = resolve(config.get<string>('EVIDENCIAS_DIR', 'storage/evidencias'));
   }
 
-  async guardar(clave: string, contenido: Buffer): Promise<void> {
+  async guardar(clave: string, contenido: Buffer, _mimeType: string): Promise<void> {
     const ruta = this.ruta(clave);
     await mkdir(dirname(ruta), { recursive: true });
     await writeFile(ruta, contenido);

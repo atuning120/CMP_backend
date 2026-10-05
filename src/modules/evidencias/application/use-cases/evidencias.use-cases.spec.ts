@@ -35,7 +35,7 @@ const crear = () => {
   } satisfies EvidenciaRepositoryPort;
   const archivos = new Map<string, Buffer>();
   const almacenamiento = {
-    guardar: jest.fn(async (clave: string, contenido: Buffer) => { archivos.set(clave, contenido); }),
+    guardar: jest.fn(async (clave: string, contenido: Buffer, _mimeType: string) => { archivos.set(clave, contenido); }),
     leer: jest.fn(async (clave: string) => archivos.get(clave) ?? null),
   } satisfies AlmacenamientoArchivosPort;
   return {
@@ -122,10 +122,10 @@ describe('AlmacenamientoLocal', () => {
     const dir = await mkdtemp(join(tmpdir(), 'evidencias-'));
     const almacenamiento = new AlmacenamientoLocal({ get: () => dir } as unknown as ConfigService);
     try {
-      await almacenamiento.guardar('turno-1/a.jpg', Buffer.from('x'));
+      await almacenamiento.guardar('turno-1/a.jpg', Buffer.from('x'), 'image/jpeg');
       expect((await almacenamiento.leer('turno-1/a.jpg'))?.toString()).toBe('x');
       expect(await almacenamiento.leer('turno-1/no-existe.jpg')).toBeNull();
-      await expect(almacenamiento.guardar('../fuera.jpg', Buffer.from('x'))).rejects.toThrow();
+      await expect(almacenamiento.guardar('../fuera.jpg', Buffer.from('x'), 'image/jpeg')).rejects.toThrow();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

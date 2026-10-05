@@ -74,7 +74,7 @@ export class SubirEvidenciaUseCase {
     const fechaHora = fechaDelEvento(dto.fechaHora, ahora);
     const clave = `turno-${turno.id}/${idCliente}.${extension}`;
     // Primero el archivo y luego el registro: si falla el registro, el reintento sobrescribe el mismo archivo
-    await this.almacenamiento.guardar(clave, dto.archivo.buffer);
+    await this.almacenamiento.guardar(clave, dto.archivo.buffer, mimeDeArchivo(dto.archivo));
     return this.evidenciaRepo.create({ idReporte: reporte.idReporte, claveArchivo: clave, fechaHora, idCliente });
   }
 }

@@ -8,10 +8,9 @@ import { ReporteTurnoOrmEntity } from './infrastructure/persistence/orm-entities
 import { EvidenciaOrmEntity } from './infrastructure/persistence/orm-entities/evidencia.orm-entity';
 import { ReportePostgresqlRepository } from './infrastructure/persistence/repositories/reporte.postgresql-repository';
 import { EvidenciaPostgresqlRepository } from './infrastructure/persistence/repositories/evidencia.postgresql-repository';
-import { AlmacenamientoLocal } from './infrastructure/storage/almacenamiento-local';
+import { almacenamientoProvider } from './infrastructure/storage/almacenamiento.provider';
 import { REPORTE_REPOSITORY } from './domain/repositories/reporte.repository.port';
 import { EVIDENCIA_REPOSITORY } from './domain/repositories/evidencia.repository.port';
-import { ALMACENAMIENTO_ARCHIVOS } from './domain/ports/almacenamiento-archivos.port';
 import { TurnosModule } from '../turnos/turnos.module';
 
 @Module({
@@ -20,7 +19,7 @@ import { TurnosModule } from '../turnos/turnos.module';
   providers: [
     { provide: REPORTE_REPOSITORY, useClass: ReportePostgresqlRepository },
     { provide: EVIDENCIA_REPOSITORY, useClass: EvidenciaPostgresqlRepository },
-    { provide: ALMACENAMIENTO_ARCHIVOS, useClass: AlmacenamientoLocal },
+    almacenamientoProvider,
     CrearReporteUseCase,
     SubirEvidenciaUseCase,
     ObtenerArchivoEvidenciaUseCase,
