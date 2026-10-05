@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './interface/http/controllers/auth.controller';
-import { LoginOperadorUseCase } from './application/use-cases/login-operador.use-case';
+import { LoginUseCase } from './application/use-cases/login.use-case';
 import { LoginWebUseCase } from './application/use-cases/login-web.use-case';
 import { RegisterOperadorUseCase } from './application/use-cases/register-operador.use-case';
+import { RegisterJefeTurnoUseCase } from './application/use-cases/register-jefe-turno.use-case';
 import { JwtStrategy } from './infrastructure/strategies/jwt.strategy';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { OperadoresModule } from '../operadores/operadores.module';
@@ -23,7 +24,7 @@ import { OperadoresModule } from '../operadores/operadores.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [LoginOperadorUseCase, LoginWebUseCase, RegisterOperadorUseCase, JwtStrategy],
+  providers: [LoginUseCase, LoginWebUseCase, RegisterOperadorUseCase, RegisterJefeTurnoUseCase, JwtStrategy],
   exports: [JwtModule],
 })
 export class AuthModule { }
