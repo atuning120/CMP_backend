@@ -5,6 +5,8 @@ import { RegisterOperadorRequestDto } from '../dtos/register-operador.request.dt
 import { LoginWebRequestDto } from '../dtos/login-web.request.dto';
 import { LoginWebUseCase } from '../../../application/use-cases/login-web.use-case';
 import { RegisterOperadorUseCase } from '../../../application/use-cases/register-operador.use-case';
+import { RegisterJefeTurnoUseCase } from '../../../application/use-cases/register-jefe-turno.use-case';
+import { RegisterJefeTurnoRequestDto } from '../dtos/register-jefe-turno.request.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -12,11 +14,17 @@ export class AuthController {
     private readonly loginOperadorUseCase: LoginOperadorUseCase,
     private readonly loginWebUseCase: LoginWebUseCase,
     private readonly registerOperadorUseCase: RegisterOperadorUseCase,
+    private readonly registerJefeTurnoUseCase: RegisterJefeTurnoUseCase,
   ) { }
 
   @Post('register/operador')
   async registerOperador(@Body() body: RegisterOperadorRequestDto) {
     return this.registerOperadorUseCase.execute(body);
+  }
+
+  @Post('register/jefe-turno')
+  async registerJefeTurno(@Body() body: RegisterJefeTurnoRequestDto) {
+    return this.registerJefeTurnoUseCase.execute(body);
   }
 
   @Post('login/operador')

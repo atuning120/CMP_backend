@@ -17,7 +17,7 @@ export class LoginOperadorUseCase {
     private readonly jwtService: JwtService,
   ) {}
 
-  async execute(dto: LoginRequestDto): Promise<{ accessToken: string }> {
+  async execute(dto: LoginRequestDto): Promise<{ accessToken: string; rol: string }> {
     if (!dto.rut && !dto.email) {
       throw new UnauthorizedException('Debe proporcionar RUT o Email para iniciar sesión');
     }
@@ -59,6 +59,6 @@ export class LoginOperadorUseCase {
     const payload = { sub: usuario.idUsuario, rol: usuario.rol, idOperador: idOperador };
     const accessToken = this.jwtService.sign(payload);
 
-    return { accessToken };
+    return { accessToken, rol: usuario.rol };
   }
 }

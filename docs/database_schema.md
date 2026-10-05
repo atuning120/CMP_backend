@@ -7,7 +7,7 @@ erDiagram
         string email UK
         string nombre
         string password
-        string rol "VISOR o ADMIN"
+        string rol "VISOR, ADMIN, OPERADOR o JEFE_TURNO"
         string proveedor_auth "GOOGLE o CREDENCIALES"
         boolean activo
         int id_operador FK "nullable"
