@@ -1,11 +1,11 @@
 import { Injectable, Inject, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { USUARIO_REPOSITORY } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import { OPERADOR_REPOSITORY } from '../../../operadores/domain/repositories/operador.repository.port';
 import type { OperadorRepositoryPort } from '../../../operadores/domain/repositories/operador.repository.port';
 import { LoginRequestDto } from '../../interface/http/dtos/login.request.dto';
+import { EmisorSesionService, SesionMovilResponse } from '../services/emisor-sesion.service';
 
 // Errores del login: cada tipo tiene un código estable y un mensaje genérico para el cliente.
 // Usuario inexistente, contraseña incorrecta y usuario sin contraseña comparten el mismo error
@@ -25,9 +25,7 @@ const loginError = (code: LoginErrorCode) => {
   }
 };
 
-export type LoginResponse =
-  | { accessToken: string; rol: 'OPERADOR'; idOperador: number }
-  | { accessToken: string; rol: 'JEFE_TURNO' };
+export type LoginResponse = SesionMovilResponse;
 
 @Injectable()
 export class LoginUseCase {
@@ -36,7 +34,7 @@ export class LoginUseCase {
     private readonly usuarioRepo: UsuarioRepositoryPort,
     @Inject(OPERADOR_REPOSITORY)
     private readonly operadorRepo: OperadorRepositoryPort,
-    private readonly jwtService: JwtService,
+    private readonly emisorSesion: EmisorSesionService,
   ) {}
 
   async execute(dto: LoginRequestDto): Promise<LoginResponse> {
@@ -77,15 +75,13 @@ export class LoginUseCase {
       throw loginError('OPERADOR_INACTIVO');
     }
 
-    // 4. Generar JWT y responder según el rol (solo operadores y jefes de turno usan este login)
+    // 4. Emitir access + refresh token según el rol (solo operadores y jefes de turno usan este login)
     if (usuario.rol === 'OPERADOR' && usuario.idOperador) {
-      const payload = { sub: usuario.idUsuario, rol: usuario.rol, idOperador: usuario.idOperador };
-      return { accessToken: this.jwtService.sign(payload), rol: 'OPERADOR', idOperador: usuario.idOperador };
+      return this.emisorSesion.emitir({ idUsuario: usuario.idUsuario, rol: 'OPERADOR', idOperador: usuario.idOperador });
     }
 
     if (usuario.rol === 'JEFE_TURNO') {
-      const payload = { sub: usuario.idUsuario, rol: usuario.rol };
-      return { accessToken: this.jwtService.sign(payload), rol: 'JEFE_TURNO' };
+      return this.emisorSesion.emitir({ idUsuario: usuario.idUsuario, rol: 'JEFE_TURNO', idOperador: null });
     }
 
     throw loginError('SIN_ACCESO_APP');

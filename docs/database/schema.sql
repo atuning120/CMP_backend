@@ -186,3 +186,15 @@ CREATE TABLE EVIDENCIA (
     estado_sincronizacion VARCHAR(30),
     CONSTRAINT fk_evidencia_reporte FOREIGN KEY (id_reporte) REFERENCES REPORTE_TURNO(id_reporte) ON DELETE CASCADE
 );
+
+CREATE TABLE REFRESH_TOKEN (
+    id_refresh_token  SERIAL PRIMARY KEY,
+    id_usuario        INT NOT NULL,
+    token_hash        CHAR(64) NOT NULL UNIQUE, -- SHA-256 (hex) del token; el token en claro solo lo tiene el dispositivo
+    creado_en         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expira_en         TIMESTAMPTZ NOT NULL,
+    revocado_en       TIMESTAMPTZ NULL, -- null si vigente
+    CONSTRAINT fk_refresh_usuario FOREIGN KEY (id_usuario) REFERENCES USUARIO(id_usuario) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_refresh_token_usuario ON REFRESH_TOKEN(id_usuario);

@@ -2,6 +2,7 @@
 
 - DDL completo (fuente de verdad): [`database/schema.sql`](database/schema.sql)
 - Datos sintéticos de prueba: [`database/seed.sql`](database/seed.sql) (ejecutar después del schema)
+- Migraciones para bases ya creadas: [`database/migrations/`](database/migrations/) (en orden numérico)
 
 Base local desde cero:
 
@@ -24,6 +25,14 @@ erDiagram
         boolean activo
         int id_operador FK "nullable"
         timestamptz creado_en
+    }
+    REFRESH_TOKEN {
+        int id_refresh_token PK
+        int id_usuario FK
+        string token_hash UK "SHA-256 del token"
+        timestamptz creado_en
+        timestamptz expira_en
+        timestamptz revocado_en "null si vigente"
     }
     OPERADOR {
         int id_operador PK
@@ -160,6 +169,7 @@ erDiagram
 
     USUARIO |o--o| OPERADOR : "se vincula a"
     USUARIO ||--o{ AUDITORIA_GEOCERCA : "realiza"
+    USUARIO ||--o{ REFRESH_TOKEN : "mantiene sesiones"
     USUARIO |o--o{ AREA : "modifica"
     USUARIO |o--o{ ZONA_TRABAJO : "modifica"
     USUARIO |o--o{ ALERTA : "atiende"
@@ -196,6 +206,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `AUDITORIA_GEOCERCA` | Historial de cambios de áreas y zonas | `entidad` ∈ `AREA`, `ZONA`; `accion` ∈ `CREAR`, `EDITAR`, `DESACTIVAR`; `id_entidad` es polimórfico (sin FK) |
 | `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJA` |
 | `DISPOSITIVO_GPS` | Equipo de telemetría | `imei` UNIQUE |
+| `REFRESH_TOKEN` | Sesiones de la app móvil (un registro por emisión; se rotan en cada `/auth/refresh`) | `token_hash` UNIQUE (nunca se guarda el token en claro); `revocado_en` NULL = vigente |
 | `ESTADO_OPERACIONAL` | Catálogo de estados del turno | `categoria` ∈ `PRODUCTIVO`, `DEMORA`, `MANTENCION`; `activo` default `TRUE` |
 
 ### Maquinaria, telemetría y alertas
@@ -221,6 +232,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | FK | Desde | Hacia | ON DELETE |
 |---|---|---|---|
 | `fk_usuario_operador` | `USUARIO.id_operador` | `OPERADOR.id_operador` | SET NULL |
+| `fk_refresh_usuario` | `REFRESH_TOKEN.id_usuario` | `USUARIO.id_usuario` | CASCADE |
 | `fk_area_usuario` | `AREA.modificado_por` | `USUARIO.id_usuario` | SET NULL |
 | `fk_zona_area` | `ZONA_TRABAJO.id_area` | `AREA.id_area` | CASCADE |
 | `fk_zona_usuario` | `ZONA_TRABAJO.modificado_por` | `USUARIO.id_usuario` | SET NULL |
@@ -247,6 +259,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | Tablas | Módulo (`src/modules/`) |
 |---|---|
 | `USUARIO` | `usuarios` |
+| `REFRESH_TOKEN` | `auth` |
 | `OPERADOR` | `operadores` |
 | `AREA`, `ZONA_TRABAJO`, `AUDITORIA_GEOCERCA` | `geocercas` |
 | `MAQUINA`, `DISPOSITIVO_GPS`, `ASIGNACION_GPS` | `maquinas` |
@@ -256,6 +269,8 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `REPORTE_TURNO`, `EVIDENCIA` | `evidencias` |
 
 ## Reglas de negocio sobre los datos
+
+- Sesión móvil: `/auth/login` entrega access token (JWT, `JWT_EXPIRES_IN`, por defecto 1 h) y refresh token (`REFRESH_TOKEN_TTL_DAYS`, por defecto 30 días). `/auth/refresh` revoca el token usado y emite uno nuevo; reutilizar un token rotado hace más de 60 s revoca todas las sesiones del usuario. `/auth/logout` revoca el token del dispositivo.
 
 - Un operador y una máquina tienen como máximo un `TURNO` con `hora_termino` NULL (validado en `IniciarTurnoUseCase`).
 - Un turno abierto más de 12 h pasa a `CERRADO_AUTO` con `hora_termino` = `hora_inicio` + 12 h y `horometro_final` NULL (`CerrarTurnosExcedidosUseCase` + scheduler cada 5 min).

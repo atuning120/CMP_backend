@@ -32,6 +32,16 @@ export class UsuarioPostgresqlRepository implements UsuarioRepositoryPort {
     };
   }
 
+  async findById(idUsuario: number): Promise<{ idUsuario: number; rol: string; idOperador: number | null } | null> {
+    const usuario = await this.ormRepo.findOne({ where: { id_usuario: idUsuario, activo: true } });
+    if (!usuario) return null;
+    return {
+      idUsuario: usuario.id_usuario,
+      rol: usuario.rol,
+      idOperador: usuario.id_operador,
+    };
+  }
+
   async create(data: { email: string; nombre: string; rol: string; proveedorAuth: string; activo: boolean; idOperador: number | null; passwordHash: string | null }): Promise<number> {
     const entity = this.ormRepo.create({
       email: data.email,
