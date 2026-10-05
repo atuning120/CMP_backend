@@ -388,5 +388,47 @@
     "seen": 1790952568.5251544,
     "ast_hash": "95ae6df4c5efcc2a0e6235ec994a6f13",
     "semantic_hash": "95ae6df4c5efcc2a0e6235ec994a6f13"
+  },
+  ".claude/settings.json": {
+    "mtime": 1790952568.6281366,
+    "seen": 1791199473.4569998,
+    "ast_hash": "94db4c3f711cb63b2c3d5650c553a9c8",
+    "semantic_hash": ""
+  },
+  ".claude/skills/new-nest-module/SKILL.md": {
+    "mtime": 1790952560.2443917,
+    "seen": 1791199473.4570763,
+    "ast_hash": "8c4ffe8151f7a56ceef0d2fc7d5b8c4c",
+    "semantic_hash": ""
+  },
+  "CLAUDE.md": {
+    "mtime": 1790952589.3959203,
+    "seen": 1791199473.4570775,
+    "ast_hash": "7c1edbe2b2fb3df04224290575cc2643",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1790686431.2328558,
+    "seen": 1791199473.4570785,
+    "ast_hash": "f2ac579f8d8c2d6cb002c8a6b36f81b0",
+    "semantic_hash": ""
+  },
+  "docker-compose.yml": {
+    "mtime": 1790687039.897734,
+    "seen": 1791199473.4570794,
+    "ast_hash": "83b676c3cab119ce99d8e6bf8a0a07a7",
+    "semantic_hash": ""
+  },
+  "docs/database_schema.md": {
+    "mtime": 1790691574.6250315,
+    "seen": 1791199473.4570801,
+    "ast_hash": "ab26d10021411ab31a0f83c66eab229b",
+    "semantic_hash": ""
+  },
+  "pnpm-workspace.yaml": {
+    "mtime": 1790686437.4986928,
+    "seen": 1791199473.457081,
+    "ast_hash": "59c318c627c3552b8118066856e5df99",
+    "semantic_hash": ""
   }
 }
