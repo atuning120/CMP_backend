@@ -6,6 +6,7 @@ import { Turno, EstadoTurno } from '../../../domain/entities/turno.entity';
 import { UbicacionTurno } from '../../../domain/entities/ubicacion-turno';
 import { TurnoOrmEntity } from '../orm-entities/turno.orm-entity';
 import { TurnoUbicacionOrmEntity } from '../orm-entities/turno-ubicacion.orm-entity';
+import { TurnoEstadoOrmEntity } from '../orm-entities/turno-estado.orm-entity';
 
 @Injectable()
 export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
@@ -20,8 +21,14 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
     return this.ormRepository.manager.transaction(async (manager) => {
       const saved = await this.saveWith(manager, turno);
       if (saved.hora_termino) {
+        // Al cerrar el turno se cierran también su ubicación y su estado operacional vigentes
         await manager.update(
           TurnoUbicacionOrmEntity,
+          { id_turno: saved.id_turno, fin: IsNull() },
+          { fin: saved.hora_termino },
+        );
+        await manager.update(
+          TurnoEstadoOrmEntity,
           { id_turno: saved.id_turno, fin: IsNull() },
           { fin: saved.hora_termino },
         );
@@ -65,6 +72,9 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
       horometro_inicial: turno.horometroInicial,
       horometro_final: turno.horometroFinal,
       estado: turno.estadoActual,
+      id_cliente: turno.idCliente,
+      conflicto: turno.conflicto,
+      conflicto_detalle: turno.conflictoDetalle,
     });
     return manager.save(ormEntity);
   }
@@ -75,9 +85,17 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
     return this.mapToDomain(ormEntity);
   }
 
+  async findByIdCliente(idCliente: string): Promise<Turno | null> {
+    const ormEntity = await this.ormRepository.findOne({ where: { id_cliente: idCliente } });
+    if (!ormEntity) return null;
+    return this.mapToDomain(ormEntity);
+  }
+
+  // Puede haber más de uno abierto si se aceptó un conflicto al sincronizar; se toma el más reciente
   async findActivoByMaquina(idMaquina: number): Promise<Turno | null> {
     const ormEntity = await this.ormRepository.findOne({
       where: { id_maquina: idMaquina, hora_termino: IsNull() },
+      order: { hora_inicio: 'DESC' },
     });
     if (!ormEntity) return null;
     return this.mapToDomain(ormEntity);
@@ -86,6 +104,7 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
   async findActivoByOperador(idOperador: number): Promise<Turno | null> {
     const ormEntity = await this.ormRepository.findOne({
       where: { id_operador: idOperador, hora_termino: IsNull() },
+      order: { hora_inicio: 'DESC' },
     });
     if (!ormEntity) return null;
     return this.mapToDomain(ormEntity);
@@ -117,6 +136,9 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
       Number(ormEntity.horometro_inicial),
       ormEntity.horometro_final ? Number(ormEntity.horometro_final) : null,
       (ormEntity.estado as EstadoTurno | null) ?? 'EN_CURSO',
+      ormEntity.id_cliente,
+      ormEntity.conflicto ?? false,
+      ormEntity.conflicto_detalle,
     );
   }
 }

@@ -1,4 +1,6 @@
 export class FinalizarTurnoRequestDto {
-  idTurno: number;
+  idTurno?: number;
+  idClienteTurno?: string;
   horometroFinal: number;
+  fechaFin?: string;
 }

@@ -9,6 +9,7 @@ export interface TurnoRepositoryPort {
   // Crea el turno junto a su ubicación inicial en una sola transacción.
   iniciar(turno: Turno, ubicacion: UbicacionTurno): Promise<Turno>;
   findById(id: number): Promise<Turno | null>;
+  findByIdCliente(idCliente: string): Promise<Turno | null>;
   findActivoByMaquina(idMaquina: number): Promise<Turno | null>;
   findActivoByOperador(idOperador: number): Promise<Turno | null>;
   findUltimoByOperador(idOperador: number): Promise<Turno | null>;

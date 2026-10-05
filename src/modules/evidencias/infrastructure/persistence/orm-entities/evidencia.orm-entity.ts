@@ -17,4 +17,7 @@ export class EvidenciaOrmEntity {
   @Column('varchar', { name: 'estado_sincronizacion', nullable: true })
   estado_sincronizacion: string | null;
 
+  @Column('uuid', { name: 'id_cliente', nullable: true })
+  id_cliente: string | null;
+
 }

@@ -4,6 +4,9 @@ import { BadRequestException, ConflictException, ForbiddenException, NotFoundExc
 export type TurnoErrorCode =
   | 'SIN_OPERADOR'
   | 'HOROMETRO_INVALIDO'
+  | 'FECHA_INVALIDA'
+  | 'ID_CLIENTE_INVALIDO'
+  | 'ESTADO_NO_DISPONIBLE'
   | 'MAQUINA_NO_DISPONIBLE'
   | 'AREA_NO_DISPONIBLE'
   | 'ZONA_NO_DISPONIBLE'
@@ -19,6 +22,12 @@ export const turnoError = (code: TurnoErrorCode) => {
       return new ForbiddenException({ statusCode: 403, code, message: 'Solo un operador puede gestionar turnos' });
     case 'HOROMETRO_INVALIDO':
       return new BadRequestException({ statusCode: 400, code, message: 'El horómetro ingresado no es válido' });
+    case 'FECHA_INVALIDA':
+      return new BadRequestException({ statusCode: 400, code, message: 'La fecha informada no es válida' });
+    case 'ID_CLIENTE_INVALIDO':
+      return new BadRequestException({ statusCode: 400, code, message: 'El identificador de la operación no es válido' });
+    case 'ESTADO_NO_DISPONIBLE':
+      return new NotFoundException({ statusCode: 404, code, message: 'El estado operacional no existe' });
     case 'MAQUINA_NO_DISPONIBLE':
       return new NotFoundException({ statusCode: 404, code, message: 'La máquina no existe o no está activa' });
     case 'AREA_NO_DISPONIBLE':

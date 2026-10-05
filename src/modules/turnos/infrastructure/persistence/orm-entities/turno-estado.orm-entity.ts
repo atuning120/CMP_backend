@@ -20,4 +20,7 @@ export class TurnoEstadoOrmEntity {
   @Column('text', { name: 'comentario', nullable: true })
   comentario: string | null;
 
+  @Column('uuid', { name: 'id_cliente', nullable: true })
+  id_cliente: string | null;
+
 }

@@ -141,6 +141,9 @@ CREATE TABLE TURNO (
     horometro_inicial NUMERIC(10,2) NOT NULL,
     horometro_final   NUMERIC(10,2) NULL,
     estado            VARCHAR(20) CHECK (estado IN ('EN_CURSO', 'CERRADO', 'CERRADO_AUTO')),
+    id_cliente        UUID UNIQUE, -- generado en el teléfono; hace idempotente la sincronización offline
+    conflicto         BOOLEAN NOT NULL DEFAULT FALSE, -- aceptado pese a chocar con otro turno; revisar
+    conflicto_detalle TEXT,
     CONSTRAINT fk_turno_operador FOREIGN KEY (id_operador) REFERENCES OPERADOR(id_operador),
     CONSTRAINT fk_turno_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina)
 );
@@ -164,6 +167,7 @@ CREATE TABLE TURNO_ESTADO (
     inicio          TIMESTAMPTZ NOT NULL,
     fin             TIMESTAMPTZ NULL, -- null si vigente
     comentario      TEXT,
+    id_cliente      UUID UNIQUE,
     CONSTRAINT fk_testado_turno FOREIGN KEY (id_turno) REFERENCES TURNO(id_turno) ON DELETE CASCADE,
     CONSTRAINT fk_testado_estado FOREIGN KEY (id_estado) REFERENCES ESTADO_OPERACIONAL(id_estado)
 );
@@ -171,10 +175,11 @@ CREATE TABLE TURNO_ESTADO (
 CREATE TABLE REPORTE_TURNO (
     id_reporte            SERIAL PRIMARY KEY,
     id_turno              INT NOT NULL,
-    tipo                  VARCHAR(10) CHECK (tipo IN ('INICIO', 'FIN')),
+    tipo                  VARCHAR(10) CHECK (tipo IN ('INICIO', 'FIN', 'NOVEDAD')),
     descripcion           TEXT,
     fecha_hora            TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     estado_sincronizacion VARCHAR(30),
+    id_cliente            UUID UNIQUE,
     CONSTRAINT fk_reporte_turno FOREIGN KEY (id_turno) REFERENCES TURNO(id_turno) ON DELETE CASCADE
 );
 
@@ -184,6 +189,7 @@ CREATE TABLE EVIDENCIA (
     url_blob              TEXT NOT NULL,
     fecha_hora            TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     estado_sincronizacion VARCHAR(30),
+    id_cliente            UUID UNIQUE,
     CONSTRAINT fk_evidencia_reporte FOREIGN KEY (id_reporte) REFERENCES REPORTE_TURNO(id_reporte) ON DELETE CASCADE
 );
 

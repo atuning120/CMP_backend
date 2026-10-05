@@ -1,6 +1,12 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { TURNO_REPOSITORY } from '../../domain/repositories/turno.repository.port';
 import type { TurnoRepositoryPort } from '../../domain/repositories/turno.repository.port';
+import { TURNO_ESTADO_REPOSITORY } from '../../domain/repositories/turno-estado.repository.port';
+import type {
+  EstadoOperacionalResumen,
+  TurnoEstadoRegistro,
+  TurnoEstadoRepositoryPort,
+} from '../../domain/repositories/turno-estado.repository.port';
 import { MAQUINA_REPOSITORY } from '../../../maquinas/domain/repositories/maquina.repository.port';
 import type { MaquinaRepositoryPort, MaquinaResumen } from '../../../maquinas/domain/repositories/maquina.repository.port';
 import { GEOCERCA_REPOSITORY } from '../../../geocercas/domain/repositories/geocerca.repository.port';
@@ -17,10 +23,13 @@ export interface UbicacionTurnoDetalle {
   zona: ZonaTrabajoResumen | null;
 }
 
+export type EstadoTurnoDetalle = TurnoEstadoRegistro & { estado: EstadoOperacionalResumen | null };
+
 export interface TurnoActualResult {
   turno: Turno | null;
   maquina: MaquinaResumen | null;
   ubicacion: UbicacionTurnoDetalle | null;
+  historialEstados: EstadoTurnoDetalle[];
   // Último turno del operador si fue cerrado por sistema y aún no inicia uno nuevo,
   // para avisarle que debe regularizarlo con su jefe de turno.
   turnoCerradoAutomaticamente: Turno | null;
@@ -38,6 +47,23 @@ export const detallarUbicacion = async (
   return { area, zona };
 };
 
+export const detallarHistorial = async (
+  turnoEstadoRepo: TurnoEstadoRepositoryPort,
+  idTurno: number,
+): Promise<EstadoTurnoDetalle[]> => {
+  const [historial, catalogo] = await Promise.all([
+    turnoEstadoRepo.findHistorial(idTurno),
+    turnoEstadoRepo.findCatalogoActivo(),
+  ]);
+  const porId = new Map(catalogo.map((estado) => [estado.idEstado, estado]));
+  return Promise.all(
+    historial.map(async (registro) => ({
+      ...registro,
+      estado: porId.get(registro.idEstado) ?? (await turnoEstadoRepo.findEstadoById(registro.idEstado)),
+    })),
+  );
+};
+
 @Injectable()
 export class ObtenerTurnoActualUseCase {
   constructor(
@@ -47,20 +73,24 @@ export class ObtenerTurnoActualUseCase {
     private readonly maquinaRepo: MaquinaRepositoryPort,
     @Inject(GEOCERCA_REPOSITORY)
     private readonly geocercaRepo: GeocercaRepositoryPort,
+    @Inject(TURNO_ESTADO_REPOSITORY)
+    private readonly turnoEstadoRepo: TurnoEstadoRepositoryPort,
   ) {}
 
   async execute(idOperador: number, ahora: Date = new Date()): Promise<TurnoActualResult> {
     const activo = await this.turnoRepo.findActivoByOperador(idOperador);
 
     if (activo && !activo.excedeDuracionMaxima(ahora)) {
-      const [maquina, ubicacion] = await Promise.all([
+      const [maquina, ubicacion, historialEstados] = await Promise.all([
         this.maquinaRepo.findById(activo.idMaquina),
         this.turnoRepo.findUbicacionVigente(activo.id!),
+        detallarHistorial(this.turnoEstadoRepo, activo.id!),
       ]);
       return {
         turno: activo,
         maquina,
         ubicacion: await detallarUbicacion(this.geocercaRepo, ubicacion),
+        historialEstados,
         turnoCerradoAutomaticamente: null,
       };
     }
@@ -76,6 +106,7 @@ export class ObtenerTurnoActualUseCase {
       turno: null,
       maquina: null,
       ubicacion: null,
+      historialEstados: [],
       turnoCerradoAutomaticamente: ultimo?.estadoActual === 'CERRADO_AUTO' ? ultimo : null,
     };
   }

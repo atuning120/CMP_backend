@@ -14,25 +14,48 @@ export class Turno {
     public horometroInicial: number,
     public horometroFinal: number | null,
     public estadoActual: EstadoTurno,
+    // UUID generado por la app al registrar el turno (incluso offline); null en turnos creados sin la app
+    public readonly idCliente: string | null = null,
+    public conflicto: boolean = false,
+    public conflictoDetalle: string | null = null,
   ) {}
 
   get enCurso(): boolean {
     return this.estadoActual === 'EN_CURSO' && !this.fechaFin;
   }
 
-  excedeDuracionMaxima(ahora: Date): boolean {
-    return this.enCurso && ahora.getTime() - this.fechaInicio.getTime() > DURACION_MAXIMA_TURNO_MS;
+  get limiteCierreAutomatico(): Date {
+    return new Date(this.fechaInicio.getTime() + DURACION_MAXIMA_TURNO_MS);
   }
 
+  excedeDuracionMaxima(ahora: Date): boolean {
+    return this.enCurso && ahora.getTime() > this.limiteCierreAutomatico.getTime();
+  }
+
+  /**
+   * Cierre informado por el operador. `fecha` es el momento real del cierre (puede venir de un
+   * registro offline sincronizado después).
+   * - Dentro de las 12 h: queda CERRADO. Si el sistema ya lo había cerrado automáticamente
+   *   (porque el cierre llegó tarde por falta de conexión), se corrige con los datos reales.
+   * - Después de las 12 h: queda CERRADO_AUTO en el límite, pero se conserva el horómetro final.
+   */
   finalizar(fecha: Date, horometro: number) {
-    if (!this.enCurso) {
+    if (this.estadoActual === 'CERRADO') {
       throw new Error('El turno ya está finalizado');
+    }
+    if (fecha.getTime() < this.fechaInicio.getTime()) {
+      throw new Error('La fecha de cierre no puede ser anterior al inicio');
     }
     if (horometro < this.horometroInicial) {
       throw new Error('El horómetro final no puede ser menor al inicial');
     }
-    this.fechaFin = fecha;
     this.horometroFinal = horometro;
+    if (fecha.getTime() > this.limiteCierreAutomatico.getTime()) {
+      this.fechaFin = this.limiteCierreAutomatico;
+      this.estadoActual = 'CERRADO_AUTO';
+      return;
+    }
+    this.fechaFin = fecha;
     this.estadoActual = 'CERRADO';
   }
 
@@ -42,7 +65,12 @@ export class Turno {
     if (!this.enCurso) {
       throw new Error('El turno ya está finalizado');
     }
-    this.fechaFin = new Date(this.fechaInicio.getTime() + DURACION_MAXIMA_TURNO_MS);
+    this.fechaFin = this.limiteCierreAutomatico;
     this.estadoActual = 'CERRADO_AUTO';
+  }
+
+  marcarConflicto(detalle: string) {
+    this.conflicto = true;
+    this.conflictoDetalle = this.conflictoDetalle ? `${this.conflictoDetalle} | ${detalle}` : detalle;
   }
 }

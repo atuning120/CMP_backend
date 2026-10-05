@@ -45,6 +45,15 @@ export class GeocercaPostgresqlRepository implements GeocercaRepositoryPort {
     return zonas.map((zona) => this.mapZona(zona));
   }
 
+  async findZonasActivas(): Promise<ZonaTrabajoResumen[]> {
+    const zonas = await this.zonaRepository.find({
+      select: ZONA_COLUMNS,
+      where: { estado: 'ACTIVA' },
+      order: { id_area: 'ASC', nombre: 'ASC' },
+    });
+    return zonas.map((zona) => this.mapZona(zona));
+  }
+
   async findZonaById(idZona: number): Promise<ZonaTrabajoResumen | null> {
     const zona = await this.zonaRepository.findOne({ select: ZONA_COLUMNS, where: { id_zona: idZona } });
     return zona ? this.mapZona(zona) : null;

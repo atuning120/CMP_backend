@@ -60,3 +60,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Graphify (solo local)
 graphify-out/
+
+# Fotos de evidencia guardadas por AlmacenamientoLocal
+/storage
