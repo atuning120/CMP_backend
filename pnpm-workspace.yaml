@@ -1,3 +1,5 @@
+# Scripts de instalación de dependencias nativas. Ninguna se necesita en producción:
+# @parcel/watcher es del modo watch de Nest y unrs-resolver del linter.
 allowBuilds:
-  '@parcel/watcher': set this to true or false
-  unrs-resolver: set this to true or false
+  '@parcel/watcher': false
+  unrs-resolver: false

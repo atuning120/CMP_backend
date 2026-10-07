@@ -58,6 +58,10 @@ const crearRepos = () => {
   const maquinaRepo = {
     findById: jest.fn<Promise<MaquinaResumen | null>, [number]>(async () => maquina),
     findActivas: jest.fn<Promise<MaquinaResumen[]>, []>(async () => [maquina]),
+    findFlota: jest.fn(async () => []),
+    existeNombre: jest.fn(async () => false),
+    existePatente: jest.fn(async () => false),
+    create: jest.fn(),
   } satisfies MaquinaRepositoryPort;
   const geocercaRepo = {
     findAreasActivas: jest.fn<Promise<AreaResumen[]>, []>(async () => [area]),

@@ -11,6 +11,7 @@ import { OperadoresModule } from './modules/operadores/operadores.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -37,7 +38,7 @@ import { AuthModule } from './modules/auth/auth.module';
     UsuariosModule,
     AuthModule,
   ],
-  controllers: [],
+  controllers: [HealthController],
   providers: [],
 })
 export class AppModule { }
