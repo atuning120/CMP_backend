@@ -11,6 +11,7 @@ import { OperadoresModule } from './modules/operadores/operadores.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { HistorialModule } from './modules/historial/historial.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -37,6 +38,7 @@ import { HealthController } from './health.controller';
     TrackingModule,
     UsuariosModule,
     AuthModule,
+    HistorialModule,
   ],
   controllers: [HealthController],
   providers: [],

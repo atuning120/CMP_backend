@@ -149,6 +149,26 @@ INSERT INTO maquina (nombre, marca, modelo, anio, tipo_maquina, estado) VALUES
 ('MN-02', 'Komatsu', 'GD655-7', 2022, 'Motoniveladora', 'ACTIVA'),
 ('RX-01', 'Caterpillar', 'CAT 420F2 4WD', 2020, 'Retroexcavadora', 'ACTIVA');
 
+-- Modelos genéricos para "Datos Previos" al incorporar una máquina
+INSERT INTO modelo_maquina (nombre, marca, modelo, tipo_maquina) VALUES
+('Cargador CAT 988K', 'Caterpillar', 'CAT 988K', 'Cargador Frontal'),
+('Cargador CAT 980M', 'Caterpillar', 'CAT 980M', 'Cargador Frontal'),
+('Cargador Komatsu WA600', 'Komatsu', 'WA600-6', 'Cargador Frontal'),
+('Cargador Komatsu WA500', 'Komatsu', 'WA500-7', 'Cargador Frontal'),
+('Excavadora CAT 390F', 'Caterpillar', 'CAT 390F L', 'Excavadora'),
+('Excavadora Komatsu PC800', 'Komatsu', 'PC800LC-8', 'Excavadora'),
+('Excavadora Komatsu PC490', 'Komatsu', 'PC490LC-11', 'Excavadora'),
+('Bulldozer CAT D8T', 'Caterpillar', 'CAT D8T', 'Bulldozer'),
+('Bulldozer CAT D9T', 'Caterpillar', 'CAT D9T', 'Bulldozer'),
+('Bulldozer Komatsu D375A', 'Komatsu', 'D375A-6', 'Bulldozer'),
+('Minicargador CAT 262D3', 'Caterpillar', 'CAT 262D3', 'Minicargador'),
+('Minicargador Bobcat S770', 'Bobcat', 'S770', 'Minicargador'),
+('Camión Tolva CAT 777G', 'Caterpillar', '777G', 'Camión Tolva'),
+('Camión Tolva Komatsu HD785', 'Komatsu', 'HD785-7', 'Camión Tolva'),
+('Motoniveladora CAT 16M3', 'Caterpillar', 'CAT 16M3', 'Motoniveladora'),
+('Motoniveladora Komatsu GD655', 'Komatsu', 'GD655-7', 'Motoniveladora'),
+('Retroexcavadora CAT 420F2', 'Caterpillar', 'CAT 420F2 4WD', 'Retroexcavadora');
+
 -- Inserción de 20 registros sintéticos para la tabla DISPOSITIVO_GPS
 INSERT INTO dispositivo_gps (imei, modelo, numero_sim, estado) VALUES
 ('864201040001001', 'Teltonika FMB920', '+56911000001', 'ACTIVO'),

@@ -4,6 +4,8 @@ import { CurrentUser } from '../../../../auth/interface/http/decorators/current-
 import { ListarMaquinasActivasUseCase } from '../../../application/use-cases/listar-maquinas-activas.use-case';
 import { ListarFlotaUseCase } from '../../../application/use-cases/listar-flota.use-case';
 import { CrearMaquinaUseCase } from '../../../application/use-cases/crear-maquina.use-case';
+import { ListarTiposMaquinaUseCase } from '../../../application/use-cases/listar-tipos-maquina.use-case';
+import { ListarMarcasMaquinaUseCase } from '../../../application/use-cases/listar-marcas-maquina.use-case';
 import { CrearMaquinaRequestDto } from '../dtos/crear-maquina.request.dto';
 
 @Controller('maquinas')
@@ -13,6 +15,8 @@ export class MaquinaController {
     private readonly listarMaquinasActivasUseCase: ListarMaquinasActivasUseCase,
     private readonly listarFlotaUseCase: ListarFlotaUseCase,
     private readonly crearMaquinaUseCase: CrearMaquinaUseCase,
+    private readonly listarTiposMaquinaUseCase: ListarTiposMaquinaUseCase,
+    private readonly listarMarcasMaquinaUseCase: ListarMarcasMaquinaUseCase,
   ) {}
 
   @Get()
@@ -26,12 +30,25 @@ export class MaquinaController {
     return this.listarFlotaUseCase.execute(typeof busqueda === 'string' ? busqueda : undefined);
   }
 
+  // Opciones del selector "Tipo de máquina" al incorporar una máquina
+  @Get('tipos')
+  async listarTipos() {
+    return this.listarTiposMaquinaUseCase.execute();
+  }
+
+  // Opciones del selector "Marca" al incorporar una máquina
+  @Get('marcas')
+  async listarMarcas() {
+    return this.listarMarcasMaquinaUseCase.execute();
+  }
+
   // Incorporación de una máquina nueva a planta (jefe de turno)
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async crear(@Body() body: CrearMaquinaRequestDto, @CurrentUser() user: { rol: string }) {
+  async crear(@Body() body: CrearMaquinaRequestDto, @CurrentUser() user: { rol: string; idUsuario: number }) {
     return this.crearMaquinaUseCase.execute({
       rol: user?.rol,
+      idUsuario: user?.idUsuario,
       nombre: body?.nombre,
       marca: body?.marca,
       modelo: body?.modelo,
@@ -41,6 +58,8 @@ export class MaquinaController {
       numeroChasis: body?.numeroChasis,
       horometroInicial: body?.horometroInicial,
       esContratista: body?.esContratista,
+      motivo: body?.motivo,
+      observacion: body?.observacion,
     });
   }
 }

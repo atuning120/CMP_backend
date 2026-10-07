@@ -8,4 +8,6 @@ export class CrearMaquinaRequestDto {
   numeroChasis?: string;
   horometroInicial: number;
   esContratista?: boolean;
+  motivo: string;
+  observacion?: string;
 }

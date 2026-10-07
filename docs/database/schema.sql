@@ -83,6 +83,19 @@ CREATE TABLE MAQUINA (
 CREATE UNIQUE INDEX ux_maquina_nombre ON MAQUINA (UPPER(nombre));
 CREATE UNIQUE INDEX ux_maquina_patente ON MAQUINA (UPPER(patente)) WHERE patente IS NOT NULL;
 
+-- Catálogo de modelos genéricos ("Datos Previos" al incorporar una máquina). Sin FKs: solo rellena el formulario.
+CREATE TABLE MODELO_MAQUINA (
+    id_modelo       SERIAL PRIMARY KEY,
+    nombre          VARCHAR(100) NOT NULL, -- nombre corto que se muestra en la app
+    marca           VARCHAR(50) NOT NULL,
+    modelo          VARCHAR(50) NOT NULL,
+    tipo_maquina    VARCHAR(50) NOT NULL,
+    activo          BOOLEAN NOT NULL DEFAULT TRUE,
+    creado_en       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX ux_modelo_maquina_marca_modelo ON MODELO_MAQUINA (UPPER(marca), UPPER(modelo));
+
 CREATE TABLE DISPOSITIVO_GPS (
     id_gps          SERIAL PRIMARY KEY,
     imei            VARCHAR(50) NOT NULL UNIQUE,
@@ -201,6 +214,23 @@ CREATE TABLE EVIDENCIA (
     id_cliente            UUID UNIQUE,
     CONSTRAINT fk_evidencia_reporte FOREIGN KEY (id_reporte) REFERENCES REPORTE_TURNO(id_reporte) ON DELETE CASCADE
 );
+
+-- Acciones del jefe de turno sobre la flota, con motivo y observación (pestaña Historial junto con TURNO)
+CREATE TABLE BITACORA_JEFE_TURNO (
+    id_bitacora     SERIAL PRIMARY KEY,
+    accion          VARCHAR(20) NOT NULL CHECK (accion IN ('INCORPORAR', 'EDITAR', 'HABILITAR', 'DESHABILITAR', 'REEMPLAZAR')),
+    id_maquina      INT NOT NULL,
+    id_usuario      INT NOT NULL, -- jefe de turno que realizó la acción (sale de la sesión)
+    motivo          VARCHAR(100) NOT NULL,
+    observacion     TEXT,
+    detalle         JSONB, -- datos de la acción (p. ej. valores antes/después al editar)
+    fecha           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_bitacora_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina),
+    CONSTRAINT fk_bitacora_usuario FOREIGN KEY (id_usuario) REFERENCES USUARIO(id_usuario)
+);
+
+CREATE INDEX idx_bitacora_fecha ON BITACORA_JEFE_TURNO (fecha DESC);
+CREATE INDEX idx_turno_hora_inicio ON TURNO (hora_inicio DESC);
 
 CREATE TABLE REFRESH_TOKEN (
     id_refresh_token  SERIAL PRIMARY KEY,

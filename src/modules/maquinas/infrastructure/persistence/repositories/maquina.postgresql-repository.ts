@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import type { MaquinaFlota, MaquinaRepositoryPort, MaquinaResumen, NuevaMaquina } from '../../../domain/repositories/maquina.repository.port';
+import type { MaquinaFlota, MaquinaRepositoryPort, MaquinaResumen, NuevaMaquina, RegistroBitacora } from '../../../domain/repositories/maquina.repository.port';
 import { MaquinaOrmEntity } from '../orm-entities/maquina.orm-entity';
 
 @Injectable()
@@ -83,21 +83,30 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
     return this.ormRepository.createQueryBuilder('m').where('UPPER(m.patente) = UPPER(:patente)', { patente }).getExists();
   }
 
-  async create(datos: NuevaMaquina): Promise<MaquinaFlota> {
-    const ormEntity = await this.ormRepository.save(
-      this.ormRepository.create({
-        nombre: datos.nombre,
-        marca: datos.marca,
-        modelo: datos.modelo,
-        anio: datos.anio,
-        tipo_maquina: datos.tipoMaquina,
-        estado: 'ACTIVA',
-        patente: datos.patente,
-        numero_chasis: datos.numeroChasis,
-        horometro_inicial: String(datos.horometroInicial),
-        es_contratista: datos.esContratista,
-      }),
-    );
+  async create(datos: NuevaMaquina, registro: RegistroBitacora): Promise<MaquinaFlota> {
+    const ormEntity = await this.ormRepository.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(MaquinaOrmEntity);
+      const creada = await repo.save(
+        repo.create({
+          nombre: datos.nombre,
+          marca: datos.marca,
+          modelo: datos.modelo,
+          anio: datos.anio,
+          tipo_maquina: datos.tipoMaquina,
+          estado: 'ACTIVA',
+          patente: datos.patente,
+          numero_chasis: datos.numeroChasis,
+          horometro_inicial: String(datos.horometroInicial),
+          es_contratista: datos.esContratista,
+        }),
+      );
+      await manager.query(
+        `INSERT INTO bitacora_jefe_turno (accion, id_maquina, id_usuario, motivo, observacion, detalle)
+         VALUES ('INCORPORAR', $1, $2, $3, $4, $5)`,
+        [creada.id_maquina, registro.idUsuario, registro.motivo, registro.observacion, JSON.stringify(datos)],
+      );
+      return creada;
+    });
     // Recién incorporada: aún no tiene turnos, así que nadie la opera
     return {
       ...this.mapToResumen(ormEntity),
@@ -106,6 +115,31 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       ubicacionActual: null,
       horometroActual: datos.horometroInicial,
     };
+  }
+
+  async findTipos(): Promise<string[]> {
+    return this.valoresEnUso('tipo_maquina');
+  }
+
+  async findMarcas(): Promise<string[]> {
+    return this.valoresEnUso('marca');
+  }
+
+  // Valores distintos de una columna en la flota y en el catálogo de modelos activos.
+  // Variantes que solo difieren en mayúsculas o espacios se muestran una sola vez.
+  private async valoresEnUso(columna: 'tipo_maquina' | 'marca'): Promise<string[]> {
+    const filas: { valor: string }[] = await this.ormRepository.query(`
+      SELECT MIN(valor) AS valor
+      FROM (
+        SELECT TRIM(${columna}) AS valor FROM maquina
+        UNION ALL
+        SELECT TRIM(${columna}) FROM modelo_maquina WHERE activo
+      ) t
+      WHERE valor IS NOT NULL AND valor <> ''
+      GROUP BY UPPER(valor)
+      ORDER BY MIN(valor)
+    `);
+    return filas.map((fila) => fila.valor);
   }
 
   private mapToResumen(ormEntity: MaquinaOrmEntity): MaquinaResumen {

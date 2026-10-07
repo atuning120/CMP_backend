@@ -29,6 +29,13 @@ export interface NuevaMaquina {
   esContratista: boolean;
 }
 
+// Quién y por qué: cada acción del jefe de turno sobre la flota queda en BITACORA_JEFE_TURNO
+export interface RegistroBitacora {
+  idUsuario: number;
+  motivo: string;
+  observacion: string | null;
+}
+
 export interface MaquinaRepositoryPort {
   findById(idMaquina: number): Promise<MaquinaResumen | null>;
   findActivas(): Promise<MaquinaResumen[]>;
@@ -37,5 +44,10 @@ export interface MaquinaRepositoryPort {
   // Comparación sin distinguir mayúsculas, igual que los índices únicos
   existeNombre(nombre: string): Promise<boolean>;
   existePatente(patente: string): Promise<boolean>;
-  create(datos: NuevaMaquina): Promise<MaquinaFlota>;
+  // La máquina y su registro de incorporación en la bitácora se guardan en una misma transacción
+  create(datos: NuevaMaquina, registro: RegistroBitacora): Promise<MaquinaFlota>;
+  // Tipos de máquina en uso: los de la flota y los del catálogo de modelos activos, sin repetir
+  findTipos(): Promise<string[]>;
+  // Marcas en uso, con el mismo criterio que findTipos
+  findMarcas(): Promise<string[]>;
 }
