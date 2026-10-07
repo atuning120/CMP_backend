@@ -9,6 +9,8 @@ const crear = () => {
     existeNombre: jest.fn(async () => false),
     existePatente: jest.fn(async () => false),
     create: jest.fn(),
+    findTipos: jest.fn(async () => []),
+    findMarcas: jest.fn(async () => []),
   } satisfies MaquinaRepositoryPort;
   return { maquinaRepo, listar: new ListarFlotaUseCase(maquinaRepo) };
 };

@@ -83,6 +83,19 @@ CREATE TABLE MAQUINA (
 CREATE UNIQUE INDEX ux_maquina_nombre ON MAQUINA (UPPER(nombre));
 CREATE UNIQUE INDEX ux_maquina_patente ON MAQUINA (UPPER(patente)) WHERE patente IS NOT NULL;
 
+-- Catálogo de modelos genéricos ("Datos Previos" al incorporar una máquina). Sin FKs: solo rellena el formulario.
+CREATE TABLE MODELO_MAQUINA (
+    id_modelo       SERIAL PRIMARY KEY,
+    nombre          VARCHAR(100) NOT NULL, -- nombre corto que se muestra en la app
+    marca           VARCHAR(50) NOT NULL,
+    modelo          VARCHAR(50) NOT NULL,
+    tipo_maquina    VARCHAR(50) NOT NULL,
+    activo          BOOLEAN NOT NULL DEFAULT TRUE,
+    creado_en       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX ux_modelo_maquina_marca_modelo ON MODELO_MAQUINA (UPPER(marca), UPPER(modelo));
+
 CREATE TABLE DISPOSITIVO_GPS (
     id_gps          SERIAL PRIMARY KEY,
     imei            VARCHAR(50) NOT NULL UNIQUE,

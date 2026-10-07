@@ -62,6 +62,8 @@ const crearRepos = () => {
     existeNombre: jest.fn(async () => false),
     existePatente: jest.fn(async () => false),
     create: jest.fn(),
+    findTipos: jest.fn(async () => []),
+    findMarcas: jest.fn(async () => []),
   } satisfies MaquinaRepositoryPort;
   const geocercaRepo = {
     findAreasActivas: jest.fn<Promise<AreaResumen[]>, []>(async () => [area]),

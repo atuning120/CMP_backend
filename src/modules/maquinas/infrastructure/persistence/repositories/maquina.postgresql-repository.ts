@@ -108,6 +108,31 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
     };
   }
 
+  async findTipos(): Promise<string[]> {
+    return this.valoresEnUso('tipo_maquina');
+  }
+
+  async findMarcas(): Promise<string[]> {
+    return this.valoresEnUso('marca');
+  }
+
+  // Valores distintos de una columna en la flota y en el catálogo de modelos activos.
+  // Variantes que solo difieren en mayúsculas o espacios se muestran una sola vez.
+  private async valoresEnUso(columna: 'tipo_maquina' | 'marca'): Promise<string[]> {
+    const filas: { valor: string }[] = await this.ormRepository.query(`
+      SELECT MIN(valor) AS valor
+      FROM (
+        SELECT TRIM(${columna}) AS valor FROM maquina
+        UNION ALL
+        SELECT TRIM(${columna}) FROM modelo_maquina WHERE activo
+      ) t
+      WHERE valor IS NOT NULL AND valor <> ''
+      GROUP BY UPPER(valor)
+      ORDER BY MIN(valor)
+    `);
+    return filas.map((fila) => fila.valor);
+  }
+
   private mapToResumen(ormEntity: MaquinaOrmEntity): MaquinaResumen {
     return {
       idMaquina: ormEntity.id_maquina,

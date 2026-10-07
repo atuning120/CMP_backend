@@ -85,6 +85,15 @@ erDiagram
         decimal horometro_inicial
         boolean es_contratista
     }
+    MODELO_MAQUINA {
+        int id_modelo PK
+        string nombre
+        string marca
+        string modelo
+        string tipo_maquina
+        boolean activo
+        timestamptz creado_en
+    }
     DISPOSITIVO_GPS {
         int id_gps PK
         string imei UK
@@ -216,6 +225,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `ZONA_TRABAJO` | Subdivisión de un área | `estado` en uso: `ACTIVA`, `INACTIVA` |
 | `AUDITORIA_GEOCERCA` | Historial de cambios de áreas y zonas | `entidad` ∈ `AREA`, `ZONA`; `accion` ∈ `CREAR`, `EDITAR`, `DESACTIVAR`; `id_entidad` es polimórfico (sin FK) |
 | `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJA`; `nombre` y `patente` únicos (sin distinguir mayúsculas) |
+| `MODELO_MAQUINA` | Modelo genérico por tipo de máquina ("Datos Previos" al incorporar una máquina); sin relaciones | (`marca`, `modelo`) únicos sin distinguir mayúsculas; `activo` default `TRUE` |
 | `DISPOSITIVO_GPS` | Equipo de telemetría | `imei` UNIQUE |
 | `REFRESH_TOKEN` | Sesiones de la app móvil (un registro por emisión; se rotan en cada `/auth/refresh`) | `token_hash` UNIQUE (nunca se guarda el token en claro); `revocado_en` NULL = vigente |
 | `ESTADO_OPERACIONAL` | Catálogo de estados del turno (con `descripcion` para la app) | `categoria` ∈ `PRODUCTIVO`, `DEMORA`, `MANTENCION`; `activo` default `TRUE` |
@@ -273,7 +283,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `REFRESH_TOKEN` | `auth` |
 | `OPERADOR` | `operadores` |
 | `AREA`, `ZONA_TRABAJO`, `AUDITORIA_GEOCERCA` | `geocercas` |
-| `MAQUINA`, `DISPOSITIVO_GPS`, `ASIGNACION_GPS` | `maquinas` |
+| `MAQUINA`, `MODELO_MAQUINA`, `DISPOSITIVO_GPS`, `ASIGNACION_GPS` | `maquinas` |
 | `TRACKING_HISTORY` | `tracking` |
 | `ALERTA` | `alertas` |
 | `TURNO`, `TURNO_UBICACION`, `TURNO_ESTADO`, `ESTADO_OPERACIONAL` | `turnos` |

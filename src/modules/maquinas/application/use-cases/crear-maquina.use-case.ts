@@ -1,6 +1,8 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { MAQUINA_REPOSITORY } from '../../domain/repositories/maquina.repository.port';
 import type { MaquinaFlota, MaquinaRepositoryPort } from '../../domain/repositories/maquina.repository.port';
+import { MODELO_MAQUINA_REPOSITORY } from '../../domain/repositories/modelo-maquina.repository.port';
+import type { ModeloMaquinaRepositoryPort } from '../../domain/repositories/modelo-maquina.repository.port';
 import { maquinaError } from '../maquina.errors';
 
 export interface CrearMaquinaDto {
@@ -43,9 +45,13 @@ const texto = (campo: CampoTexto, valor: unknown): string | null => {
 
 @Injectable()
 export class CrearMaquinaUseCase {
+  private readonly logger = new Logger(CrearMaquinaUseCase.name);
+
   constructor(
     @Inject(MAQUINA_REPOSITORY)
     private readonly maquinaRepo: MaquinaRepositoryPort,
+    @Inject(MODELO_MAQUINA_REPOSITORY)
+    private readonly modeloRepo: ModeloMaquinaRepositoryPort,
   ) {}
 
   async execute(dto: CrearMaquinaDto): Promise<MaquinaFlota> {
@@ -70,16 +76,48 @@ export class CrearMaquinaUseCase {
     if (await this.maquinaRepo.existeNombre(nombre)) throw maquinaError('CODIGO_DUPLICADO', nombre);
     if (patente && (await this.maquinaRepo.existePatente(patente))) throw maquinaError('PATENTE_DUPLICADA', patente);
 
-    return this.maquinaRepo.create({
+    const modelo = texto('modelo', dto.modelo);
+    // Marca y tipo que ya existen con otras mayúsculas se guardan con la escritura existente, para no duplicarlos
+    const marcaIngresada = texto('marca', dto.marca);
+    const tipoIngresado = texto('tipoMaquina', dto.tipoMaquina);
+    const [marcaExistente, tipoExistente] = await Promise.all([
+      marcaIngresada ? this.buscarExistente(marcaIngresada, () => this.maquinaRepo.findMarcas()) : undefined,
+      tipoIngresado ? this.buscarExistente(tipoIngresado, () => this.maquinaRepo.findTipos()) : undefined,
+    ]);
+    const marca = marcaExistente ?? marcaIngresada;
+    const tipoMaquina = tipoExistente ?? tipoIngresado;
+
+    const maquina = await this.maquinaRepo.create({
       nombre,
-      marca: texto('marca', dto.marca),
-      modelo: texto('modelo', dto.modelo),
+      marca,
+      modelo,
       anio,
-      tipoMaquina: texto('tipoMaquina', dto.tipoMaquina),
+      tipoMaquina,
       patente,
       numeroChasis: texto('numeroChasis', dto.numeroChasis),
       horometroInicial,
       esContratista: dto.esContratista === true,
     });
+
+    // Marca o tipo nuevo: queda registrado como modelo para que aparezca en los selectores y en "Datos Previos"
+    if (marca && modelo && tipoMaquina && (!marcaExistente || !tipoExistente)) {
+      try {
+        await this.modeloRepo.crearSiNoExiste({
+          nombre: `${tipoMaquina} ${marca} ${modelo}`.slice(0, 100),
+          marca,
+          modelo,
+          tipoMaquina,
+        });
+      } catch (error) {
+        // La máquina ya quedó creada: no se revierte por no poder registrar el modelo
+        this.logger.warn(`No se pudo registrar el modelo "${marca} ${modelo}" (${tipoMaquina}): ${String(error)}`);
+      }
+    }
+
+    return maquina;
+  }
+
+  private async buscarExistente(valor: string, listar: () => Promise<string[]>): Promise<string | undefined> {
+    return (await listar()).find((existente) => existente.toUpperCase() === valor.toUpperCase());
   }
 }

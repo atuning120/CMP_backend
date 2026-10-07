@@ -4,6 +4,8 @@ import { CurrentUser } from '../../../../auth/interface/http/decorators/current-
 import { ListarMaquinasActivasUseCase } from '../../../application/use-cases/listar-maquinas-activas.use-case';
 import { ListarFlotaUseCase } from '../../../application/use-cases/listar-flota.use-case';
 import { CrearMaquinaUseCase } from '../../../application/use-cases/crear-maquina.use-case';
+import { ListarTiposMaquinaUseCase } from '../../../application/use-cases/listar-tipos-maquina.use-case';
+import { ListarMarcasMaquinaUseCase } from '../../../application/use-cases/listar-marcas-maquina.use-case';
 import { CrearMaquinaRequestDto } from '../dtos/crear-maquina.request.dto';
 
 @Controller('maquinas')
@@ -13,6 +15,8 @@ export class MaquinaController {
     private readonly listarMaquinasActivasUseCase: ListarMaquinasActivasUseCase,
     private readonly listarFlotaUseCase: ListarFlotaUseCase,
     private readonly crearMaquinaUseCase: CrearMaquinaUseCase,
+    private readonly listarTiposMaquinaUseCase: ListarTiposMaquinaUseCase,
+    private readonly listarMarcasMaquinaUseCase: ListarMarcasMaquinaUseCase,
   ) {}
 
   @Get()
@@ -24,6 +28,18 @@ export class MaquinaController {
   @Get('flota')
   async listarFlota(@Query('busqueda') busqueda?: string) {
     return this.listarFlotaUseCase.execute(typeof busqueda === 'string' ? busqueda : undefined);
+  }
+
+  // Opciones del selector "Tipo de máquina" al incorporar una máquina
+  @Get('tipos')
+  async listarTipos() {
+    return this.listarTiposMaquinaUseCase.execute();
+  }
+
+  // Opciones del selector "Marca" al incorporar una máquina
+  @Get('marcas')
+  async listarMarcas() {
+    return this.listarMarcasMaquinaUseCase.execute();
   }
 
   // Incorporación de una máquina nueva a planta (jefe de turno)

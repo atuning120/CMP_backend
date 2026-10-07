@@ -38,4 +38,8 @@ export interface MaquinaRepositoryPort {
   existeNombre(nombre: string): Promise<boolean>;
   existePatente(patente: string): Promise<boolean>;
   create(datos: NuevaMaquina): Promise<MaquinaFlota>;
+  // Tipos de máquina en uso: los de la flota y los del catálogo de modelos activos, sin repetir
+  findTipos(): Promise<string[]>;
+  // Marcas en uso, con el mismo criterio que findTipos
+  findMarcas(): Promise<string[]>;
 }
