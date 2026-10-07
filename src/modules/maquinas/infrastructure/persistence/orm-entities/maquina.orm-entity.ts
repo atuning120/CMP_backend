@@ -23,4 +23,16 @@ export class MaquinaOrmEntity {
   @Column('varchar', { name: 'estado', nullable: true })
   estado: string | null;
 
+  @Column('varchar', { name: 'patente', nullable: true })
+  patente: string | null;
+
+  @Column('varchar', { name: 'numero_chasis', nullable: true })
+  numero_chasis: string | null;
+
+  @Column('numeric', { name: 'horometro_inicial', nullable: true })
+  horometro_inicial: string | null;
+
+  @Column('boolean', { name: 'es_contratista', default: false })
+  es_contratista: boolean;
+
 }

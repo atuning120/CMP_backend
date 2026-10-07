@@ -72,8 +72,16 @@ CREATE TABLE MAQUINA (
     modelo          VARCHAR(50),
     anio            INT,
     tipo_maquina    VARCHAR(50),
-    estado          VARCHAR(20) CHECK (estado IN ('ACTIVA', 'BAJA'))
+    estado          VARCHAR(20) CHECK (estado IN ('ACTIVA', 'BAJA')),
+    patente           VARCHAR(15),
+    numero_chasis     VARCHAR(50), -- N° de chasis / serie (VIN)
+    horometro_inicial NUMERIC(10,2), -- al incorporarse a planta; luego manda el horómetro de los turnos
+    es_contratista    BOOLEAN NOT NULL DEFAULT FALSE -- equipo de contratista o arriendo
 );
+
+-- El código interno (nombre) y la patente identifican a la máquina en faena: no se pueden repetir
+CREATE UNIQUE INDEX ux_maquina_nombre ON MAQUINA (UPPER(nombre));
+CREATE UNIQUE INDEX ux_maquina_patente ON MAQUINA (UPPER(patente)) WHERE patente IS NOT NULL;
 
 CREATE TABLE DISPOSITIVO_GPS (
     id_gps          SERIAL PRIMARY KEY,
