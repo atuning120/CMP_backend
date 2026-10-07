@@ -1,19 +1,21 @@
-# Verifica cada PR hacia main: el Backend debe instalar, pasar lint, typecheck, tests, compilar
-# y generar la imagen Docker que luego se despliega en Azure Container Apps.
-name: CI Backend
+# CI: cada PR hacia main debe instalar, pasar lint, typecheck, tests, compilar y generar la imagen Docker.
+# CD: al llegar cambios a main (merge del PR) se vuelve a verificar y se despliega en Azure Container Apps.
+name: CI/CD Backend
 
 on:
   pull_request:
+    branches: [main]
+  push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Un push nuevo al mismo PR cancela la verificación anterior
+# Un push nuevo al mismo PR cancela la verificación anterior; en main nunca se corta un despliegue
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verificar:
@@ -51,6 +53,8 @@ jobs:
   docker:
     name: Imagen Docker
     needs: verificar
+    # En main la imagen la construye el despliegue
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -66,3 +70,77 @@ jobs:
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  desplegar:
+    name: Desplegar en Azure
+    needs: verificar
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # El environment limita qué workflows pueden autenticarse en Azure (credencial federada OIDC)
+    environment:
+      name: produccion
+      url: https://${{ vars.AZURE_CONTAINERAPP_FQDN }}/health
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      REGISTRO: cmpcapstoneacr
+      IMAGEN: cmpcapstoneacr.azurecr.io/cmp-backend
+      GRUPO: CMP_Capstone
+      APP: cmp-backend
+    steps:
+      - uses: actions/checkout@v4
+
+      # Sin contraseñas guardadas: GitHub entrega un token OIDC que Azure canjea por la identidad del pipeline
+      - name: Login en Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login en ACR
+        run: az acr login -n "$REGISTRO"
+
+      - uses: docker/setup-buildx-action@v3
+
+      # El entorno Express de Container Apps exige imágenes OCI (sin attestations de provenance/SBOM)
+      - name: Construir y publicar imagen
+        id: imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
+          outputs: type=registry,"name=${{ env.IMAGEN }}:${{ github.sha }},${{ env.IMAGEN }}:latest",oci-mediatypes=true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Express no admite sufijos de revisión: se despliega por digest para forzar una revisión nueva
+      - name: Actualizar Container App
+        env:
+          DIGEST: ${{ steps.imagen.outputs.digest }}
+        run: |
+          if [ -z "$DIGEST" ]; then
+            DIGEST=$(az acr manifest show-metadata -r "$REGISTRO" -n "cmp-backend:$GITHUB_SHA" --query digest -o tsv)
+          fi
+          az config set extension.use_dynamic_install=yes_without_prompt --only-show-errors
+          az containerapp update -g "$GRUPO" -n "$APP" --image "$IMAGEN@$DIGEST" -o none --only-show-errors
+          echo "Desplegado ${GITHUB_SHA::7} ($DIGEST)" >> "$GITHUB_STEP_SUMMARY"
+
+      # Con mínimo 0 réplicas el primer request despierta el contenedor: se reintenta hasta ~3 minutos
+      - name: Verificar /health
+        run: |
+          URL="https://$(az containerapp show -g "$GRUPO" -n "$APP" --query properties.configuration.ingress.fqdn -o tsv --only-show-errors)/health"
+          for intento in $(seq 1 18); do
+            if curl -fsS --max-time 10 "$URL"; then
+              echo; echo "OK: $URL"
+              exit 0
+            fi
+            echo "Intento $intento: aún no responde, reintentando en 10 s..."
+            sleep 10
+          done
+          echo "::error::El Backend no respondió en $URL"
+          exit 1
