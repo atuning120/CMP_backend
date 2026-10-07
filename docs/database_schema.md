@@ -85,6 +85,16 @@ erDiagram
         decimal horometro_inicial
         boolean es_contratista
     }
+    BITACORA_JEFE_TURNO {
+        int id_bitacora PK
+        string accion "INCORPORAR, EDITAR, HABILITAR, DESHABILITAR o REEMPLAZAR"
+        int id_maquina FK
+        int id_usuario FK
+        string motivo
+        text observacion
+        jsonb detalle
+        timestamptz fecha
+    }
     MODELO_MAQUINA {
         int id_modelo PK
         string nombre
@@ -209,6 +219,8 @@ erDiagram
     MAQUINA ||--o{ TRACKING_HISTORY : "posiciones de"
     DISPOSITIVO_GPS ||--o{ ALERTA : "genera"
     MAQUINA ||--o{ ALERTA : "afecta a"
+    MAQUINA ||--o{ BITACORA_JEFE_TURNO : "acciones sobre"
+    USUARIO ||--o{ BITACORA_JEFE_TURNO : "realiza"
 ```
 
 ## Tablas
@@ -227,6 +239,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJA`; `nombre` y `patente` únicos (sin distinguir mayúsculas) |
 | `MODELO_MAQUINA` | Modelo genérico por tipo de máquina ("Datos Previos" al incorporar una máquina); sin relaciones | (`marca`, `modelo`) únicos sin distinguir mayúsculas; `activo` default `TRUE` |
 | `DISPOSITIVO_GPS` | Equipo de telemetría | `imei` UNIQUE |
+| `BITACORA_JEFE_TURNO` | Acciones del jefe de turno sobre la flota con motivo y observación; junto con `TURNO` forma el historial | `accion` ∈ `INCORPORAR`, `EDITAR`, `HABILITAR`, `DESHABILITAR`, `REEMPLAZAR`; `motivo` obligatorio; `detalle` JSONB |
 | `REFRESH_TOKEN` | Sesiones de la app móvil (un registro por emisión; se rotan en cada `/auth/refresh`) | `token_hash` UNIQUE (nunca se guarda el token en claro); `revocado_en` NULL = vigente |
 | `ESTADO_OPERACIONAL` | Catálogo de estados del turno (con `descripcion` para la app) | `categoria` ∈ `PRODUCTIVO`, `DEMORA`, `MANTENCION`; `activo` default `TRUE` |
 
@@ -267,6 +280,8 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `fk_alerta_usuario` | `ALERTA.atendida_por` | `USUARIO.id_usuario` | SET NULL |
 | `fk_turno_operador` | `TURNO.id_operador` | `OPERADOR.id_operador` | NO ACTION |
 | `fk_turno_maquina` | `TURNO.id_maquina` | `MAQUINA.id_maquina` | NO ACTION |
+| `fk_bitacora_maquina` | `BITACORA_JEFE_TURNO.id_maquina` | `MAQUINA.id_maquina` | NO ACTION |
+| `fk_bitacora_usuario` | `BITACORA_JEFE_TURNO.id_usuario` | `USUARIO.id_usuario` | NO ACTION |
 | `fk_tubicacion_turno` | `TURNO_UBICACION.id_turno` | `TURNO.id_turno` | CASCADE |
 | `fk_tubicacion_area` | `TURNO_UBICACION.id_area` | `AREA.id_area` | NO ACTION |
 | `fk_tubicacion_zona` | `TURNO_UBICACION.id_zona` | `ZONA_TRABAJO.id_zona` | SET NULL |
@@ -284,6 +299,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `OPERADOR` | `operadores` |
 | `AREA`, `ZONA_TRABAJO`, `AUDITORIA_GEOCERCA` | `geocercas` |
 | `MAQUINA`, `MODELO_MAQUINA`, `DISPOSITIVO_GPS`, `ASIGNACION_GPS` | `maquinas` |
+| `BITACORA_JEFE_TURNO` (escritura desde `maquinas`) | `historial` |
 | `TRACKING_HISTORY` | `tracking` |
 | `ALERTA` | `alertas` |
 | `TURNO`, `TURNO_UBICACION`, `TURNO_ESTADO`, `ESTADO_OPERACIONAL` | `turnos` |

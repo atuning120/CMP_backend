@@ -215,6 +215,23 @@ CREATE TABLE EVIDENCIA (
     CONSTRAINT fk_evidencia_reporte FOREIGN KEY (id_reporte) REFERENCES REPORTE_TURNO(id_reporte) ON DELETE CASCADE
 );
 
+-- Acciones del jefe de turno sobre la flota, con motivo y observación (pestaña Historial junto con TURNO)
+CREATE TABLE BITACORA_JEFE_TURNO (
+    id_bitacora     SERIAL PRIMARY KEY,
+    accion          VARCHAR(20) NOT NULL CHECK (accion IN ('INCORPORAR', 'EDITAR', 'HABILITAR', 'DESHABILITAR', 'REEMPLAZAR')),
+    id_maquina      INT NOT NULL,
+    id_usuario      INT NOT NULL, -- jefe de turno que realizó la acción (sale de la sesión)
+    motivo          VARCHAR(100) NOT NULL,
+    observacion     TEXT,
+    detalle         JSONB, -- datos de la acción (p. ej. valores antes/después al editar)
+    fecha           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_bitacora_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina),
+    CONSTRAINT fk_bitacora_usuario FOREIGN KEY (id_usuario) REFERENCES USUARIO(id_usuario)
+);
+
+CREATE INDEX idx_bitacora_fecha ON BITACORA_JEFE_TURNO (fecha DESC);
+CREATE INDEX idx_turno_hora_inicio ON TURNO (hora_inicio DESC);
+
 CREATE TABLE REFRESH_TOKEN (
     id_refresh_token  SERIAL PRIMARY KEY,
     id_usuario        INT NOT NULL,

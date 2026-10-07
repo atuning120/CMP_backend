@@ -7,6 +7,7 @@ import { maquinaError } from '../maquina.errors';
 
 export interface CrearMaquinaDto {
   rol: string;
+  idUsuario?: number;
   nombre: unknown;
   marca?: unknown;
   modelo?: unknown;
@@ -16,12 +17,14 @@ export interface CrearMaquinaDto {
   numeroChasis?: unknown;
   horometroInicial: unknown;
   esContratista?: unknown;
+  motivo?: unknown;
+  observacion?: unknown;
 }
 
 const ROLES_PERMITIDOS = ['JEFE_TURNO', 'ADMIN'];
 
-// Largos máximos de las columnas en MAQUINA
-const LARGOS = { nombre: 100, marca: 50, modelo: 50, tipoMaquina: 50, patente: 15, numeroChasis: 50 } as const;
+// Largos máximos de las columnas en MAQUINA y BITACORA_JEFE_TURNO (observacion es TEXT; el límite evita abusos)
+const LARGOS = { nombre: 100, marca: 50, modelo: 50, tipoMaquina: 50, patente: 15, numeroChasis: 50, motivo: 100, observacion: 500 } as const;
 type CampoTexto = keyof typeof LARGOS;
 
 const ETIQUETAS: Record<CampoTexto, string> = {
@@ -31,6 +34,8 @@ const ETIQUETAS: Record<CampoTexto, string> = {
   tipoMaquina: 'tipo de máquina',
   patente: 'patente',
   numeroChasis: 'N° de chasis',
+  motivo: 'motivo',
+  observacion: 'observación',
 };
 
 const texto = (campo: CampoTexto, valor: unknown): string | null => {
@@ -55,7 +60,12 @@ export class CrearMaquinaUseCase {
   ) {}
 
   async execute(dto: CrearMaquinaDto): Promise<MaquinaFlota> {
-    if (!ROLES_PERMITIDOS.includes(dto.rol)) throw maquinaError('SIN_PERMISO');
+    if (!ROLES_PERMITIDOS.includes(dto.rol) || !dto.idUsuario) throw maquinaError('SIN_PERMISO');
+
+    // Toda incorporación queda justificada en la bitácora del jefe de turno
+    const motivo = texto('motivo', dto.motivo);
+    if (!motivo) throw maquinaError('DATOS_INVALIDOS', 'El motivo de la incorporación es obligatorio');
+    const observacion = texto('observacion', dto.observacion);
 
     // Código y patente se guardan en mayúsculas, como se rotulan en faena
     const nombre = texto('nombre', dto.nombre)?.toUpperCase() ?? null;
@@ -97,7 +107,7 @@ export class CrearMaquinaUseCase {
       numeroChasis: texto('numeroChasis', dto.numeroChasis),
       horometroInicial,
       esContratista: dto.esContratista === true,
-    });
+    }, { idUsuario: dto.idUsuario, motivo, observacion });
 
     // Marca o tipo nuevo: queda registrado como modelo para que aparezca en los selectores y en "Datos Previos"
     if (marca && modelo && tipoMaquina && (!marcaExistente || !tipoExistente)) {

@@ -31,7 +31,7 @@ const crear = (existentes: { nombres?: string[]; patentes?: string[]; tipos?: st
   return { maquinaRepo, modeloRepo, crearMaquina: new CrearMaquinaUseCase(maquinaRepo, modeloRepo) };
 };
 
-const base = { rol: 'JEFE_TURNO', nombre: ' cf-06 ', marca: 'Komatsu', modelo: 'WA600-8', tipoMaquina: 'Cargador Frontal', horometroInicial: 12.5 };
+const base = { rol: 'JEFE_TURNO', idUsuario: 7, motivo: 'Aumento de capacidad', nombre: ' cf-06 ', marca: 'Komatsu', modelo: 'WA600-8', tipoMaquina: 'Cargador Frontal', horometroInicial: 12.5 };
 
 const codigoDe = async (promise: Promise<unknown>) => {
   try {
@@ -56,18 +56,21 @@ describe('CrearMaquinaUseCase', () => {
       numeroChasis: null,
       horometroInicial: 12.5,
       esContratista: true,
-    });
+    }, { idUsuario: 7, motivo: 'Aumento de capacidad', observacion: null });
   });
 
   it('solo un jefe de turno o administrador puede crear', async () => {
     const { crearMaquina } = crear();
     expect(await codigoDe(crearMaquina.execute({ ...base, rol: 'OPERADOR' }))).toBe('SIN_PERMISO');
+    expect(await codigoDe(crearMaquina.execute({ ...base, idUsuario: undefined }))).toBe('SIN_PERMISO');
     await expect(crearMaquina.execute({ ...base, rol: 'ADMIN' })).resolves.toBeDefined();
   });
 
   it('rechaza datos obligatorios faltantes o inválidos', async () => {
     const { maquinaRepo, crearMaquina } = crear();
     expect(await codigoDe(crearMaquina.execute({ ...base, nombre: '   ' }))).toBe('DATOS_INVALIDOS');
+    expect(await codigoDe(crearMaquina.execute({ ...base, motivo: '  ' }))).toBe('DATOS_INVALIDOS');
+    expect(await codigoDe(crearMaquina.execute({ ...base, observacion: 'x'.repeat(501) }))).toBe('DATOS_INVALIDOS');
     expect(await codigoDe(crearMaquina.execute({ ...base, horometroInicial: -1 }))).toBe('HOROMETRO_INVALIDO');
     expect(await codigoDe(crearMaquina.execute({ ...base, horometroInicial: '' }))).toBe('HOROMETRO_INVALIDO');
     expect(await codigoDe(crearMaquina.execute({ ...base, anio: 1800 }))).toBe('ANIO_INVALIDO');
@@ -84,7 +87,7 @@ describe('CrearMaquinaUseCase', () => {
   it('usa la escritura existente de un tipo y no registra modelo', async () => {
     const { maquinaRepo, modeloRepo, crearMaquina } = crear();
     await crearMaquina.execute({ ...base, tipoMaquina: 'cargador frontal' });
-    expect(maquinaRepo.create).toHaveBeenCalledWith(expect.objectContaining({ tipoMaquina: 'Cargador Frontal' }));
+    expect(maquinaRepo.create).toHaveBeenCalledWith(expect.objectContaining({ tipoMaquina: 'Cargador Frontal' }), expect.anything());
     expect(modeloRepo.crearSiNoExiste).not.toHaveBeenCalled();
   });
 
@@ -108,7 +111,7 @@ describe('CrearMaquinaUseCase', () => {
   it('usa la escritura existente de la marca', async () => {
     const { maquinaRepo, modeloRepo, crearMaquina } = crear();
     await crearMaquina.execute({ ...base, marca: 'KOMATSU' });
-    expect(maquinaRepo.create).toHaveBeenCalledWith(expect.objectContaining({ marca: 'Komatsu' }));
+    expect(maquinaRepo.create).toHaveBeenCalledWith(expect.objectContaining({ marca: 'Komatsu' }), expect.anything());
     expect(modeloRepo.crearSiNoExiste).not.toHaveBeenCalled();
   });
 

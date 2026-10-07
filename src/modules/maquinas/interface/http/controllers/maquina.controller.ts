@@ -45,9 +45,10 @@ export class MaquinaController {
   // Incorporación de una máquina nueva a planta (jefe de turno)
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async crear(@Body() body: CrearMaquinaRequestDto, @CurrentUser() user: { rol: string }) {
+  async crear(@Body() body: CrearMaquinaRequestDto, @CurrentUser() user: { rol: string; idUsuario: number }) {
     return this.crearMaquinaUseCase.execute({
       rol: user?.rol,
+      idUsuario: user?.idUsuario,
       nombre: body?.nombre,
       marca: body?.marca,
       modelo: body?.modelo,
@@ -57,6 +58,8 @@ export class MaquinaController {
       numeroChasis: body?.numeroChasis,
       horometroInicial: body?.horometroInicial,
       esContratista: body?.esContratista,
+      motivo: body?.motivo,
+      observacion: body?.observacion,
     });
   }
 }
