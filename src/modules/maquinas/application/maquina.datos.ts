@@ -1,5 +1,11 @@
 import type { Logger } from '@nestjs/common';
-import type { AccionBitacora, MaquinaRepositoryPort, OperadorAsignable, RegistroBitacora } from '../domain/repositories/maquina.repository.port';
+import type {
+  AccionBitacora,
+  MaquinaRepositoryPort,
+  NuevaMaquina,
+  OperadorAsignable,
+  RegistroBitacora,
+} from '../domain/repositories/maquina.repository.port';
 import type { ModeloMaquinaRepositoryPort } from '../domain/repositories/modelo-maquina.repository.port';
 import { maquinaError } from './maquina.errors';
 
@@ -112,4 +118,53 @@ export const accionesPorReasignacion = (
       detalle: { antes: { operador: operador.nombre }, despues: { operador: null } },
     },
   ];
+};
+
+// Datos de una máquina nueva (al incorporarla o como entrante de un reemplazo), tal como llegan
+export interface NuevaMaquinaDto {
+  nombre: unknown;
+  marca?: unknown;
+  modelo?: unknown;
+  anio?: unknown;
+  tipoMaquina?: unknown;
+  patente?: unknown;
+  numeroChasis?: unknown;
+  horometroInicial: unknown;
+  esContratista?: unknown;
+}
+
+// Valida y normaliza una máquina nueva: código y patente sin repetir, horómetro y año válidos
+export const leerNuevaMaquina = async (
+  maquinaRepo: MaquinaRepositoryPort,
+  dto: NuevaMaquinaDto,
+): Promise<{ datos: Omit<NuevaMaquina, 'idOperador'>; marcaYTipo: MarcaYTipo }> => {
+  const nombre = textoMayusculas('nombre', dto.nombre);
+  if (!nombre) throw maquinaError('DATOS_INVALIDOS', 'El código interno es obligatorio');
+  const patente = textoMayusculas('patente', dto.patente);
+
+  const horometroInicial = Number(dto.horometroInicial);
+  if (dto.horometroInicial === null || dto.horometroInicial === '' || !Number.isFinite(horometroInicial) || horometroInicial < 0) {
+    throw maquinaError('HOROMETRO_INVALIDO');
+  }
+
+  const anio = leerAnio(dto.anio);
+
+  if (await maquinaRepo.existeNombre(nombre)) throw maquinaError('CODIGO_DUPLICADO', nombre);
+  if (patente && (await maquinaRepo.existePatente(patente))) throw maquinaError('PATENTE_DUPLICADA', patente);
+
+  const marcaYTipo = await normalizarMarcaYTipo(maquinaRepo, texto('marca', dto.marca), texto('tipoMaquina', dto.tipoMaquina));
+  return {
+    datos: {
+      nombre,
+      marca: marcaYTipo.marca,
+      modelo: texto('modelo', dto.modelo),
+      anio,
+      tipoMaquina: marcaYTipo.tipoMaquina,
+      patente,
+      numeroChasis: texto('numeroChasis', dto.numeroChasis),
+      horometroInicial,
+      esContratista: dto.esContratista === true,
+    },
+    marcaYTipo,
+  };
 };

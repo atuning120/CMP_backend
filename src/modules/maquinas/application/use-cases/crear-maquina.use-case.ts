@@ -6,27 +6,17 @@ import type { ModeloMaquinaRepositoryPort } from '../../domain/repositories/mode
 import { maquinaError } from '../maquina.errors';
 import {
   accionesPorReasignacion,
-  leerAnio,
+  leerNuevaMaquina,
   leerOperador,
-  normalizarMarcaYTipo,
   registrarModeloSiEsNuevo,
   ROLES_GESTION_FLOTA,
   texto,
-  textoMayusculas,
 } from '../maquina.datos';
+import type { NuevaMaquinaDto } from '../maquina.datos';
 
-export interface CrearMaquinaDto {
+export interface CrearMaquinaDto extends NuevaMaquinaDto {
   rol: string;
   idUsuario?: number;
-  nombre: unknown;
-  marca?: unknown;
-  modelo?: unknown;
-  anio?: unknown;
-  tipoMaquina?: unknown;
-  patente?: unknown;
-  numeroChasis?: unknown;
-  horometroInicial: unknown;
-  esContratista?: unknown;
   idOperador?: unknown; // opcional: operador a cargo
   motivo?: unknown;
   observacion?: unknown;
@@ -51,40 +41,17 @@ export class CrearMaquinaUseCase {
     if (!motivo) throw maquinaError('DATOS_INVALIDOS', 'El motivo de la incorporación es obligatorio');
     const observacion = texto('observacion', dto.observacion);
 
-    const nombre = textoMayusculas('nombre', dto.nombre);
-    if (!nombre) throw maquinaError('DATOS_INVALIDOS', 'El código interno es obligatorio');
-    const patente = textoMayusculas('patente', dto.patente);
-
-    const horometroInicial = Number(dto.horometroInicial);
-    if (dto.horometroInicial === null || dto.horometroInicial === '' || !Number.isFinite(horometroInicial) || horometroInicial < 0) {
-      throw maquinaError('HOROMETRO_INVALIDO');
-    }
-
-    const anio = leerAnio(dto.anio);
-
-    if (await this.maquinaRepo.existeNombre(nombre)) throw maquinaError('CODIGO_DUPLICADO', nombre);
-    if (patente && (await this.maquinaRepo.existePatente(patente))) throw maquinaError('PATENTE_DUPLICADA', patente);
-
+    const { datos, marcaYTipo } = await leerNuevaMaquina(this.maquinaRepo, dto);
     const operador = await leerOperador(this.maquinaRepo, dto.idOperador);
     const registro = { idUsuario: dto.idUsuario, motivo, observacion };
 
-    const modelo = texto('modelo', dto.modelo);
-    const marcaYTipo = await normalizarMarcaYTipo(this.maquinaRepo, texto('marca', dto.marca), texto('tipoMaquina', dto.tipoMaquina));
+    const maquina = await this.maquinaRepo.create(
+      { ...datos, idOperador: operador?.idOperador ?? null },
+      registro,
+      accionesPorReasignacion(operador, null, datos.nombre, registro),
+    );
 
-    const maquina = await this.maquinaRepo.create({
-      nombre,
-      marca: marcaYTipo.marca,
-      modelo,
-      anio,
-      tipoMaquina: marcaYTipo.tipoMaquina,
-      patente,
-      numeroChasis: texto('numeroChasis', dto.numeroChasis),
-      horometroInicial,
-      esContratista: dto.esContratista === true,
-      idOperador: operador?.idOperador ?? null,
-    }, registro, accionesPorReasignacion(operador, null, nombre, registro));
-
-    await registrarModeloSiEsNuevo(this.modeloRepo, this.logger, { ...marcaYTipo, modelo });
+    await registrarModeloSiEsNuevo(this.modeloRepo, this.logger, { ...marcaYTipo, modelo: datos.modelo });
 
     return maquina;
   }

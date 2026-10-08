@@ -10,6 +10,7 @@ import type {
   MaquinaResumen,
   NuevaMaquina,
   OperadorAsignable,
+  ReemplazoMaquina,
   RegistroBitacora,
 } from '../../../domain/repositories/maquina.repository.port';
 import { MaquinaOrmEntity } from '../orm-entities/maquina.orm-entity';
@@ -64,16 +65,17 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
              m.anio, m.numero_chasis, m.es_contratista,
              oa.id_operador AS id_operador_asignado, oa.nombre || ' ' || oa.apellido AS operador_asignado,
              baja.motivo AS motivo_baja, baja.observacion AS observacion_baja, baja.fecha AS fecha_baja,
+             baja.reemplazada_por,
              actual.operador, actual.ubicacion,
              COALESCE(ultimo.horometro, m.horometro_inicial) AS horometro
       FROM maquina m
       LEFT JOIN asignacion_operador ao ON ao.id_maquina = m.id_maquina AND ao.vigente_hasta IS NULL
       LEFT JOIN operador oa ON oa.id_operador = ao.id_operador
-      -- Por qué está fuera de servicio: la última vez que se deshabilitó
+      -- Por qué está fuera de servicio: la última vez que se deshabilitó o se reemplazó
       LEFT JOIN LATERAL (
-        SELECT b.motivo, b.observacion, b.fecha
+        SELECT b.motivo, b.observacion, b.fecha, b.detalle ->> 'entrante' AS reemplazada_por
         FROM bitacora_jefe_turno b
-        WHERE b.id_maquina = m.id_maquina AND b.accion = 'DESHABILITAR'
+        WHERE b.id_maquina = m.id_maquina AND b.accion IN ('DESHABILITAR', 'REEMPLAZAR')
         ORDER BY b.fecha DESC
         LIMIT 1
       ) baja ON m.estado = 'BAJA'
@@ -120,7 +122,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       fueraDeServicio:
         fila.motivo_baja === null || fila.fecha_baja === null
           ? null
-          : { motivo: fila.motivo_baja, observacion: fila.observacion_baja, fecha: fila.fecha_baja },
+          : { motivo: fila.motivo_baja, observacion: fila.observacion_baja, fecha: fila.fecha_baja, reemplazadaPor: fila.reemplazada_por },
       operadorActual: fila.operador,
       ubicacionActual: fila.ubicacion,
       // NUMERIC llega como string desde pg
@@ -148,6 +150,49 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       [idMaquina],
     );
     return fila.existe;
+  }
+
+  async reemplazar(reemplazo: ReemplazoMaquina): Promise<number> {
+    return this.ormRepository.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(MaquinaOrmEntity);
+      const { entrante } = reemplazo;
+      let idEntrante: number;
+      if ('nueva' in entrante) {
+        idEntrante = (await this.insertarMaquina(manager, entrante.nueva)).id_maquina;
+      } else {
+        idEntrante = entrante.idMaquina;
+        if (entrante.habilitar) await repo.update({ id_maquina: idEntrante }, { estado: 'ACTIVA' });
+      }
+      await repo.update({ id_maquina: reemplazo.idSaliente }, { estado: 'BAJA' });
+      // La saliente queda sin operador; el elegido pasa a la entrante (cerrando la asignación que tuviera)
+      await manager.query(
+        `UPDATE asignacion_operador SET vigente_hasta = CURRENT_TIMESTAMP WHERE id_maquina = $1 AND vigente_hasta IS NULL`,
+        [reemplazo.idSaliente],
+      );
+      await this.asignarOperador(manager, idEntrante, reemplazo.idOperador);
+      await this.registrarAcciones(manager, reemplazo.idSaliente, reemplazo.accionesSaliente);
+      await this.registrarAcciones(manager, idEntrante, reemplazo.accionesEntrante);
+      await this.registrarAcciones(manager, idEntrante, reemplazo.accionesOtras);
+      return idEntrante;
+    });
+  }
+
+  private async insertarMaquina(manager: EntityManager, datos: Omit<NuevaMaquina, 'idOperador'>): Promise<MaquinaOrmEntity> {
+    const repo = manager.getRepository(MaquinaOrmEntity);
+    return repo.save(
+      repo.create({
+        nombre: datos.nombre,
+        marca: datos.marca,
+        modelo: datos.modelo,
+        anio: datos.anio,
+        tipo_maquina: datos.tipoMaquina,
+        estado: 'ACTIVA',
+        patente: datos.patente,
+        numero_chasis: datos.numeroChasis,
+        horometro_inicial: String(datos.horometroInicial),
+        es_contratista: datos.esContratista,
+      }),
+    );
   }
 
   async findOperadoresAsignables(): Promise<OperadorAsignable[]> {
@@ -234,21 +279,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
 
   async create(datos: NuevaMaquina, registro: RegistroBitacora, acciones: AccionBitacora[] = []): Promise<MaquinaFlota> {
     const ormEntity = await this.ormRepository.manager.transaction(async (manager) => {
-      const repo = manager.getRepository(MaquinaOrmEntity);
-      const creada = await repo.save(
-        repo.create({
-          nombre: datos.nombre,
-          marca: datos.marca,
-          modelo: datos.modelo,
-          anio: datos.anio,
-          tipo_maquina: datos.tipoMaquina,
-          estado: 'ACTIVA',
-          patente: datos.patente,
-          numero_chasis: datos.numeroChasis,
-          horometro_inicial: String(datos.horometroInicial),
-          es_contratista: datos.esContratista,
-        }),
-      );
+      const creada = await this.insertarMaquina(manager, datos);
       await manager.query(
         `INSERT INTO bitacora_jefe_turno (accion, id_maquina, id_usuario, motivo, observacion, detalle)
          VALUES ('INCORPORAR', $1, $2, $3, $4, $5)`,
@@ -317,6 +348,7 @@ interface FilaFlota {
   motivo_baja: string | null;
   observacion_baja: string | null;
   fecha_baja: Date | null;
+  reemplazada_por: string | null;
   operador: string | null;
   ubicacion: string | null;
   horometro: string | null;

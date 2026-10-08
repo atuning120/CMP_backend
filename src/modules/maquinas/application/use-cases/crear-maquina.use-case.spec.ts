@@ -32,6 +32,7 @@ const crear = (existentes: { nombres?: string[]; patentes?: string[]; tipos?: st
     findTipos: jest.fn(async () => existentes.tipos ?? ['Cargador Frontal']),
     findOperadoresAsignables: jest.fn(async () => []),
     findOperadorAsignable: jest.fn(async () => null),
+    reemplazar: jest.fn(async () => 0),
     findMarcas: jest.fn(async () => existentes.marcas ?? ['Komatsu']),
   } satisfies MaquinaRepositoryPort;
   const modeloRepo = {

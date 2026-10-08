@@ -8,6 +8,8 @@ import { ListarTiposMaquinaUseCase } from '../../../application/use-cases/listar
 import { ListarMarcasMaquinaUseCase } from '../../../application/use-cases/listar-marcas-maquina.use-case';
 import { CrearMaquinaRequestDto } from '../dtos/crear-maquina.request.dto';
 import { EditarMaquinaUseCase } from '../../../application/use-cases/editar-maquina.use-case';
+import { ReemplazarMaquinaUseCase } from '../../../application/use-cases/reemplazar-maquina.use-case';
+import { ReemplazarMaquinaRequestDto } from '../dtos/reemplazar-maquina.request.dto';
 import { ListarOperadoresAsignablesUseCase } from '../../../application/use-cases/listar-operadores-asignables.use-case';
 import { EditarMaquinaRequestDto } from '../dtos/editar-maquina.request.dto';
 
@@ -22,6 +24,7 @@ export class MaquinaController {
     private readonly listarMarcasMaquinaUseCase: ListarMarcasMaquinaUseCase,
     private readonly editarMaquinaUseCase: EditarMaquinaUseCase,
     private readonly listarOperadoresAsignablesUseCase: ListarOperadoresAsignablesUseCase,
+    private readonly reemplazarMaquinaUseCase: ReemplazarMaquinaUseCase,
   ) {}
 
   @Get()
@@ -69,6 +72,25 @@ export class MaquinaController {
       numeroChasis: body?.numeroChasis,
       horometroInicial: body?.horometroInicial,
       esContratista: body?.esContratista,
+      idOperador: body?.idOperador,
+      motivo: body?.motivo,
+      observacion: body?.observacion,
+    });
+  }
+
+  // Reemplazo (jefe de turno): la máquina :id sale de servicio y otra de la flota o una nueva toma su lugar
+  @Post(':id/reemplazo')
+  async reemplazar(
+    @Param('id') id: string,
+    @Body() body: ReemplazarMaquinaRequestDto,
+    @CurrentUser() user: { rol: string; idUsuario: number },
+  ) {
+    return this.reemplazarMaquinaUseCase.execute({
+      rol: user?.rol,
+      idUsuario: user?.idUsuario,
+      idMaquina: id,
+      idMaquinaEntrante: body?.idMaquinaEntrante,
+      maquinaNueva: body?.maquinaNueva,
       idOperador: body?.idOperador,
       motivo: body?.motivo,
       observacion: body?.observacion,

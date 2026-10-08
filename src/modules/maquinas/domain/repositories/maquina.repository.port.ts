@@ -32,8 +32,8 @@ export interface MaquinaFlota extends MaquinaResumen {
   numeroChasis: string | null;
   esContratista: boolean;
   operadorAsignado: OperadorAsignado | null; // a cargo de la máquina (ASIGNACION_OPERADOR vigente)
-  // Solo si está fuera de servicio (BAJA): el último registro DESHABILITAR de la bitácora
-  fueraDeServicio: { motivo: string; observacion: string | null; fecha: Date } | null;
+  // Solo si está fuera de servicio (BAJA): el último DESHABILITAR o REEMPLAZAR de la bitácora
+  fueraDeServicio: { motivo: string; observacion: string | null; fecha: Date; reemplazadaPor: string | null } | null;
   operadorActual: string | null; // operador con turno EN_CURSO en la máquina
   ubicacionActual: string | null; // zona (o área) vigente de ese turno
   horometroActual: number | null; // último horómetro registrado en un turno
@@ -76,10 +76,21 @@ export interface FichaMaquina {
 }
 
 export interface AccionBitacora extends RegistroBitacora {
-  accion: 'EDITAR' | 'HABILITAR' | 'DESHABILITAR';
+  accion: 'INCORPORAR' | 'EDITAR' | 'HABILITAR' | 'DESHABILITAR' | 'REEMPLAZAR';
   detalle: Record<string, unknown> | null;
   // Otra máquina afectada (p. ej. la que pierde a su operador al reasignarlo); por defecto, la que se guarda
   idMaquina?: number;
+}
+
+// Reemplazo: la saliente queda fuera de servicio y la entrante (de la flota o nueva) toma su lugar
+export interface ReemplazoMaquina {
+  idSaliente: number;
+  // De la flota (habilitar: estaba fuera de servicio) o una máquina nueva que se crea
+  entrante: { idMaquina: number; habilitar: boolean } | { nueva: Omit<NuevaMaquina, 'idOperador'> };
+  idOperador: number | null; // operador a cargo de la entrante al terminar
+  accionesSaliente: AccionBitacora[];
+  accionesEntrante: AccionBitacora[]; // se registran con el id de la entrante (que aún no existe si es nueva)
+  accionesOtras: AccionBitacora[]; // con idMaquina explícito (p. ej. la máquina de donde viene el operador)
 }
 
 export interface MaquinaRepositoryPort {
@@ -98,6 +109,8 @@ export interface MaquinaRepositoryPort {
   // Asignar un operador cierra su asignación anterior (otra máquina); acciones: registros extra en la bitácora
   create(datos: NuevaMaquina, registro: RegistroBitacora, acciones?: AccionBitacora[]): Promise<MaquinaFlota>;
   findOperadoresAsignables(): Promise<OperadorAsignable[]>;
+  // Todo el reemplazo en una transacción; devuelve el id de la entrante
+  reemplazar(reemplazo: ReemplazoMaquina): Promise<number>;
   findOperadorAsignable(idOperador: number): Promise<OperadorAsignable | null>;
   // Tipos de máquina en uso: los de la flota y los del catálogo de modelos activos, sin repetir
   findTipos(): Promise<string[]>;

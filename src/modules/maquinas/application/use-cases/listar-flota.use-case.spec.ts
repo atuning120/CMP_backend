@@ -15,6 +15,7 @@ const crear = () => {
     findTipos: jest.fn(async () => []),
     findOperadoresAsignables: jest.fn(async () => []),
     findOperadorAsignable: jest.fn(async () => null),
+    reemplazar: jest.fn(async () => 0),
     findMarcas: jest.fn(async () => []),
   } satisfies MaquinaRepositoryPort;
   return { maquinaRepo, listar: new ListarFlotaUseCase(maquinaRepo) };
