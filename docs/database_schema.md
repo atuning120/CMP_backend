@@ -118,6 +118,13 @@ erDiagram
         timestamptz vigente_desde
         timestamptz vigente_hasta "null si vigente"
     }
+    ASIGNACION_OPERADOR {
+        int id_asignacion PK
+        int id_maquina FK
+        int id_operador FK
+        timestamptz vigente_desde
+        timestamptz vigente_hasta "null si vigente"
+    }
     TRACKING_HISTORY {
         bigint id_history PK
         timestamptz timestamp PK
@@ -215,6 +222,8 @@ erDiagram
     REPORTE_TURNO ||--|{ EVIDENCIA : "contiene"
     MAQUINA ||--o{ ASIGNACION_GPS : "equipada con"
     DISPOSITIVO_GPS ||--o{ ASIGNACION_GPS : "instalado en"
+    MAQUINA ||--o{ ASIGNACION_OPERADOR : "a cargo de"
+    OPERADOR ||--o{ ASIGNACION_OPERADOR : "asignado a"
     DISPOSITIVO_GPS ||--o{ TRACKING_HISTORY : "reporta"
     MAQUINA ||--o{ TRACKING_HISTORY : "posiciones de"
     DISPOSITIVO_GPS ||--o{ ALERTA : "genera"
@@ -248,6 +257,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | Tabla | Propósito | Restricciones |
 |---|---|---|
 | `ASIGNACION_GPS` | Qué GPS está instalado en qué máquina y desde cuándo | `vigente_hasta` NULL = asignación vigente |
+| `ASIGNACION_OPERADOR` | Operador a cargo de cada máquina (preseleccionada al iniciar turno), con historial | `vigente_hasta` NULL = vigente; índices únicos parciales: un vigente por máquina y por operador |
 | `TRACKING_HISTORY` | Posiciones GPS recibidas | PK (`id_history`, `timestamp`); `id_maquina` se copia al ingerir; `payload_crudo` JSONB |
 | `ALERTA` | Eventos detectados (p. ej. `RALENTI_EXCESIVO`) | `atendida` default `FALSE`; `atendida_por`/`atendida_en` NULL hasta atenderla |
 
@@ -273,6 +283,8 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `fk_auditoria_usuario` | `AUDITORIA_GEOCERCA.id_usuario` | `USUARIO.id_usuario` | NO ACTION |
 | `fk_asig_gps` | `ASIGNACION_GPS.id_gps` | `DISPOSITIVO_GPS.id_gps` | NO ACTION |
 | `fk_asig_maquina` | `ASIGNACION_GPS.id_maquina` | `MAQUINA.id_maquina` | NO ACTION |
+| `fk_asig_op_maquina` | `ASIGNACION_OPERADOR.id_maquina` | `MAQUINA.id_maquina` | NO ACTION |
+| `fk_asig_op_operador` | `ASIGNACION_OPERADOR.id_operador` | `OPERADOR.id_operador` | NO ACTION |
 | `fk_tracking_gps` | `TRACKING_HISTORY.id_gps` | `DISPOSITIVO_GPS.id_gps` | NO ACTION |
 | `fk_tracking_maquina` | `TRACKING_HISTORY.id_maquina` | `MAQUINA.id_maquina` | NO ACTION |
 | `fk_alerta_gps` | `ALERTA.id_gps` | `DISPOSITIVO_GPS.id_gps` | NO ACTION |
@@ -298,7 +310,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `REFRESH_TOKEN` | `auth` |
 | `OPERADOR` | `operadores` |
 | `AREA`, `ZONA_TRABAJO`, `AUDITORIA_GEOCERCA` | `geocercas` |
-| `MAQUINA`, `MODELO_MAQUINA`, `DISPOSITIVO_GPS`, `ASIGNACION_GPS` | `maquinas` |
+| `MAQUINA`, `MODELO_MAQUINA`, `DISPOSITIVO_GPS`, `ASIGNACION_GPS`, `ASIGNACION_OPERADOR` | `maquinas` |
 | `BITACORA_JEFE_TURNO` (escritura desde `maquinas`) | `historial` |
 | `TRACKING_HISTORY` | `tracking` |
 | `ALERTA` | `alertas` |

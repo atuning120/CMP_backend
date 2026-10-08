@@ -7,6 +7,9 @@ const crear = (existentes: { nombres?: string[]; patentes?: string[]; tipos?: st
     findById: jest.fn(),
     findActivas: jest.fn(),
     findFlota: jest.fn(),
+    findFlotaById: jest.fn(),
+    tieneTurnoEnCurso: jest.fn(),
+    actualizar: jest.fn(),
     existeNombre: jest.fn(async (nombre: string) => (existentes.nombres ?? []).includes(nombre)),
     existePatente: jest.fn(async (patente: string) => (existentes.patentes ?? []).includes(patente)),
     create: jest.fn(async (datos: NuevaMaquina) => ({
@@ -17,11 +20,17 @@ const crear = (existentes: { nombres?: string[]; patentes?: string[]; tipos?: st
       tipoMaquina: datos.tipoMaquina,
       estado: 'ACTIVA',
       patente: datos.patente,
+      anio: datos.anio,
+      numeroChasis: datos.numeroChasis,
+      esContratista: datos.esContratista,
+      operadorAsignado: null,
       operadorActual: null,
       ubicacionActual: null,
       horometroActual: datos.horometroInicial,
     })),
     findTipos: jest.fn(async () => existentes.tipos ?? ['Cargador Frontal']),
+    findOperadoresAsignables: jest.fn(async () => []),
+    findOperadorAsignable: jest.fn(async () => null),
     findMarcas: jest.fn(async () => existentes.marcas ?? ['Komatsu']),
   } satisfies MaquinaRepositoryPort;
   const modeloRepo = {
@@ -56,7 +65,8 @@ describe('CrearMaquinaUseCase', () => {
       numeroChasis: null,
       horometroInicial: 12.5,
       esContratista: true,
-    }, { idUsuario: 7, motivo: 'Aumento de capacidad', observacion: null });
+      idOperador: null,
+    }, { idUsuario: 7, motivo: 'Aumento de capacidad', observacion: null }, []);
   });
 
   it('solo un jefe de turno o administrador puede crear', async () => {
@@ -87,7 +97,7 @@ describe('CrearMaquinaUseCase', () => {
   it('usa la escritura existente de un tipo y no registra modelo', async () => {
     const { maquinaRepo, modeloRepo, crearMaquina } = crear();
     await crearMaquina.execute({ ...base, tipoMaquina: 'cargador frontal' });
-    expect(maquinaRepo.create).toHaveBeenCalledWith(expect.objectContaining({ tipoMaquina: 'Cargador Frontal' }), expect.anything());
+    expect(maquinaRepo.create).toHaveBeenCalledWith(expect.objectContaining({ tipoMaquina: 'Cargador Frontal' }), expect.anything(), []);
     expect(modeloRepo.crearSiNoExiste).not.toHaveBeenCalled();
   });
 
@@ -111,7 +121,7 @@ describe('CrearMaquinaUseCase', () => {
   it('usa la escritura existente de la marca', async () => {
     const { maquinaRepo, modeloRepo, crearMaquina } = crear();
     await crearMaquina.execute({ ...base, marca: 'KOMATSU' });
-    expect(maquinaRepo.create).toHaveBeenCalledWith(expect.objectContaining({ marca: 'Komatsu' }), expect.anything());
+    expect(maquinaRepo.create).toHaveBeenCalledWith(expect.objectContaining({ marca: 'Komatsu' }), expect.anything(), []);
     expect(modeloRepo.crearSiNoExiste).not.toHaveBeenCalled();
   });
 
@@ -124,5 +134,29 @@ describe('CrearMaquinaUseCase', () => {
       modelo: 'L580',
       tipoMaquina: 'Cargador Frontal',
     });
+  });
+
+  it('asigna el operador y registra que dejó su máquina anterior', async () => {
+    const { maquinaRepo, crearMaquina } = crear();
+    maquinaRepo.findOperadorAsignable.mockResolvedValueOnce({
+      idOperador: 4,
+      nombre: 'Juan Pérez',
+      rut: '1-9',
+      maquinaAsignada: { idMaquina: 2, nombre: 'CF-02' },
+    } as never);
+    await crearMaquina.execute({ ...base, idOperador: 4 });
+    expect(maquinaRepo.create).toHaveBeenCalledWith(expect.objectContaining({ idOperador: 4 }), expect.anything(), [
+      expect.objectContaining({
+        idMaquina: 2,
+        accion: 'EDITAR',
+        observacion: 'Juan Pérez pasó a CF-06',
+        detalle: { antes: { operador: 'Juan Pérez' }, despues: { operador: null } },
+      }),
+    ]);
+  });
+
+  it('rechaza un operador que no existe', async () => {
+    const { crearMaquina } = crear();
+    expect(await codigoDe(crearMaquina.execute({ ...base, idOperador: 99 }))).toBe('DATOS_INVALIDOS');
   });
 });
