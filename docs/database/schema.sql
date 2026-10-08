@@ -123,6 +123,22 @@ CREATE TABLE ASIGNACION_GPS (
     CONSTRAINT fk_asig_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina)
 );
 
+-- Operador a cargo de cada máquina (el que la tiene preseleccionada al iniciar turno).
+-- Guarda el historial: al cambiar de operador la asignación anterior se cierra con vigente_hasta
+CREATE TABLE ASIGNACION_OPERADOR (
+    id_asignacion   SERIAL PRIMARY KEY,
+    id_maquina      INT NOT NULL,
+    id_operador     INT NOT NULL,
+    vigente_desde   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    vigente_hasta   TIMESTAMPTZ NULL, -- null si está vigente
+    CONSTRAINT fk_asig_op_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina),
+    CONSTRAINT fk_asig_op_operador FOREIGN KEY (id_operador) REFERENCES OPERADOR(id_operador)
+);
+
+-- A lo más un operador vigente por máquina y una máquina vigente por operador
+CREATE UNIQUE INDEX ux_asig_op_maquina_vigente ON ASIGNACION_OPERADOR (id_maquina) WHERE vigente_hasta IS NULL;
+CREATE UNIQUE INDEX ux_asig_op_operador_vigente ON ASIGNACION_OPERADOR (id_operador) WHERE vigente_hasta IS NULL;
+
 CREATE TABLE TRACKING_HISTORY (
     id_history      BIGINT NOT NULL,
     timestamp       TIMESTAMPTZ NOT NULL,

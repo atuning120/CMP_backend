@@ -57,12 +57,18 @@ const crearRepos = () => {
   } satisfies TurnoRepositoryPort;
   const maquinaRepo = {
     findById: jest.fn<Promise<MaquinaResumen | null>, [number]>(async () => maquina),
-    findActivas: jest.fn<Promise<MaquinaResumen[]>, []>(async () => [maquina]),
+    findActivas: jest.fn(async () => [{ ...maquina, idOperadorAsignado: null }]),
     findFlota: jest.fn(async () => []),
+    findFlotaById: jest.fn(async () => null),
+    tieneTurnoEnCurso: jest.fn(async () => false),
+    actualizar: jest.fn(async () => undefined),
     existeNombre: jest.fn(async () => false),
     existePatente: jest.fn(async () => false),
     create: jest.fn(),
     findTipos: jest.fn(async () => []),
+    findOperadoresAsignables: jest.fn(async () => []),
+    findOperadorAsignable: jest.fn(async () => null),
+    reemplazar: jest.fn(async () => 0),
     findMarcas: jest.fn(async () => []),
   } satisfies MaquinaRepositoryPort;
   const geocercaRepo = {

@@ -2,7 +2,7 @@ export const HISTORIAL_REPOSITORY = Symbol('HISTORIAL_REPOSITORY');
 
 export type TipoEventoHistorial = 'INICIO_TURNO' | 'INCORPORAR' | 'EDITAR' | 'HABILITAR' | 'DESHABILITAR' | 'REEMPLAZAR';
 
-// Un evento del historial del jefe de turno: una acción de la bitácora o un inicio de turno de un operador
+// Un evento del historial del jefe de turno: una acción de la bitácora o un turno de un operador (inicio y, si ya cerró, su fin)
 export interface EventoHistorial {
   id: string; // 'B-<id_bitacora>' o 'T-<id_turno>': únicos aunque vengan de tablas distintas
   tipo: TipoEventoHistorial;
@@ -14,10 +14,19 @@ export interface EventoHistorial {
   detalle: Record<string, unknown> | null;
 }
 
+// Posición del último evento recibido. Se ordena por (fecha, id) y no solo por fecha:
+// dos eventos con la misma fecha en el corte de una página no deben perderse ni repetirse
+export interface CursorHistorial {
+  fecha: Date;
+  id: string;
+}
+
 export interface FiltroHistorial {
   incluirTurnos: boolean;
   incluirFlota: boolean;
-  antesDe: Date | null; // paginación: eventos estrictamente anteriores a esta fecha
+  desde: Date; // inclusive
+  hasta: Date | null; // exclusiva; null = hasta ahora
+  despuesDe: CursorHistorial | null; // paginación: eventos que van después de este en el orden descendente
   limite: number;
 }
 

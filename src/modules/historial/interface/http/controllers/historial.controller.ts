@@ -9,14 +9,17 @@ import { ListarHistorialUseCase } from '../../../application/use-cases/listar-hi
 export class HistorialController {
   constructor(private readonly listarHistorialUseCase: ListarHistorialUseCase) {}
 
-  // ?tipo=TODO|TURNOS|FLOTA&antes=<ISO de la fecha del último evento recibido>&limite=30
+  // ?tipo=TODO|TURNOS|FLOTA&desde=<ISO>&hasta=<ISO>&antes=<fecha ISO del último evento>&antesId=<su id>&limite=30
   @Get()
   async listar(
     @CurrentUser() user: { rol: string },
     @Query('tipo') tipo?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
     @Query('antes') antes?: string,
+    @Query('antesId') antesId?: string,
     @Query('limite') limite?: string,
   ) {
-    return this.listarHistorialUseCase.execute({ rol: user?.rol, tipo, antes, limite });
+    return this.listarHistorialUseCase.execute({ rol: user?.rol, tipo, desde, hasta, antes, antesId, limite });
   }
 }

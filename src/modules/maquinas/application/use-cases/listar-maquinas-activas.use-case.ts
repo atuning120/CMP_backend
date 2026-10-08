@@ -1,6 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { MAQUINA_REPOSITORY } from '../../domain/repositories/maquina.repository.port';
-import type { MaquinaRepositoryPort, MaquinaResumen } from '../../domain/repositories/maquina.repository.port';
+import type { MaquinaCatalogo, MaquinaRepositoryPort } from '../../domain/repositories/maquina.repository.port';
 
 @Injectable()
 export class ListarMaquinasActivasUseCase {
@@ -9,7 +9,7 @@ export class ListarMaquinasActivasUseCase {
     private readonly maquinaRepo: MaquinaRepositoryPort,
   ) {}
 
-  async execute(): Promise<MaquinaResumen[]> {
+  async execute(): Promise<MaquinaCatalogo[]> {
     return this.maquinaRepo.findActivas();
   }
 }

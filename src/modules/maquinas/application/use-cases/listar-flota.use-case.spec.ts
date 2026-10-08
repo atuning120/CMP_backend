@@ -6,10 +6,16 @@ const crear = () => {
     findById: jest.fn(),
     findActivas: jest.fn(),
     findFlota: jest.fn(async () => []),
+    findFlotaById: jest.fn(async () => null),
+    tieneTurnoEnCurso: jest.fn(async () => false),
+    actualizar: jest.fn(async () => undefined),
     existeNombre: jest.fn(async () => false),
     existePatente: jest.fn(async () => false),
     create: jest.fn(),
     findTipos: jest.fn(async () => []),
+    findOperadoresAsignables: jest.fn(async () => []),
+    findOperadorAsignable: jest.fn(async () => null),
+    reemplazar: jest.fn(async () => 0),
     findMarcas: jest.fn(async () => []),
   } satisfies MaquinaRepositoryPort;
   return { maquinaRepo, listar: new ListarFlotaUseCase(maquinaRepo) };

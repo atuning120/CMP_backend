@@ -5,6 +5,9 @@ import { ModeloMaquinaController } from './interface/http/controllers/modelo-maq
 import { ListarMaquinasActivasUseCase } from './application/use-cases/listar-maquinas-activas.use-case';
 import { ListarFlotaUseCase } from './application/use-cases/listar-flota.use-case';
 import { CrearMaquinaUseCase } from './application/use-cases/crear-maquina.use-case';
+import { EditarMaquinaUseCase } from './application/use-cases/editar-maquina.use-case';
+import { ReemplazarMaquinaUseCase } from './application/use-cases/reemplazar-maquina.use-case';
+import { ListarOperadoresAsignablesUseCase } from './application/use-cases/listar-operadores-asignables.use-case';
 import { ListarModelosMaquinaUseCase } from './application/use-cases/listar-modelos-maquina.use-case';
 import { ListarTiposMaquinaUseCase } from './application/use-cases/listar-tipos-maquina.use-case';
 import { ListarMarcasMaquinaUseCase } from './application/use-cases/listar-marcas-maquina.use-case';
@@ -30,6 +33,9 @@ import { MODELO_MAQUINA_REPOSITORY } from './domain/repositories/modelo-maquina.
     ListarMaquinasActivasUseCase,
     ListarFlotaUseCase,
     CrearMaquinaUseCase,
+    EditarMaquinaUseCase,
+    ListarOperadoresAsignablesUseCase,
+    ReemplazarMaquinaUseCase,
     ListarModelosMaquinaUseCase,
     ListarTiposMaquinaUseCase,
     ListarMarcasMaquinaUseCase,
