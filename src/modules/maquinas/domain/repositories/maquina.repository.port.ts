@@ -32,6 +32,8 @@ export interface MaquinaFlota extends MaquinaResumen {
   numeroChasis: string | null;
   esContratista: boolean;
   operadorAsignado: OperadorAsignado | null; // a cargo de la máquina (ASIGNACION_OPERADOR vigente)
+  // Solo si está fuera de servicio (BAJA): el último registro DESHABILITAR de la bitácora
+  fueraDeServicio: { motivo: string; observacion: string | null; fecha: Date } | null;
   operadorActual: string | null; // operador con turno EN_CURSO en la máquina
   ubicacionActual: string | null; // zona (o área) vigente de ese turno
   horometroActual: number | null; // último horómetro registrado en un turno

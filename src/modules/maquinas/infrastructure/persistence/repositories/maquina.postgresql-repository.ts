@@ -63,11 +63,20 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       SELECT m.id_maquina, m.nombre, m.marca, m.modelo, m.tipo_maquina, m.estado, m.patente,
              m.anio, m.numero_chasis, m.es_contratista,
              oa.id_operador AS id_operador_asignado, oa.nombre || ' ' || oa.apellido AS operador_asignado,
+             baja.motivo AS motivo_baja, baja.observacion AS observacion_baja, baja.fecha AS fecha_baja,
              actual.operador, actual.ubicacion,
              COALESCE(ultimo.horometro, m.horometro_inicial) AS horometro
       FROM maquina m
       LEFT JOIN asignacion_operador ao ON ao.id_maquina = m.id_maquina AND ao.vigente_hasta IS NULL
       LEFT JOIN operador oa ON oa.id_operador = ao.id_operador
+      -- Por qué está fuera de servicio: la última vez que se deshabilitó
+      LEFT JOIN LATERAL (
+        SELECT b.motivo, b.observacion, b.fecha
+        FROM bitacora_jefe_turno b
+        WHERE b.id_maquina = m.id_maquina AND b.accion = 'DESHABILITAR'
+        ORDER BY b.fecha DESC
+        LIMIT 1
+      ) baja ON m.estado = 'BAJA'
       LEFT JOIN LATERAL (
         SELECT o.nombre || ' ' || o.apellido AS operador,
                COALESCE(z.nombre, a.nombre) AS ubicacion
@@ -108,6 +117,10 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       esContratista: fila.es_contratista,
       operadorAsignado:
         fila.id_operador_asignado === null ? null : { idOperador: fila.id_operador_asignado, nombre: fila.operador_asignado ?? '' },
+      fueraDeServicio:
+        fila.motivo_baja === null || fila.fecha_baja === null
+          ? null
+          : { motivo: fila.motivo_baja, observacion: fila.observacion_baja, fecha: fila.fecha_baja },
       operadorActual: fila.operador,
       ubicacionActual: fila.ubicacion,
       // NUMERIC llega como string desde pg
@@ -301,6 +314,9 @@ interface FilaFlota {
   es_contratista: boolean;
   id_operador_asignado: number | null;
   operador_asignado: string | null;
+  motivo_baja: string | null;
+  observacion_baja: string | null;
+  fecha_baja: Date | null;
   operador: string | null;
   ubicacion: string | null;
   horometro: string | null;

@@ -14,6 +14,7 @@ const maquina: MaquinaFlota = {
   numeroChasis: null,
   esContratista: false,
   operadorAsignado: null,
+  fueraDeServicio: null,
   operadorActual: null,
   ubicacionActual: null,
   horometroActual: 1500,
