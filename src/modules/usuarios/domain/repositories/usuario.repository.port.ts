@@ -28,3 +28,25 @@ export interface CuentaMicrosoftRepositoryPort {
   // Alta automática como VISOR con proveedor MICROSOFT
   crearDesdeMicrosoft(datos: { email: string; nombre: string; oid: string }): Promise<UsuarioCuentaMicrosoft>;
 }
+
+export const GESTION_USUARIOS_REPOSITORY = Symbol('GESTION_USUARIOS_REPOSITORY');
+
+// Usuario tal como lo ve el administrador en el panel web
+export interface UsuarioAdministrable {
+  idUsuario: number;
+  email: string;
+  nombre: string;
+  rol: string;
+  proveedorAuth: string;
+  activo: boolean;
+  creadoEn: Date;
+  esOperador: boolean; // vinculado a una ficha de OPERADOR (usa la app móvil)
+}
+
+// Administración de usuarios desde el panel web (solo ADMIN)
+export interface GestionUsuariosRepositoryPort {
+  listar(): Promise<UsuarioAdministrable[]>;
+  findAdministrable(idUsuario: number): Promise<UsuarioAdministrable | null>;
+  contarAdminsActivos(): Promise<number>;
+  cambiarRol(idUsuario: number, rol: string): Promise<void>;
+}

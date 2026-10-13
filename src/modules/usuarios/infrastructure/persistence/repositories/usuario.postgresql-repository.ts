@@ -4,12 +4,16 @@ import { Repository } from 'typeorm';
 import { UsuarioOrmEntity } from '../orm-entities/usuario.orm-entity';
 import type {
   CuentaMicrosoftRepositoryPort,
+  GestionUsuariosRepositoryPort,
+  UsuarioAdministrable,
   UsuarioCuentaMicrosoft,
   UsuarioRepositoryPort,
 } from '../../../domain/repositories/usuario.repository.port';
 
 @Injectable()
-export class UsuarioPostgresqlRepository implements UsuarioRepositoryPort, CuentaMicrosoftRepositoryPort {
+export class UsuarioPostgresqlRepository
+  implements UsuarioRepositoryPort, CuentaMicrosoftRepositoryPort, GestionUsuariosRepositoryPort
+{
   constructor(
     @InjectRepository(UsuarioOrmEntity)
     private readonly ormRepo: Repository<UsuarioOrmEntity>,
@@ -99,6 +103,37 @@ export class UsuarioPostgresqlRepository implements UsuarioRepositoryPort, Cuent
       }),
     );
     return this.mapCuenta(saved);
+  }
+
+  async listar(): Promise<UsuarioAdministrable[]> {
+    const usuarios = await this.ormRepo.find({ order: { activo: 'DESC', nombre: 'ASC' } });
+    return usuarios.map((u) => this.mapAdministrable(u));
+  }
+
+  async findAdministrable(idUsuario: number): Promise<UsuarioAdministrable | null> {
+    const usuario = await this.ormRepo.findOne({ where: { id_usuario: idUsuario } });
+    return usuario ? this.mapAdministrable(usuario) : null;
+  }
+
+  async contarAdminsActivos(): Promise<number> {
+    return this.ormRepo.count({ where: { rol: 'ADMIN', activo: true } });
+  }
+
+  async cambiarRol(idUsuario: number, rol: string): Promise<void> {
+    await this.ormRepo.update({ id_usuario: idUsuario }, { rol });
+  }
+
+  private mapAdministrable(usuario: UsuarioOrmEntity): UsuarioAdministrable {
+    return {
+      idUsuario: usuario.id_usuario,
+      email: usuario.email,
+      nombre: usuario.nombre,
+      rol: usuario.rol,
+      proveedorAuth: usuario.proveedor_auth,
+      activo: usuario.activo,
+      creadoEn: usuario.creado_en,
+      esOperador: usuario.id_operador !== null,
+    };
   }
 
   private mapCuenta(usuario: UsuarioOrmEntity): UsuarioCuentaMicrosoft {
