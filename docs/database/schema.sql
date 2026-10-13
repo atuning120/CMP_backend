@@ -21,12 +21,15 @@ CREATE TABLE USUARIO (
     password_hash   VARCHAR(255),
     nombre          VARCHAR(100) NOT NULL,
     rol             VARCHAR(20) NOT NULL CHECK (rol IN ('VISOR', 'ADMIN','OPERADOR', 'JEFE_TURNO' )),
-    proveedor_auth  VARCHAR(30) NOT NULL CHECK (proveedor_auth IN ('GOOGLE', 'CREDENCIALES')),
+    proveedor_auth  VARCHAR(30) NOT NULL CONSTRAINT usuario_proveedor_auth_check CHECK (proveedor_auth IN ('GOOGLE', 'CREDENCIALES', 'MICROSOFT')),
     activo          BOOLEAN NOT NULL DEFAULT TRUE,
     id_operador     INT UNIQUE NULL,
+    entra_oid       VARCHAR(64) NULL, -- id de la cuenta Microsoft (claim oid) si entra con Microsoft
     creado_en       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_usuario_operador FOREIGN KEY (id_operador) REFERENCES OPERADOR(id_operador) ON DELETE SET NULL
 );
+
+CREATE UNIQUE INDEX ux_usuario_entra_oid ON USUARIO (entra_oid) WHERE entra_oid IS NOT NULL;
 
 CREATE TABLE AREA (
     id_area         SERIAL PRIMARY KEY,

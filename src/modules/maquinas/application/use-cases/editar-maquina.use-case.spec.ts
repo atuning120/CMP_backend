@@ -17,6 +17,8 @@ const maquina: MaquinaFlota = {
   fueraDeServicio: null,
   operadorActual: null,
   ubicacionActual: null,
+  idAreaActual: null,
+  idZonaActual: null,
   horometroActual: 1500,
 };
 
