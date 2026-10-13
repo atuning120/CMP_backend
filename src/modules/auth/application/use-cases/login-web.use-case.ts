@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -18,8 +19,9 @@ import type { IdentidadMicrosoft, VerificadorEntraIdPort } from '../ports/verifi
 import { LoginWebRequestDto } from '../../interface/http/dtos/login-web.request.dto';
 import { ROLES_WEB } from './login-web-credenciales.use-case';
 
-// Solo personal de CMP y de IMOPAC (contratista). Se puede cambiar con WEB_DOMINIOS_PERMITIDOS
-const DOMINIOS_POR_DEFECTO = 'cmp.cl,imopac.cl';
+// Personal de CMP, de IMOPAC (contratista) y de la UCN (universidad del proyecto: académicos y alumnos).
+// Dominios exactos, sin subdominios. Se puede cambiar con WEB_DOMINIOS_PERMITIDOS
+const DOMINIOS_POR_DEFECTO = 'cmp.cl,imopac.cl,ucn.cl,alumnos.ucn.cl';
 // Tenant de las cuentas personales de Microsoft (outlook.com, hotmail.com): nunca se aceptan
 const TENANT_CUENTAS_PERSONALES = '9188040d-6c67-4c5b-b112-36a304b66dad';
 const LARGO_MAXIMO_NOMBRE = 100;
@@ -39,7 +41,7 @@ const loginMicrosoftError = (code: LoginMicrosoftErrorCode) => {
     case 'MICROSOFT_NO_CONFIGURADO':
       return new ServiceUnavailableException({ statusCode: 503, code, message: 'El inicio de sesión con Microsoft no está configurado' });
     case 'DOMINIO_NO_PERMITIDO':
-      return new ForbiddenException({ statusCode: 403, code, message: 'Solo pueden ingresar cuentas corporativas de CMP o IMOPAC' });
+      return new ForbiddenException({ statusCode: 403, code, message: 'Solo pueden ingresar cuentas institucionales de CMP, IMOPAC o la UCN' });
     case 'USUARIO_INACTIVO':
       return new ForbiddenException({ statusCode: 403, code, message: 'Tu usuario está desactivado' });
     case 'SIN_ACCESO_WEB':
@@ -66,7 +68,8 @@ export interface SesionWebMicrosoft {
 
 /**
  * Login del panel web con Microsoft (Entra ID). El Frontend obtiene el ID token con MSAL y lo envía aquí.
- * - Solo cuentas de organizaciones (no personales) con correo de los dominios permitidos.
+ * - Solo cuentas de organizaciones (no personales) con correo de los dominios permitidos
+ *   (CMP, IMOPAC y UCN por defecto).
  * - Opcional: AZURE_AD_TENANTS_PERMITIDOS restringe además a esos tenants (ids separados por coma).
  * - La cuenta se reconoce por su oid. Si no existe, se busca por correo: un usuario ya creado
  *   (p. ej. con credenciales) queda vinculado a esa cuenta Microsoft; si tampoco existe, se registra
@@ -74,6 +77,7 @@ export interface SesionWebMicrosoft {
  */
 @Injectable()
 export class LoginWebUseCase {
+  private readonly logger = new Logger(LoginWebUseCase.name);
   private readonly dominios: string[];
   private readonly tenants: string[];
 
@@ -106,17 +110,23 @@ export class LoginWebUseCase {
     let identidad: IdentidadMicrosoft | null;
     try {
       identidad = await this.verificador.verificar(idToken);
-    } catch {
+    } catch (error) {
+      // Solo el motivo (p. ej. audiencia o emisor esperados), nunca el token
+      this.logger.warn(`Token de Microsoft rechazado: ${error instanceof Error ? error.message : String(error)}`);
       throw loginMicrosoftError('TOKEN_INVALIDO');
     }
     if (!identidad) throw loginMicrosoftError('MICROSOFT_NO_CONFIGURADO');
-    if (!identidad.oid || !identidad.email) throw loginMicrosoftError('TOKEN_INVALIDO');
+    if (!identidad.oid || !identidad.email) {
+      this.logger.warn(`Token de Microsoft sin ${identidad.oid ? 'correo' : 'oid'} (tenant ${identidad.tid})`);
+      throw loginMicrosoftError('TOKEN_INVALIDO');
+    }
     return identidad;
   }
 
   private exigirOrganizacionPermitida({ email, tid }: IdentidadMicrosoft) {
     const dominio = email!.split('@').pop()!;
     if (tid === TENANT_CUENTAS_PERSONALES || !this.dominios.includes(dominio)) {
+      this.logger.log(`Login con Microsoft rechazado por dominio: @${dominio}`);
       throw loginMicrosoftError('DOMINIO_NO_PERMITIDO');
     }
     if (this.tenants.length > 0 && !this.tenants.includes(tid.toLowerCase())) {

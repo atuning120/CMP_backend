@@ -68,6 +68,13 @@ describe('LoginWebUseCase (Microsoft)', () => {
     expect(jwt.sign).toHaveBeenCalledWith({ sub: 99, rol: 'VISOR' });
   });
 
+  it.each(['juan.perez@ucn.cl', 'cristian.nunez@alumnos.ucn.cl'])('acepta cuentas de la UCN (%s)', async (email) => {
+    const { repo, useCase } = crear({ identidad: { ...IDENTIDAD, email } });
+
+    expect(await useCase.execute({ entraIdToken: 'token' })).toMatchObject({ rol: 'VISOR', nuevo: true });
+    expect(repo.crearDesdeMicrosoft).toHaveBeenCalledWith(expect.objectContaining({ email }));
+  });
+
   it('acepta el dominio de IMOPAC y usa el correo como nombre si Microsoft no envía uno', async () => {
     const { repo, useCase } = crear({ identidad: { ...IDENTIDAD, email: 'juan.perez@imopac.cl', nombre: null } });
 
@@ -98,6 +105,7 @@ describe('LoginWebUseCase (Microsoft)', () => {
   it.each([
     ['otro dominio', { email: 'alguien@gmail.com' }],
     ['subdominio parecido', { email: 'alguien@cmp.cl.falso.com' }],
+    ['otro subdominio de la UCN no autorizado', { email: 'alguien@otro.ucn.cl' }],
     ['cuenta personal de Microsoft', { tid: '9188040d-6c67-4c5b-b112-36a304b66dad' }],
   ])('rechaza %s con DOMINIO_NO_PERMITIDO', async (_caso, cambio) => {
     const { repo, useCase } = crear({ identidad: { ...IDENTIDAD, ...cambio } });

@@ -16,12 +16,14 @@ const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 @Injectable()
 export class VerificadorEntraIdAdapter implements VerificadorEntraIdPort {
   private readonly clientId: string;
+  private readonly jwksUri: string;
   private readonly jwks: jwksClient.JwksClient;
 
   constructor(config: ConfigService) {
     this.clientId = config.get<string>('AZURE_AD_CLIENT_ID', '').trim();
+    this.jwksUri = config.get<string>('AZURE_AD_JWKS_URI', '').trim() || JWKS_COMUN;
     this.jwks = jwksClient({
-      jwksUri: config.get<string>('AZURE_AD_JWKS_URI', '').trim() || JWKS_COMUN,
+      jwksUri: this.jwksUri,
       cache: true,
       rateLimit: true,
     });
@@ -36,7 +38,13 @@ export class VerificadorEntraIdAdapter implements VerificadorEntraIdPort {
       throw new Error('Token sin kid o tenant');
     }
 
-    const clave = await this.jwks.getSigningKey(decodificado.header.kid);
+    let clave: jwksClient.SigningKey;
+    try {
+      clave = await this.jwks.getSigningKey(decodificado.header.kid);
+    } catch (error) {
+      // Suele ser una AZURE_AD_JWKS_URI mal configurada: se indica cuál para diagnosticarlo rápido
+      throw new Error(`No se pudo obtener la clave de firma desde ${this.jwksUri}: ${error instanceof Error ? error.message : String(error)}`);
+    }
     const payload = jwt.verify(idToken, clave.getPublicKey(), {
       algorithms: ['RS256'],
       audience: this.clientId,

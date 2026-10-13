@@ -1,4 +1,4 @@
--- Login web con Microsoft (Entra ID): los usuarios con correo @cmp.cl o @imopac.cl que entran por
+-- Login web con Microsoft (Entra ID): los usuarios con correo de CMP, IMOPAC o la UCN que entran por
 -- primera vez se registran solos como VISOR. Se agrega el proveedor 'MICROSOFT' y el identificador
 -- inmutable de la cuenta en Entra ID (claim oid), que es más confiable que el correo para reconocerla.
 -- Aplicar una vez en bases creadas antes de este cambio (p. ej. Aiven). schema.sql ya lo incluye.
