@@ -12,7 +12,8 @@ const crear = (claveConfigurada: string | null = CLAVE, existente: { idUsuario: 
     findByEmail: jest.fn(async () => (existente ? { ...existente, rol: 'JEFE_TURNO', passwordHash: null, idOperador: null, nombre: 'Existente', email: 'existente@cmp.cl' } : null)),
     findByIdOperador: jest.fn(),
     findById: jest.fn(),
-    create: jest.fn(async () => 42),
+    // Tipado con el parámetro real para poder leer mock.calls en los tests
+    create: jest.fn(async (_datos: Parameters<UsuarioRepositoryPort['create']>[0]) => 42),
   } satisfies UsuarioRepositoryPort;
   const config = { get: jest.fn(() => claveConfigurada ?? undefined) } as unknown as ConfigService;
   return { usuarioRepo, useCase: new RegisterAdminUseCase(usuarioRepo, config) };
@@ -25,9 +26,9 @@ describe('RegisterAdminUseCase', () => {
     const resultado = await useCase.execute(DTO, CLAVE);
 
     expect(resultado).toEqual({ message: 'Administrador registrado exitosamente', idUsuario: 42 });
-    const creado = usuarioRepo.create.mock.calls[0][0];
+    const creado = usuarioRepo.create.mock.calls[0]?.[0];
     expect(creado).toMatchObject({ email: DTO.email, nombre: 'Ana Pérez', rol: 'ADMIN', idOperador: null, activo: true });
-    expect(await bcrypt.compare(DTO.password, creado.passwordHash)).toBe(true);
+    expect(await bcrypt.compare(DTO.password, creado?.passwordHash ?? '')).toBe(true);
   });
 
   it('queda deshabilitado (404) si ADMIN_SETUP_KEY no está configurada', async () => {
