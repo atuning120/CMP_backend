@@ -36,6 +36,9 @@ export interface MaquinaFlota extends MaquinaResumen {
   fueraDeServicio: { motivo: string; observacion: string | null; fecha: Date; reemplazadaPor: string | null } | null;
   operadorActual: string | null; // operador con turno EN_CURSO en la máquina
   ubicacionActual: string | null; // zona (o área) vigente de ese turno
+  // Ids de esa ubicación, para situar la máquina en el mapa de geocercas (no hay GPS en línea)
+  idAreaActual: number | null;
+  idZonaActual: number | null;
   horometroActual: number | null; // último horómetro registrado en un turno
 }
 

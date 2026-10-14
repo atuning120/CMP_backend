@@ -27,6 +27,8 @@ const crear = (existentes: { nombres?: string[]; patentes?: string[]; tipos?: st
       fueraDeServicio: null,
       operadorActual: null,
       ubicacionActual: null,
+      idAreaActual: null,
+      idZonaActual: null,
       horometroActual: datos.horometroInicial,
     })),
     findTipos: jest.fn(async () => existentes.tipos ?? ['Cargador Frontal']),

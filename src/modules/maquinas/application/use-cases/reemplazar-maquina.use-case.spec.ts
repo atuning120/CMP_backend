@@ -17,6 +17,8 @@ const maquina = (id: number, nombre: string, extra: Partial<MaquinaFlota> = {}):
   fueraDeServicio: null,
   operadorActual: null,
   ubicacionActual: null,
+  idAreaActual: null,
+  idZonaActual: null,
   horometroActual: 100,
   ...extra,
 });

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, Headers, HttpCode, HttpStatus } from '@nestjs/common';
 import { LoginUseCase } from '../../../application/use-cases/login.use-case';
 import { LoginRequestDto } from '../dtos/login.request.dto';
 import { RegisterOperadorRequestDto } from '../dtos/register-operador.request.dto';
@@ -7,6 +7,10 @@ import { LoginWebUseCase } from '../../../application/use-cases/login-web.use-ca
 import { RegisterOperadorUseCase } from '../../../application/use-cases/register-operador.use-case';
 import { RegisterJefeTurnoUseCase } from '../../../application/use-cases/register-jefe-turno.use-case';
 import { RegisterJefeTurnoRequestDto } from '../dtos/register-jefe-turno.request.dto';
+import { RegisterAdminUseCase } from '../../../application/use-cases/register-admin.use-case';
+import { RegisterAdminRequestDto } from '../dtos/register-admin.request.dto';
+import { LoginWebCredencialesUseCase } from '../../../application/use-cases/login-web-credenciales.use-case';
+import { LoginWebCredencialesRequestDto } from '../dtos/login-web-credenciales.request.dto';
 import { RefreshTokenRequestDto } from '../dtos/refresh-token.request.dto';
 import { RefrescarSesionUseCase } from '../../../application/use-cases/refrescar-sesion.use-case';
 import { CerrarSesionUseCase } from '../../../application/use-cases/cerrar-sesion.use-case';
@@ -16,8 +20,10 @@ export class AuthController {
   constructor(
     private readonly loginUseCase: LoginUseCase,
     private readonly loginWebUseCase: LoginWebUseCase,
+    private readonly loginWebCredencialesUseCase: LoginWebCredencialesUseCase,
     private readonly registerOperadorUseCase: RegisterOperadorUseCase,
     private readonly registerJefeTurnoUseCase: RegisterJefeTurnoUseCase,
+    private readonly registerAdminUseCase: RegisterAdminUseCase,
     private readonly refrescarSesionUseCase: RefrescarSesionUseCase,
     private readonly cerrarSesionUseCase: CerrarSesionUseCase,
   ) { }
@@ -30,6 +36,15 @@ export class AuthController {
   @Post('register/jefe-turno')
   async registerJefeTurno(@Body() body: RegisterJefeTurnoRequestDto) {
     return this.registerJefeTurnoUseCase.execute(body);
+  }
+
+  // Protegido con la clave ADMIN_SETUP_KEY (header x-admin-setup-key)
+  @Post('register/admin')
+  async registerAdmin(
+    @Body() body: RegisterAdminRequestDto,
+    @Headers('x-admin-setup-key') claveSetup?: string,
+  ) {
+    return this.registerAdminUseCase.execute(body, claveSetup);
   }
 
   @Post('login')
@@ -55,5 +70,12 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async loginWeb(@Body() body: LoginWebRequestDto) {
     return this.loginWebUseCase.execute(body);
+  }
+
+  // Login del panel web con email y contraseña; responde { accessToken, rol }
+  @Post('login/web/credenciales')
+  @HttpCode(HttpStatus.OK)
+  async loginWebCredenciales(@Body() body: LoginWebCredencialesRequestDto) {
+    return this.loginWebCredencialesUseCase.execute(body);
   }
 }

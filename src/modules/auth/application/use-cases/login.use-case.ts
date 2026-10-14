@@ -3,7 +3,7 @@ import * as bcrypt from 'bcryptjs';
 import { USUARIO_REPOSITORY } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import { OPERADOR_REPOSITORY } from '../../../operadores/domain/repositories/operador.repository.port';
-import type { OperadorRepositoryPort } from '../../../operadores/domain/repositories/operador.repository.port';
+import type { OperadorRepositoryPort, PerfilOperador } from '../../../operadores/domain/repositories/operador.repository.port';
 import { LoginRequestDto } from '../../interface/http/dtos/login.request.dto';
 import { EmisorSesionService, SesionMovilResponse } from '../services/emisor-sesion.service';
 
@@ -25,7 +25,16 @@ const loginError = (code: LoginErrorCode) => {
   }
 };
 
-export type LoginResponse = SesionMovilResponse;
+// Datos que la app muestra del usuario que ingresó. Un jefe de turno no tiene RUT ni apellido aparte:
+// su nombre completo viene en `nombre`
+export interface PerfilSesion {
+  nombre: string;
+  apellido: string | null;
+  rut: string | null;
+  email: string;
+}
+
+export type LoginResponse = SesionMovilResponse & { perfil: PerfilSesion };
 
 @Injectable()
 export class LoginUseCase {
@@ -44,6 +53,7 @@ export class LoginUseCase {
 
     let usuario;
     let operadorActivo = true;
+    let perfilOperador: PerfilOperador | null = null;
 
     // 1. Buscar por RUT (solo operadores) o Email
     if (dto.rut) {
@@ -52,6 +62,7 @@ export class LoginUseCase {
         throw loginError('CREDENCIALES_INVALIDAS');
       }
       operadorActivo = operador.estado === 'ACTIVO';
+      perfilOperador = { nombre: operador.nombre, apellido: operador.apellido, rut: operador.rut };
       usuario = await this.usuarioRepo.findByIdOperador(operador.idOperador);
       if (usuario) {
         usuario = { ...usuario, idOperador: operador.idOperador };
@@ -77,11 +88,18 @@ export class LoginUseCase {
 
     // 4. Emitir access + refresh token según el rol (solo operadores y jefes de turno usan este login)
     if (usuario.rol === 'OPERADOR' && usuario.idOperador) {
-      return this.emisorSesion.emitir({ idUsuario: usuario.idUsuario, rol: 'OPERADOR', idOperador: usuario.idOperador });
+      // Con login por email el operador aún no se leyó
+      const datos = perfilOperador ?? (await this.operadorRepo.findPerfil(usuario.idOperador));
+      const perfil: PerfilSesion = datos
+        ? { ...datos, email: usuario.email }
+        : { nombre: usuario.nombre, apellido: null, rut: null, email: usuario.email };
+      const sesion = await this.emisorSesion.emitir({ idUsuario: usuario.idUsuario, rol: 'OPERADOR', idOperador: usuario.idOperador });
+      return { ...sesion, perfil };
     }
 
     if (usuario.rol === 'JEFE_TURNO') {
-      return this.emisorSesion.emitir({ idUsuario: usuario.idUsuario, rol: 'JEFE_TURNO', idOperador: null });
+      const sesion = await this.emisorSesion.emitir({ idUsuario: usuario.idUsuario, rol: 'JEFE_TURNO', idOperador: null });
+      return { ...sesion, perfil: { nombre: usuario.nombre, apellido: null, rut: null, email: usuario.email } };
     }
 
     throw loginError('SIN_ACCESO_APP');

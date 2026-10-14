@@ -66,7 +66,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
              oa.id_operador AS id_operador_asignado, oa.nombre || ' ' || oa.apellido AS operador_asignado,
              baja.motivo AS motivo_baja, baja.observacion AS observacion_baja, baja.fecha AS fecha_baja,
              baja.reemplazada_por,
-             actual.operador, actual.ubicacion,
+             actual.operador, actual.ubicacion, actual.id_area, actual.id_zona,
              COALESCE(ultimo.horometro, m.horometro_inicial) AS horometro
       FROM maquina m
       LEFT JOIN asignacion_operador ao ON ao.id_maquina = m.id_maquina AND ao.vigente_hasta IS NULL
@@ -81,7 +81,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       ) baja ON m.estado = 'BAJA'
       LEFT JOIN LATERAL (
         SELECT o.nombre || ' ' || o.apellido AS operador,
-               COALESCE(z.nombre, a.nombre) AS ubicacion
+               COALESCE(z.nombre, a.nombre) AS ubicacion, tu.id_area, tu.id_zona
         FROM turno t
         JOIN operador o ON o.id_operador = t.id_operador
         LEFT JOIN turno_ubicacion tu ON tu.id_turno = t.id_turno AND tu.fin IS NULL
@@ -125,6 +125,8 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
           : { motivo: fila.motivo_baja, observacion: fila.observacion_baja, fecha: fila.fecha_baja, reemplazadaPor: fila.reemplazada_por },
       operadorActual: fila.operador,
       ubicacionActual: fila.ubicacion,
+      idAreaActual: fila.id_area,
+      idZonaActual: fila.id_zona,
       // NUMERIC llega como string desde pg
       horometroActual: fila.horometro === null ? null : Number(fila.horometro),
     }));
@@ -351,6 +353,8 @@ interface FilaFlota {
   reemplazada_por: string | null;
   operador: string | null;
   ubicacion: string | null;
+  id_area: number | null;
+  id_zona: number | null;
   horometro: string | null;
 }
 

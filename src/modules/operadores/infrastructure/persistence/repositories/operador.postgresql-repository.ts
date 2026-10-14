@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OperadorOrmEntity } from '../orm-entities/operador.orm-entity';
-import type { OperadorRepositoryPort } from '../../../domain/repositories/operador.repository.port';
+import type { OperadorRepositoryPort, PerfilOperador } from '../../../domain/repositories/operador.repository.port';
 
 @Injectable()
 export class OperadorPostgresqlRepository implements OperadorRepositoryPort {
@@ -11,13 +11,22 @@ export class OperadorPostgresqlRepository implements OperadorRepositoryPort {
     private readonly ormRepo: Repository<OperadorOrmEntity>,
   ) {}
 
-  async findByRut(rut: string): Promise<{ idOperador: number; estado: string } | null> {
+  async findByRut(rut: string): Promise<({ idOperador: number; estado: string } & PerfilOperador) | null> {
     const operador = await this.ormRepo.findOne({ where: { rut } });
     if (!operador) return null;
     return {
       idOperador: operador.id_operador,
       estado: operador.estado ?? 'ACTIVO',
+      nombre: operador.nombre,
+      apellido: operador.apellido,
+      rut: operador.rut,
     };
+  }
+
+  async findPerfil(idOperador: number): Promise<PerfilOperador | null> {
+    const operador = await this.ormRepo.findOne({ where: { id_operador: idOperador } });
+    if (!operador) return null;
+    return { nombre: operador.nombre, apellido: operador.apellido, rut: operador.rut };
   }
 
   async create(data: { nombre: string; apellido: string; rut: string; telefono: string; estado: string }): Promise<number> {
