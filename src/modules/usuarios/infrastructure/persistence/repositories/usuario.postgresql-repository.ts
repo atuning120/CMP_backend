@@ -19,7 +19,7 @@ export class UsuarioPostgresqlRepository
     private readonly ormRepo: Repository<UsuarioOrmEntity>,
   ) {}
 
-  async findByEmail(email: string): Promise<{ idUsuario: number; rol: string; passwordHash: string | null; idOperador: number | null } | null> {
+  async findByEmail(email: string): Promise<{ idUsuario: number; rol: string; passwordHash: string | null; idOperador: number | null; nombre: string; email: string } | null> {
     const usuario = await this.ormRepo.findOne({ where: { email, activo: true } });
     if (!usuario) return null;
     return {
@@ -27,16 +27,20 @@ export class UsuarioPostgresqlRepository
       rol: usuario.rol,
       passwordHash: usuario.password_hash,
       idOperador: usuario.id_operador,
+      nombre: usuario.nombre,
+      email: usuario.email,
     };
   }
 
-  async findByIdOperador(idOperador: number): Promise<{ idUsuario: number; rol: string; passwordHash: string | null } | null> {
+  async findByIdOperador(idOperador: number): Promise<{ idUsuario: number; rol: string; passwordHash: string | null; nombre: string; email: string } | null> {
     const usuario = await this.ormRepo.findOne({ where: { id_operador: idOperador, activo: true } });
     if (!usuario) return null;
     return {
       idUsuario: usuario.id_usuario,
       rol: usuario.rol,
       passwordHash: usuario.password_hash,
+      nombre: usuario.nombre,
+      email: usuario.email,
     };
   }
 

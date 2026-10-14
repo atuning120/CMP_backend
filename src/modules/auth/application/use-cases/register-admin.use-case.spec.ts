@@ -9,7 +9,7 @@ const DTO = { nombre: 'Ana', apellido: 'Pérez', email: 'ana.perez@cmp.cl', pass
 
 const crear = (claveConfigurada: string | null = CLAVE, existente: { idUsuario: number } | null = null) => {
   const usuarioRepo = {
-    findByEmail: jest.fn(async () => (existente ? { ...existente, rol: 'JEFE_TURNO', passwordHash: null, idOperador: null } : null)),
+    findByEmail: jest.fn(async () => (existente ? { ...existente, rol: 'JEFE_TURNO', passwordHash: null, idOperador: null, nombre: 'Existente', email: 'existente@cmp.cl' } : null)),
     findByIdOperador: jest.fn(),
     findById: jest.fn(),
     create: jest.fn(async () => 42),

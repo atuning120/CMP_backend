@@ -8,7 +8,7 @@ const PASSWORD = 'Secreta123';
 const crear = async (usuario: { rol: string; passwordHash?: string | null } | null) => {
   const passwordHash = usuario?.passwordHash === undefined ? await bcrypt.hash(PASSWORD, 4) : usuario.passwordHash;
   const usuarioRepo = {
-    findByEmail: jest.fn(async () => (usuario ? { idUsuario: 9, rol: usuario.rol, passwordHash, idOperador: null } : null)),
+    findByEmail: jest.fn(async () => (usuario ? { idUsuario: 9, rol: usuario.rol, passwordHash, idOperador: null, nombre: 'Usuario Web', email: 'web@cmp.cl' } : null)),
     findByIdOperador: jest.fn(),
     findById: jest.fn(),
     create: jest.fn(),
