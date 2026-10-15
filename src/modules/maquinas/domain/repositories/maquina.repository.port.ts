@@ -32,8 +32,8 @@ export interface MaquinaFlota extends MaquinaResumen {
   numeroChasis: string | null;
   esContratista: boolean;
   operadorAsignado: OperadorAsignado | null; // a cargo de la máquina (ASIGNACION_OPERADOR vigente)
-  // Solo si está fuera de servicio (BAJA): el último DESHABILITAR o REEMPLAZAR de la bitácora
-  fueraDeServicio: { motivo: string; observacion: string | null; fecha: Date; reemplazadaPor: string | null } | null;
+  // Solo si no está ACTIVA: el último cambio de estado (o reemplazo) de la bitácora, con su motivo
+  motivoEstado: { motivo: string; observacion: string | null; fecha: Date; reemplazadaPor: string | null } | null;
   operadorActual: string | null; // operador con turno EN_CURSO en la máquina
   ubicacionActual: string | null; // zona (o área) vigente de ese turno
   // Ids de esa ubicación, para situar la máquina en el mapa de geocercas (no hay GPS en línea)
@@ -62,7 +62,11 @@ export interface RegistroBitacora {
   observacion: string | null;
 }
 
-export type EstadoMaquina = 'ACTIVA' | 'BAJA';
+// ACTIVA = Operativo; BAJA = Fuera de servicio (no puede iniciar turno; es la única que se puede reemplazar).
+// "Sin operador" no es un estado: se deduce de que la máquina no tenga operador asignado
+export const ESTADOS_MAQUINA = ['ACTIVA', 'BAJO_OBSERVACION', 'EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA'] as const;
+export type EstadoMaquina = (typeof ESTADOS_MAQUINA)[number];
+export const esEstadoMaquina = (valor: unknown): valor is EstadoMaquina => ESTADOS_MAQUINA.includes(valor as EstadoMaquina);
 
 // Datos de la ficha que el jefe de turno puede editar (el horómetro sale de los turnos)
 export interface FichaMaquina {
@@ -79,7 +83,8 @@ export interface FichaMaquina {
 }
 
 export interface AccionBitacora extends RegistroBitacora {
-  accion: 'INCORPORAR' | 'EDITAR' | 'HABILITAR' | 'DESHABILITAR' | 'REEMPLAZAR';
+  // HABILITAR: sale de BAJA; DESHABILITAR: pasa a BAJA; CAMBIAR_ESTADO: entre estados que no son BAJA
+  accion: 'INCORPORAR' | 'EDITAR' | 'HABILITAR' | 'DESHABILITAR' | 'CAMBIAR_ESTADO' | 'REEMPLAZAR';
   detalle: Record<string, unknown> | null;
   // Otra máquina afectada (p. ej. la que pierde a su operador al reasignarlo); por defecto, la que se guarda
   idMaquina?: number;

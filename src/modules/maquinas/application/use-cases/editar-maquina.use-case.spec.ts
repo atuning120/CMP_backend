@@ -14,7 +14,7 @@ const maquina: MaquinaFlota = {
   numeroChasis: null,
   esContratista: false,
   operadorAsignado: null,
-  fueraDeServicio: null,
+  motivoEstado: null,
   operadorActual: null,
   ubicacionActual: null,
   idAreaActual: null,
@@ -74,10 +74,37 @@ describe('EditarMaquinaUseCase', () => {
     expect(maquinaRepo.existePatente).toHaveBeenCalledWith('ZZ-YY-99', 3);
   });
 
-  it('un cambio de estado se registra como habilitar o deshabilitar', async () => {
+  it('un cambio de estado se registra como habilitar, deshabilitar o cambiar estado', async () => {
     const { maquinaRepo, editar } = crear();
     await editar.execute({ ...base, estado: 'BAJA' });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { estado: 'BAJA' }, [{ ...registro, accion: 'DESHABILITAR', detalle: null }]);
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { estado: 'BAJA' }, [
+      { ...registro, accion: 'DESHABILITAR', detalle: { antes: { estado: 'ACTIVA' }, despues: { estado: 'BAJA' } } },
+    ]);
+    await editar.execute({ ...base, estado: 'EN_MANTENIMIENTO' });
+    expect(maquinaRepo.actualizar).toHaveBeenLastCalledWith(3, { estado: 'EN_MANTENIMIENTO' }, [
+      { ...registro, accion: 'CAMBIAR_ESTADO', detalle: { antes: { estado: 'ACTIVA' }, despues: { estado: 'EN_MANTENIMIENTO' } } },
+    ]);
+    expect(await codigoDe(editar.execute({ ...base, estado: 'SIN_OPERADOR' }))).toBe('DATOS_INVALIDOS');
+  });
+
+  it('un cambio solo de estado no consulta catálogos ni vuelve a leer la flota', async () => {
+    const { maquinaRepo, editar } = crear();
+    const resultado = await editar.execute({ ...base, estado: 'EN_RESERVA', observacion: 'Respaldo del turno B' });
+    expect(maquinaRepo.findMarcas).not.toHaveBeenCalled();
+    expect(maquinaRepo.findTipos).not.toHaveBeenCalled();
+    expect(maquinaRepo.findFlotaById).toHaveBeenCalledTimes(1);
+    expect(resultado).toMatchObject({
+      estado: 'EN_RESERVA',
+      motivoEstado: { motivo: registro.motivo, observacion: 'Respaldo del turno B', reemplazadaPor: null },
+    });
+  });
+
+  it('pasar a un estado distinto de fuera de servicio no se bloquea por un turno en curso', async () => {
+    const { maquinaRepo, editar } = crear();
+    maquinaRepo.tieneTurnoEnCurso.mockResolvedValue(true);
+    await editar.execute({ ...base, estado: 'BAJO_OBSERVACION' });
+    expect(maquinaRepo.actualizar).toHaveBeenCalled();
+    expect(await codigoDe(editar.execute({ ...base, estado: 'BAJA' }))).toBe('MAQUINA_EN_USO');
   });
 
   it('editar y cambiar el estado a la vez deja ambos registros', async () => {

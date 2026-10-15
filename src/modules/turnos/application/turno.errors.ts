@@ -29,7 +29,7 @@ export const turnoError = (code: TurnoErrorCode) => {
     case 'ESTADO_NO_DISPONIBLE':
       return new NotFoundException({ statusCode: 404, code, message: 'El estado operacional no existe' });
     case 'MAQUINA_NO_DISPONIBLE':
-      return new NotFoundException({ statusCode: 404, code, message: 'La máquina no existe o no está activa' });
+      return new NotFoundException({ statusCode: 404, code, message: 'La máquina no existe' });
     case 'AREA_NO_DISPONIBLE':
       return new NotFoundException({ statusCode: 404, code, message: 'El área no existe o no está activa' });
     case 'ZONA_NO_DISPONIBLE':

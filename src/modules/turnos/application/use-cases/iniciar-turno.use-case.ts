@@ -74,8 +74,8 @@ export class IniciarTurnoUseCase {
       idCliente,
     );
 
-    if (maquina.estado !== 'ACTIVA') {
-      nuevoTurno.marcarConflicto(`La máquina ${maquina.nombre} no estaba activa al sincronizar`);
+    if (maquina.estado === 'BAJA') {
+      nuevoTurno.marcarConflicto(`La máquina ${maquina.nombre} estaba fuera de servicio al sincronizar`);
     }
     if (area.estado !== 'ACTIVA') {
       nuevoTurno.marcarConflicto(`El área ${area.nombre} no estaba activa al sincronizar`);

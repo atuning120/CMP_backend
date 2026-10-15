@@ -75,7 +75,7 @@ CREATE TABLE MAQUINA (
     modelo          VARCHAR(50),
     anio            INT,
     tipo_maquina    VARCHAR(50),
-    estado          VARCHAR(20) CHECK (estado IN ('ACTIVA', 'BAJA')),
+    estado          VARCHAR(20) CHECK (estado IN ('ACTIVA', 'BAJO_OBSERVACION', 'EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA')),
     patente           VARCHAR(15),
     numero_chasis     VARCHAR(50), -- N° de chasis / serie (VIN)
     horometro_inicial NUMERIC(10,2), -- al incorporarse a planta; luego manda el horómetro de los turnos
@@ -237,7 +237,7 @@ CREATE TABLE EVIDENCIA (
 -- Acciones del jefe de turno sobre la flota, con motivo y observación (pestaña Historial junto con TURNO)
 CREATE TABLE BITACORA_JEFE_TURNO (
     id_bitacora     SERIAL PRIMARY KEY,
-    accion          VARCHAR(20) NOT NULL CHECK (accion IN ('INCORPORAR', 'EDITAR', 'HABILITAR', 'DESHABILITAR', 'REEMPLAZAR')),
+    accion          VARCHAR(20) NOT NULL CHECK (accion IN ('INCORPORAR', 'EDITAR', 'HABILITAR', 'DESHABILITAR', 'CAMBIAR_ESTADO', 'REEMPLAZAR')),
     id_maquina      INT NOT NULL,
     id_usuario      INT NOT NULL, -- jefe de turno que realizó la acción (sale de la sesión)
     motivo          VARCHAR(100) NOT NULL,

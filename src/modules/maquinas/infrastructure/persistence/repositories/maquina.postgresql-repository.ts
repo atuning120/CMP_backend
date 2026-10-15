@@ -33,7 +33,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       SELECT m.id_maquina, m.nombre, m.marca, m.modelo, m.tipo_maquina, m.estado, ao.id_operador
       FROM maquina m
       LEFT JOIN asignacion_operador ao ON ao.id_maquina = m.id_maquina AND ao.vigente_hasta IS NULL
-      WHERE m.estado = 'ACTIVA'
+      WHERE m.estado <> 'BAJA'
       ORDER BY m.nombre ASC
     `);
     return filas.map((fila) => ({
@@ -71,14 +71,14 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       FROM maquina m
       LEFT JOIN asignacion_operador ao ON ao.id_maquina = m.id_maquina AND ao.vigente_hasta IS NULL
       LEFT JOIN operador oa ON oa.id_operador = ao.id_operador
-      -- Por qué está fuera de servicio: la última vez que se deshabilitó o se reemplazó
+      -- Por qué está en su estado (si no es ACTIVA): el último cambio de estado o reemplazo
       LEFT JOIN LATERAL (
         SELECT b.motivo, b.observacion, b.fecha, b.detalle ->> 'entrante' AS reemplazada_por
         FROM bitacora_jefe_turno b
-        WHERE b.id_maquina = m.id_maquina AND b.accion IN ('DESHABILITAR', 'REEMPLAZAR')
+        WHERE b.id_maquina = m.id_maquina AND b.accion IN ('HABILITAR', 'DESHABILITAR', 'CAMBIAR_ESTADO', 'REEMPLAZAR')
         ORDER BY b.fecha DESC
         LIMIT 1
-      ) baja ON m.estado = 'BAJA'
+      ) baja ON m.estado <> 'ACTIVA'
       LEFT JOIN LATERAL (
         SELECT o.nombre || ' ' || o.apellido AS operador,
                COALESCE(z.nombre, a.nombre) AS ubicacion, tu.id_area, tu.id_zona
@@ -119,7 +119,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       esContratista: fila.es_contratista,
       operadorAsignado:
         fila.id_operador_asignado === null ? null : { idOperador: fila.id_operador_asignado, nombre: fila.operador_asignado ?? '' },
-      fueraDeServicio:
+      motivoEstado:
         fila.motivo_baja === null || fila.fecha_baja === null
           ? null
           : { motivo: fila.motivo_baja, observacion: fila.observacion_baja, fecha: fila.fecha_baja, reemplazadaPor: fila.reemplazada_por },

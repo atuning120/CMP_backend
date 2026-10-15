@@ -9,7 +9,7 @@ export class EditarMaquinaRequestDto {
   numeroChasis?: string | null;
   esContratista?: boolean;
   idOperador?: number | null; // null deja la máquina sin operador
-  estado?: 'ACTIVA' | 'BAJA';
+  estado?: 'ACTIVA' | 'BAJO_OBSERVACION' | 'EN_MANTENIMIENTO' | 'EN_RESERVA' | 'BAJA';
   motivo: string;
   observacion?: string | null;
 }

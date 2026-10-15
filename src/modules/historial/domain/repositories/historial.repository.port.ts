@@ -1,6 +1,6 @@
 export const HISTORIAL_REPOSITORY = Symbol('HISTORIAL_REPOSITORY');
 
-export type TipoEventoHistorial = 'INICIO_TURNO' | 'INCORPORAR' | 'EDITAR' | 'HABILITAR' | 'DESHABILITAR' | 'REEMPLAZAR';
+export type TipoEventoHistorial = 'INICIO_TURNO' | 'INCORPORAR' | 'EDITAR' | 'HABILITAR' | 'DESHABILITAR' | 'CAMBIAR_ESTADO' | 'REEMPLAZAR';
 
 // Un evento del historial del jefe de turno: una acción de la bitácora o un turno de un operador (inicio y, si ya cerró, su fin)
 export interface EventoHistorial {
