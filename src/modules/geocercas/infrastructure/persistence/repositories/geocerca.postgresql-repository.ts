@@ -6,6 +6,7 @@ import type {
   AreaMapa,
   AreaResumen,
   DatosGeocerca,
+  DistintivoArea,
   EdicionGeocerca,
   GeocercaEscrituraPort,
   GeocercaRepositoryPort,
@@ -17,7 +18,7 @@ import { AreaOrmEntity } from '../orm-entities/area.orm-entity';
 import { ZonaTrabajoOrmEntity } from '../orm-entities/zona-trabajo.orm-entity';
 
 // El polígono (PostGIS) no se selecciona: los listados solo necesitan los datos descriptivos.
-const AREA_COLUMNS: (keyof AreaOrmEntity)[] = ['id_area', 'nombre', 'descripcion', 'estado'];
+const AREA_COLUMNS: (keyof AreaOrmEntity)[] = ['id_area', 'nombre', 'descripcion', 'codigo', 'icono', 'estado'];
 const ZONA_COLUMNS: (keyof ZonaTrabajoOrmEntity)[] = ['id_zona', 'id_area', 'nombre', 'descripcion', 'estado'];
 
 // GeoJSON -> geometría PostGIS en WGS84 (el SRID de las columnas poligono)
@@ -28,6 +29,8 @@ interface FilaGeocercaMapa {
   id_area: number;
   nombre: string;
   descripcion: string | null;
+  codigo?: string | null;
+  icono?: string | null;
   estado: string | null;
   poligono: PoligonoGeoJson | null;
 }
@@ -45,7 +48,8 @@ export class GeocercaPostgresqlRepository implements GeocercaRepositoryPort, Geo
     const areas = await this.areaRepository.find({
       select: AREA_COLUMNS,
       where: { estado: 'ACTIVA' },
-      order: { nombre: 'ASC' },
+      // Orden elegido por el ADMIN; las áreas sin orden (nuevas) quedan al final (NULLS LAST en ASC)
+      order: { orden: 'ASC', nombre: 'ASC' },
     });
     return areas.map((area) => this.mapArea(area));
   }
@@ -81,8 +85,8 @@ export class GeocercaPostgresqlRepository implements GeocercaRepositoryPort, Geo
   async findMapa(): Promise<{ areas: AreaMapa[]; zonas: ZonaMapa[] }> {
     const [areas, zonas]: [FilaGeocercaMapa[], FilaGeocercaMapa[]] = await Promise.all([
       this.areaRepository.query(
-        `SELECT id_area AS id, id_area, nombre, descripcion, estado, ST_AsGeoJSON(poligono)::json AS poligono
-         FROM area WHERE estado = 'ACTIVA' ORDER BY nombre`,
+        `SELECT id_area AS id, id_area, nombre, descripcion, codigo, icono, estado, ST_AsGeoJSON(poligono)::json AS poligono
+         FROM area WHERE estado = 'ACTIVA' ORDER BY orden, nombre`,
       ),
       this.zonaRepository.query(
         `SELECT z.id_zona AS id, z.id_area, z.nombre, z.descripcion, z.estado, ST_AsGeoJSON(z.poligono)::json AS poligono
@@ -91,7 +95,15 @@ export class GeocercaPostgresqlRepository implements GeocercaRepositoryPort, Geo
       ),
     ]);
     return {
-      areas: areas.map((f) => ({ idArea: f.id, nombre: f.nombre, descripcion: f.descripcion, estado: f.estado, poligono: f.poligono })),
+      areas: areas.map((f) => ({
+        idArea: f.id,
+        nombre: f.nombre,
+        descripcion: f.descripcion,
+        codigo: f.codigo ?? null,
+        icono: f.icono ?? null,
+        estado: f.estado,
+        poligono: f.poligono,
+      })),
       zonas: zonas.map((f) => ({
         idZona: f.id,
         idArea: f.id_area,
@@ -126,28 +138,45 @@ export class GeocercaPostgresqlRepository implements GeocercaRepositoryPort, Geo
     return fila?.total ?? 0;
   }
 
-  async crearArea(datos: DatosGeocerca, idUsuario: number): Promise<number> {
+  async crearArea(datos: DatosGeocerca & DistintivoArea, idUsuario: number): Promise<number> {
     return this.areaRepository.manager.transaction(async (em) => {
       const [fila] = await em.query(
-        `INSERT INTO area (nombre, descripcion, poligono, estado, modificado_en, modificado_por)
-         VALUES ($1, $2, ${GEOM('$3')}, 'ACTIVA', CURRENT_TIMESTAMP, $4) RETURNING id_area`,
-        [datos.nombre, datos.descripcion, JSON.stringify(datos.poligono), idUsuario],
+        `INSERT INTO area (nombre, descripcion, codigo, icono, poligono, estado, modificado_en, modificado_por)
+         VALUES ($1, $2, $3, $4, ${GEOM('$5')}, 'ACTIVA', CURRENT_TIMESTAMP, $6) RETURNING id_area`,
+        [datos.nombre, datos.descripcion, datos.codigo, datos.icono, JSON.stringify(datos.poligono), idUsuario],
       );
       await this.auditar(em, 'AREA', fila.id_area, 'CREAR', idUsuario);
       return fila.id_area;
     });
   }
 
-  async editarArea(idArea: number, edicion: EdicionGeocerca, idUsuario: number): Promise<void> {
+  async editarArea(idArea: number, edicion: EdicionGeocerca & DistintivoArea, idUsuario: number): Promise<void> {
     await this.areaRepository.manager.transaction(async (em) => {
       await this.auditar(em, 'AREA', idArea, 'EDITAR', idUsuario);
       await em.query(
-        `UPDATE area SET nombre = $2, descripcion = $3, poligono = COALESCE(${GEOM('$4')}, poligono),
-                modificado_en = CURRENT_TIMESTAMP, modificado_por = $5
+        `UPDATE area SET nombre = $2, descripcion = $3, codigo = $4, icono = $5,
+                poligono = COALESCE(${GEOM('$6')}, poligono), modificado_en = CURRENT_TIMESTAMP, modificado_por = $7
          WHERE id_area = $1`,
-        [idArea, edicion.nombre, edicion.descripcion, edicion.poligono ? JSON.stringify(edicion.poligono) : null, idUsuario],
+        [
+          idArea,
+          edicion.nombre,
+          edicion.descripcion,
+          edicion.codigo,
+          edicion.icono,
+          edicion.poligono ? JSON.stringify(edicion.poligono) : null,
+          idUsuario,
+        ],
       );
     });
+  }
+
+  async reordenarAreas(idsAreas: number[]): Promise<void> {
+    await this.areaRepository.query(
+      `UPDATE area a SET orden = o.posicion
+       FROM unnest($1::int[]) WITH ORDINALITY AS o(id_area, posicion)
+       WHERE a.id_area = o.id_area`,
+      [idsAreas],
+    );
   }
 
   async desactivarArea(idArea: number, idUsuario: number): Promise<void> {
@@ -223,7 +252,14 @@ export class GeocercaPostgresqlRepository implements GeocercaRepositoryPort, Geo
   }
 
   private mapArea(area: AreaOrmEntity): AreaResumen {
-    return { idArea: area.id_area, nombre: area.nombre, descripcion: area.descripcion, estado: area.estado };
+    return {
+      idArea: area.id_area,
+      nombre: area.nombre,
+      descripcion: area.descripcion,
+      codigo: area.codigo,
+      icono: area.icono,
+      estado: area.estado,
+    };
   }
 
   private mapZona(zona: ZonaTrabajoOrmEntity): ZonaTrabajoResumen {

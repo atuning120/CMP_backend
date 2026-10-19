@@ -24,7 +24,7 @@ const crear = (existentes: { nombres?: string[]; patentes?: string[]; tipos?: st
       numeroChasis: datos.numeroChasis,
       esContratista: datos.esContratista,
       operadorAsignado: null,
-      fueraDeServicio: null,
+      motivoEstado: null,
       operadorActual: null,
       ubicacionActual: null,
       idAreaActual: null,

@@ -46,6 +46,9 @@ erDiagram
         int id_area PK
         string nombre
         string descripcion
+        string codigo "distintivo corto en el listado web"
+        string icono "clave de ícono si no hay código"
+        int orden "posición en el listado (NULL al final)"
         geometry poligono
         string estado
         timestamptz creado_en
@@ -79,7 +82,7 @@ erDiagram
         string modelo
         int anio
         string tipo_maquina
-        string estado "ACTIVA o BAJA"
+        string estado "ACTIVA, BAJO_OBSERVACION, EN_MANTENIMIENTO, EN_RESERVA o BAJA"
         string patente
         string numero_chasis
         decimal horometro_inicial
@@ -87,7 +90,7 @@ erDiagram
     }
     BITACORA_JEFE_TURNO {
         int id_bitacora PK
-        string accion "INCORPORAR, EDITAR, HABILITAR, DESHABILITAR o REEMPLAZAR"
+        string accion "INCORPORAR, EDITAR, HABILITAR, DESHABILITAR, CAMBIAR_ESTADO o REEMPLAZAR"
         int id_maquina FK
         int id_usuario FK
         string motivo
@@ -245,10 +248,10 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `AREA` | Geocerca principal de la faena | `estado` en uso: `ACTIVA`, `INACTIVA` |
 | `ZONA_TRABAJO` | Subdivisión de un área | `estado` en uso: `ACTIVA`, `INACTIVA` |
 | `AUDITORIA_GEOCERCA` | Historial de cambios de áreas y zonas | `entidad` ∈ `AREA`, `ZONA`; `accion` ∈ `CREAR`, `EDITAR`, `DESACTIVAR`; `id_entidad` es polimórfico (sin FK) |
-| `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJA`; `nombre` y `patente` únicos (sin distinguir mayúsculas) |
+| `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJO_OBSERVACION`, `EN_MANTENIMIENTO`, `EN_RESERVA`, `BAJA` ("Sin operador" se deduce de la asignación); `nombre` y `patente` únicos (sin distinguir mayúsculas) |
 | `MODELO_MAQUINA` | Modelo genérico por tipo de máquina ("Datos Previos" al incorporar una máquina); sin relaciones | (`marca`, `modelo`) únicos sin distinguir mayúsculas; `activo` default `TRUE` |
 | `DISPOSITIVO_GPS` | Equipo de telemetría | `imei` UNIQUE |
-| `BITACORA_JEFE_TURNO` | Acciones del jefe de turno sobre la flota con motivo y observación; junto con `TURNO` forma el historial | `accion` ∈ `INCORPORAR`, `EDITAR`, `HABILITAR`, `DESHABILITAR`, `REEMPLAZAR`; `motivo` obligatorio; `detalle` JSONB |
+| `BITACORA_JEFE_TURNO` | Acciones del jefe de turno sobre la flota con motivo y observación; junto con `TURNO` forma el historial | `accion` ∈ `INCORPORAR`, `EDITAR`, `HABILITAR`, `DESHABILITAR`, `CAMBIAR_ESTADO`, `REEMPLAZAR`; `motivo` obligatorio; `detalle` JSONB |
 | `REFRESH_TOKEN` | Sesiones de la app móvil (un registro por emisión; se rotan en cada `/auth/refresh`) | `token_hash` UNIQUE (nunca se guarda el token en claro); `revocado_en` NULL = vigente |
 | `ESTADO_OPERACIONAL` | Catálogo de estados del turno (con `descripcion` para la app) | `categoria` ∈ `PRODUCTIVO`, `DEMORA`, `MANTENCION`; `activo` default `TRUE` |
 

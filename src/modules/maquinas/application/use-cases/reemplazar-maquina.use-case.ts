@@ -27,6 +27,9 @@ export interface ReemplazarMaquinaDto {
   observacion?: unknown;
 }
 
+// La entrante que estaba fuera de servicio o en reserva entra a operar
+const habilitar = (maquina: MaquinaFlota) => maquina.estado === 'BAJA' || maquina.estado === 'EN_RESERVA';
+
 export interface ResultadoReemplazo {
   saliente: MaquinaFlota;
   entrante: MaquinaFlota;
@@ -57,6 +60,8 @@ export class ReemplazarMaquinaUseCase {
     const nueva = dto.maquinaNueva !== undefined && dto.maquinaNueva !== null;
     if (deLaFlota === nueva) throw maquinaError('DATOS_INVALIDOS', 'Indica la máquina entrante: una de la flota o una nueva');
 
+    // Solo se reemplaza una máquina que ya está fuera de servicio
+    if (saliente.estado !== 'BAJA') throw maquinaError('DATOS_INVALIDOS', 'Solo se puede reemplazar una máquina fuera de servicio');
     // Un operador la está usando: no se puede sacar de servicio con su turno abierto
     if (await this.maquinaRepo.tieneTurnoEnCurso(saliente.idMaquina)) throw maquinaError('MAQUINA_EN_USO', saliente.nombre);
 
@@ -90,7 +95,13 @@ export class ReemplazarMaquinaUseCase {
         detalle: { ...datosNueva.datos, reemplazaA: saliente.nombre, operador: operador?.nombre ?? null },
       });
     } else if (existente) {
-      if (existente.estado === 'BAJA') accionesEntrante.push({ ...registro, accion: 'HABILITAR', detalle: { reemplazaA: saliente.nombre } });
+      if (habilitar(existente)) {
+        accionesEntrante.push({
+          ...registro,
+          accion: existente.estado === 'BAJA' ? 'HABILITAR' : 'CAMBIAR_ESTADO',
+          detalle: { reemplazaA: saliente.nombre, antes: { estado: existente.estado }, despues: { estado: 'ACTIVA' } },
+        });
+      }
       const operadorAntes = existente.operadorAsignado;
       if ((operadorAntes?.idOperador ?? null) !== (operador?.idOperador ?? null)) {
         accionesEntrante.push({
@@ -118,7 +129,7 @@ export class ReemplazarMaquinaUseCase {
 
     const reemplazo: ReemplazoMaquina = {
       idSaliente: saliente.idMaquina,
-      entrante: existente ? { idMaquina: existente.idMaquina, habilitar: existente.estado === 'BAJA' } : { nueva: datosNueva!.datos },
+      entrante: existente ? { idMaquina: existente.idMaquina, habilitar: habilitar(existente) } : { nueva: datosNueva!.datos },
       idOperador: operador?.idOperador ?? null,
       accionesSaliente,
       accionesEntrante,

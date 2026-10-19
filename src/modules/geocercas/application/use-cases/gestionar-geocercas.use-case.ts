@@ -5,6 +5,7 @@ import {
 } from '../../domain/repositories/geocerca.repository.port';
 import type {
   DatosGeocerca,
+  DistintivoArea,
   EdicionGeocerca,
   GeocercaEscrituraPort,
   GeocercaRepositoryPort,
@@ -15,6 +16,10 @@ import { geocercaError } from '../geocerca.errors';
 const ROLES_EDICION = ['ADMIN'];
 const LARGO_MAXIMO_NOMBRE = 100;
 const MAXIMO_VERTICES = 500;
+// Código del distintivo: hasta 4 letras, dígitos o guiones (cabe en el cuadrado del listado)
+const PATRON_CODIGO = /^[\p{L}\p{N}-]{1,4}$/u;
+// Clave del ícono; el catálogo vive en el cliente, que usa uno genérico si no la reconoce
+const PATRON_ICONO = /^[a-z0-9-]{1,30}$/;
 
 export interface Autor {
   rol: string;
@@ -26,6 +31,9 @@ export interface GeocercaDto {
   nombre?: unknown;
   descripcion?: unknown;
   poligono?: unknown;
+  // Solo áreas
+  codigo?: unknown;
+  icono?: unknown;
 }
 
 const esCoordenada = (p: unknown): p is [number, number] =>
@@ -69,7 +77,8 @@ export class GestionarGeocercasUseCase {
   async crearArea(dto: GeocercaDto, autor: Autor): Promise<{ idArea: number }> {
     this.exigirPermiso(autor);
     const datos = await this.leerDatosNuevos(dto);
-    return { idArea: await this.escrituraRepo.crearArea(datos, autor.idUsuario) };
+    const distintivo = this.leerDistintivo(dto, { codigo: null, icono: null });
+    return { idArea: await this.escrituraRepo.crearArea({ ...datos, ...distintivo }, autor.idUsuario) };
   }
 
   async editarArea(idArea: number, dto: GeocercaDto, autor: Autor): Promise<void> {
@@ -86,7 +95,22 @@ export class GestionarGeocercasUseCase {
         );
       }
     }
-    await this.escrituraRepo.editarArea(idArea, edicion, autor.idUsuario);
+    await this.escrituraRepo.editarArea(idArea, { ...edicion, ...this.leerDistintivo(dto, actual) }, autor.idUsuario);
+  }
+
+  // Recibe todas las áreas activas en el nuevo orden; una lista desactualizada (otro ADMIN creó o
+  // desactivó un área entretanto) se rechaza para no dejar posiciones repetidas o huecas
+  async reordenarAreas(dto: { idsAreas?: unknown }, autor: Autor): Promise<void> {
+    this.exigirPermiso(autor);
+    const ids = dto?.idsAreas;
+    if (!Array.isArray(ids) || !ids.every((id) => Number.isInteger(id) && id > 0) || new Set(ids).size !== ids.length) {
+      throw geocercaError('DATOS_INVALIDOS', 'Se espera la lista de ids de las áreas, sin repetir');
+    }
+    const activas = new Set((await this.lecturaRepo.findAreasActivas()).map((a) => a.idArea));
+    if (ids.length !== activas.size || !ids.every((id: number) => activas.has(id))) {
+      throw geocercaError('ORDEN_DESACTUALIZADO');
+    }
+    await this.escrituraRepo.reordenarAreas(ids);
   }
 
   async desactivarArea(idArea: number, autor: Autor): Promise<void> {
@@ -147,6 +171,23 @@ export class GestionarGeocercasUseCase {
     const descripcion = dto?.descripcion !== undefined ? leerTexto(dto.descripcion) : actual.descripcion;
     const poligono = dto?.poligono !== undefined ? await this.leerPoligonoValido(dto.poligono) : null;
     return { nombre, descripcion, poligono };
+  }
+
+  // Como en la edición, lo que no viene conserva el valor actual; null o "" lo quita
+  private leerDistintivo(dto: GeocercaDto, actual: DistintivoArea): DistintivoArea {
+    let codigo = actual.codigo;
+    if (dto?.codigo !== undefined) {
+      codigo = leerTexto(dto.codigo);
+      if (codigo && !PATRON_CODIGO.test(codigo)) {
+        throw geocercaError('DATOS_INVALIDOS', 'El código admite hasta 4 letras, números o guiones');
+      }
+    }
+    let icono = actual.icono;
+    if (dto?.icono !== undefined) {
+      icono = leerTexto(dto.icono);
+      if (icono && !PATRON_ICONO.test(icono)) throw geocercaError('DATOS_INVALIDOS', 'Ícono no válido');
+    }
+    return { codigo, icono };
   }
 
   private async leerPoligonoValido(valor: unknown): Promise<PoligonoGeoJson> {

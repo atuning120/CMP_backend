@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { MAQUINA_REPOSITORY } from '../../domain/repositories/maquina.repository.port';
+import { esEstadoMaquina, MAQUINA_REPOSITORY } from '../../domain/repositories/maquina.repository.port';
 import type {
   AccionBitacora,
   EstadoMaquina,
@@ -77,7 +77,7 @@ export class EditarMaquinaUseCase {
       numeroChasis: actual.numeroChasis,
       esContratista: actual.esContratista,
       idOperador: actual.operadorAsignado?.idOperador ?? null,
-      estado: actual.estado === 'BAJA' ? 'BAJA' : 'ACTIVA',
+      estado: esEstadoMaquina(actual.estado) ? actual.estado : 'ACTIVA',
     };
     const { ficha: despues, marcaOTipoNuevo, operador } = await this.leerFicha(dto, antes);
 
@@ -107,11 +107,23 @@ export class EditarMaquinaUseCase {
       acciones.push({ ...registro, accion: 'EDITAR', detalle: { antes: valores(antes, 'antes'), despues: valores(despues, 'despues') } });
       if (cambiados.includes('idOperador')) acciones.push(...accionesPorReasignacion(operador, idMaquina, despues.nombre, registro));
     }
-    if (cambiaEstado) acciones.push({ ...registro, accion: despues.estado === 'ACTIVA' ? 'HABILITAR' : 'DESHABILITAR', detalle: null });
+    if (cambiaEstado) {
+      const accion = despues.estado === 'BAJA' ? 'DESHABILITAR' : antes.estado === 'BAJA' ? 'HABILITAR' : 'CAMBIAR_ESTADO';
+      acciones.push({ ...registro, accion, detalle: { antes: { estado: antes.estado }, despues: { estado: despues.estado } } });
+    }
 
     const cambios: Partial<FichaMaquina> = Object.fromEntries(cambiados.map((campo) => [campo, despues[campo]]));
     if (cambiaEstado) cambios.estado = despues.estado;
     await this.maquinaRepo.actualizar(idMaquina, cambios, acciones);
+
+    // Solo cambió el estado: la respuesta se arma sin volver a consultar la flota (ahorra la consulta más pesada)
+    if (cambiados.length === 0) {
+      return {
+        ...actual,
+        estado: despues.estado,
+        motivoEstado: despues.estado === 'ACTIVA' ? null : { motivo, observacion, fecha: new Date(), reemplazadaPor: null },
+      };
+    }
 
     if (cambiados.some((campo) => campo === 'marca' || campo === 'modelo' || campo === 'tipoMaquina')) {
       await registrarModeloSiEsNuevo(this.modeloRepo, this.logger, {
@@ -136,7 +148,7 @@ export class EditarMaquinaUseCase {
 
     let estado: EstadoMaquina = antes.estado;
     if (dto.estado !== undefined) {
-      if (dto.estado !== 'ACTIVA' && dto.estado !== 'BAJA') throw maquinaError('DATOS_INVALIDOS', 'El estado de la máquina no es válido');
+      if (!esEstadoMaquina(dto.estado)) throw maquinaError('DATOS_INVALIDOS', 'El estado de la máquina no es válido');
       estado = dto.estado;
     }
 
@@ -146,7 +158,11 @@ export class EditarMaquinaUseCase {
 
     const marcaIngresada = dto.marca === undefined ? antes.marca : texto('marca', dto.marca);
     const tipoIngresado = dto.tipoMaquina === undefined ? antes.tipoMaquina : texto('tipoMaquina', dto.tipoMaquina);
-    const marcaYTipo = await normalizarMarcaYTipo(this.maquinaRepo, marcaIngresada, tipoIngresado);
+    // Si no vienen marca ni tipo (p. ej. un cambio de estado) se mantienen los guardados sin consultar los catálogos
+    const marcaYTipo =
+      dto.marca === undefined && dto.tipoMaquina === undefined
+        ? { marca: antes.marca, tipoMaquina: antes.tipoMaquina, hayNuevo: false }
+        : await normalizarMarcaYTipo(this.maquinaRepo, marcaIngresada, tipoIngresado);
     // Si viene el mismo operador que ya tiene, no hace falta buscarlo
     const operador = dto.idOperador === undefined || dto.idOperador === antes.idOperador ? undefined : await leerOperador(this.maquinaRepo, dto.idOperador);
 

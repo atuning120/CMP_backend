@@ -10,12 +10,12 @@ const CUADRADO: PoligonoGeoJson = {
   type: 'Polygon',
   coordinates: [[[-70.81, -28.30], [-70.80, -28.30], [-70.80, -28.29], [-70.81, -28.29], [-70.81, -28.30]]],
 };
-const AREA = { idArea: 5, nombre: 'Área 51', descripcion: null, estado: 'ACTIVA' };
+const AREA = { idArea: 5, nombre: 'Área 51', descripcion: null, codigo: '51', icono: null, estado: 'ACTIVA' };
 const ZONA = { idZona: 9, idArea: 5, nombre: 'Tolva', descripcion: 'Descarga', estado: 'ACTIVA' };
 
 const crear = (opciones: { valido?: boolean; dentro?: boolean; fuera?: number; area?: typeof AREA | null } = {}) => {
   const lectura = {
-    findAreasActivas: jest.fn(),
+    findAreasActivas: jest.fn(async () => [AREA, { ...AREA, idArea: 6 }, { ...AREA, idArea: 8 }]),
     findAreaById: jest.fn(async () => (opciones.area === undefined ? AREA : opciones.area)),
     findZonasActivasByArea: jest.fn(),
     findZonasActivas: jest.fn(),
@@ -28,6 +28,7 @@ const crear = (opciones: { valido?: boolean; dentro?: boolean; fuera?: number; a
     contarZonasFueraDe: jest.fn(async () => opciones.fuera ?? 0),
     crearArea: jest.fn(async () => 7),
     editarArea: jest.fn(async () => undefined),
+    reordenarAreas: jest.fn(async () => undefined),
     desactivarArea: jest.fn(async () => undefined),
     crearZona: jest.fn(async () => 11),
     editarZona: jest.fn(async () => undefined),
@@ -68,7 +69,39 @@ describe('GestionarGeocercasUseCase', () => {
     const { escritura, useCase } = crear();
 
     expect(await useCase.crearArea({ nombre: '  Área 60 ', descripcion: '', poligono: CUADRADO }, ADMIN)).toEqual({ idArea: 7 });
-    expect(escritura.crearArea).toHaveBeenCalledWith({ nombre: 'Área 60', descripcion: null, poligono: CUADRADO }, 1);
+    expect(escritura.crearArea).toHaveBeenCalledWith(
+      { nombre: 'Área 60', descripcion: null, poligono: CUADRADO, codigo: null, icono: null },
+      1,
+    );
+  });
+
+  it('crea un área con su distintivo', async () => {
+    const { escritura, useCase } = crear();
+
+    await useCase.crearArea({ nombre: 'Taller', poligono: CUADRADO, codigo: ' 10 ', icono: 'herramienta' }, ADMIN);
+
+    expect(escritura.crearArea).toHaveBeenCalledWith(expect.objectContaining({ codigo: '10', icono: 'herramienta' }), 1);
+  });
+
+  it('editar el ícono conserva el código y vaciar el código lo quita', async () => {
+    const { escritura, useCase } = crear();
+
+    await useCase.editarArea(5, { icono: 'fabrica' }, ADMIN);
+    expect(escritura.editarArea).toHaveBeenLastCalledWith(5, expect.objectContaining({ codigo: '51', icono: 'fabrica' }), 1);
+
+    await useCase.editarArea(5, { codigo: '' }, ADMIN);
+    expect(escritura.editarArea).toHaveBeenLastCalledWith(5, expect.objectContaining({ codigo: null, icono: null }), 1);
+  });
+
+  it.each([
+    ['un código largo', { codigo: '12345' }],
+    ['un código con espacios', { codigo: 'A 1' }],
+    ['un ícono con formato inválido', { icono: '<svg>' }],
+  ])('rechaza %s', async (_caso, distintivo) => {
+    const { escritura, useCase } = crear();
+
+    expect(await codigoDe(useCase.crearArea({ nombre: 'X', poligono: CUADRADO, ...distintivo }, ADMIN))).toBe('DATOS_INVALIDOS');
+    expect(escritura.crearArea).not.toHaveBeenCalled();
   });
 
   it.each(['JEFE_TURNO', 'VISOR', 'OPERADOR'])('un %s no puede modificar geocercas', async (rol) => {
@@ -114,6 +147,36 @@ describe('GestionarGeocercasUseCase', () => {
 
     expect(escritura.editarZona).toHaveBeenCalledWith(9, { nombre: 'Tolva Norte', descripcion: 'Descarga', poligono: null }, 1);
     expect(escritura.zonaDentroDeArea).not.toHaveBeenCalled();
+  });
+
+  it('guarda el nuevo orden de las áreas', async () => {
+    const { escritura, useCase } = crear();
+
+    await useCase.reordenarAreas({ idsAreas: [8, 5, 6] }, ADMIN);
+
+    expect(escritura.reordenarAreas).toHaveBeenCalledWith([8, 5, 6]);
+  });
+
+  it('solo un ADMIN reordena las áreas', async () => {
+    const { escritura, useCase } = crear();
+
+    expect(await codigoDe(useCase.reordenarAreas({ idsAreas: [8, 5, 6] }, { rol: 'JEFE_TURNO', idUsuario: 2 }))).toBe(
+      'SIN_PERMISO',
+    );
+    expect(escritura.reordenarAreas).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['sin lista', {}, 'DATOS_INVALIDOS'],
+    ['con ids repetidos', { idsAreas: [5, 5, 6] }, 'DATOS_INVALIDOS'],
+    ['con ids no numéricos', { idsAreas: ['5', 6, 8] }, 'DATOS_INVALIDOS'],
+    ['a la que le falta un área activa', { idsAreas: [5, 6] }, 'ORDEN_DESACTUALIZADO'],
+    ['con un área que ya no está activa', { idsAreas: [5, 6, 9] }, 'ORDEN_DESACTUALIZADO'],
+  ])('rechaza una lista %s', async (_caso, dto, codigo) => {
+    const { escritura, useCase } = crear();
+
+    expect(await codigoDe(useCase.reordenarAreas(dto, ADMIN))).toBe(codigo);
+    expect(escritura.reordenarAreas).not.toHaveBeenCalled();
   });
 
   it('exige nombre al crear', async () => {

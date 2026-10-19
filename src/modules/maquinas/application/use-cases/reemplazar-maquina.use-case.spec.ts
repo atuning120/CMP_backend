@@ -14,7 +14,7 @@ const maquina = (id: number, nombre: string, extra: Partial<MaquinaFlota> = {}):
   numeroChasis: null,
   esContratista: false,
   operadorAsignado: null,
-  fueraDeServicio: null,
+  motivoEstado: null,
   operadorActual: null,
   ubicacionActual: null,
   idAreaActual: null,
@@ -23,7 +23,7 @@ const maquina = (id: number, nombre: string, extra: Partial<MaquinaFlota> = {}):
   ...extra,
 });
 
-const saliente = maquina(3, 'CF-03', { operadorAsignado: { idOperador: 1, nombre: 'Ana Soto' } });
+const saliente = maquina(3, 'CF-03', { estado: 'BAJA', operadorAsignado: { idOperador: 1, nombre: 'Ana Soto' } });
 const respaldo = maquina(9, 'CF-09', { estado: 'BAJA' });
 
 const crear = (opciones: { enUso?: boolean } = {}) => {
@@ -73,7 +73,7 @@ describe('ReemplazarMaquinaUseCase', () => {
       idOperador: 1,
       accionesSaliente: [{ ...registro, accion: 'REEMPLAZAR', detalle: { entrante: 'CF-09', operador: 'Ana Soto' } }],
       accionesEntrante: [
-        { ...registro, accion: 'HABILITAR', detalle: { reemplazaA: 'CF-03' } },
+        { ...registro, accion: 'HABILITAR', detalle: { reemplazaA: 'CF-03', antes: { estado: 'BAJA' }, despues: { estado: 'ACTIVA' } } },
         { ...registro, accion: 'EDITAR', detalle: { antes: { operador: null }, despues: { operador: 'Ana Soto' } } },
       ],
       accionesOtras: [],
@@ -115,6 +115,23 @@ describe('ReemplazarMaquinaUseCase', () => {
     ).toBe('DATOS_INVALIDOS');
     const enUso = crear({ enUso: true });
     expect(await codigoDe(enUso.reemplazar.execute({ ...base, idMaquinaEntrante: 9 }))).toBe('MAQUINA_EN_USO');
+  });
+
+  it('solo reemplaza una máquina fuera de servicio', async () => {
+    const { maquinaRepo, reemplazar } = crear();
+    maquinaRepo.findFlotaById.mockImplementation(async (id: number) => maquina(id, `CF-0${id}`, { estado: 'EN_MANTENIMIENTO' }));
+    expect(await codigoDe(reemplazar.execute({ ...base, idMaquinaEntrante: 9 }))).toBe('DATOS_INVALIDOS');
+    expect(maquinaRepo.reemplazar).not.toHaveBeenCalled();
+  });
+
+  it('una entrante en reserva pasa a operativa', async () => {
+    const { maquinaRepo, reemplazar } = crear();
+    const reserva = maquina(8, 'CF-08', { estado: 'EN_RESERVA' });
+    maquinaRepo.findFlotaById.mockImplementation(async (id: number) => (id === 8 ? reserva : id === 3 ? saliente : maquina(id, `X-${id}`)));
+    await reemplazar.execute({ ...base, idMaquinaEntrante: 8 });
+    const [r] = maquinaRepo.reemplazar.mock.calls[0];
+    expect(r.entrante).toEqual({ idMaquina: 8, habilitar: true });
+    expect(r.accionesEntrante[0]).toMatchObject({ accion: 'CAMBIAR_ESTADO', detalle: { antes: { estado: 'EN_RESERVA' }, despues: { estado: 'ACTIVA' } } });
   });
 
   it('sin operador si se envía null', async () => {
