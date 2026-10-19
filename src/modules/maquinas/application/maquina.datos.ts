@@ -168,3 +168,19 @@ export const leerNuevaMaquina = async (
     marcaYTipo,
   };
 };
+
+// Una reparación larga se planifica en días o semanas; más de un año adelante es casi seguro un error de tipeo
+const MAXIMO_REGRESO_MS = 366 * 24 * 60 * 60 * 1000;
+
+// Fecha estimada de regreso: undefined = no viene (no cambia); null o '' = se borra
+export const leerRegresoEstimado = (valor: unknown, ahora: Date = new Date()): Date | null | undefined => {
+  if (valor === undefined) return undefined;
+  if (valor === null || valor === '') return null;
+  const fecha = typeof valor === 'string' ? new Date(valor) : null;
+  if (!fecha || Number.isNaN(fecha.getTime())) throw maquinaError('DATOS_INVALIDOS', 'La fecha estimada de regreso no es válida');
+  if (fecha.getTime() <= ahora.getTime()) throw maquinaError('DATOS_INVALIDOS', 'La fecha estimada de regreso debe ser futura');
+  if (fecha.getTime() - ahora.getTime() > MAXIMO_REGRESO_MS) {
+    throw maquinaError('DATOS_INVALIDOS', 'La fecha estimada de regreso no puede ser en más de un año');
+  }
+  return fecha;
+};

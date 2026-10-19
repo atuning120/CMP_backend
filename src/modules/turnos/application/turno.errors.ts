@@ -15,7 +15,10 @@ export type TurnoErrorCode =
   | 'OPERADOR_CON_TURNO_ACTIVO'
   | 'TURNO_NO_ENCONTRADO'
   | 'TURNO_NO_ACTIVO'
-  | 'TURNO_CERRADO_AUTOMATICAMENTE';
+  | 'TURNO_CERRADO_AUTOMATICAMENTE'
+  | 'SIN_PERMISO_CIERRE'
+  | 'MOTIVO_INVALIDO'
+  | 'SIN_TURNO_EN_CURSO';
 
 export const turnoError = (code: TurnoErrorCode) => {
   switch (code) {
@@ -47,6 +50,12 @@ export const turnoError = (code: TurnoErrorCode) => {
       return new NotFoundException({ statusCode: 404, code, message: 'Turno no encontrado' });
     case 'TURNO_NO_ACTIVO':
       return new ConflictException({ statusCode: 409, code, message: 'El turno ya se encuentra cerrado' });
+    case 'SIN_PERMISO_CIERRE':
+      return new ForbiddenException({ statusCode: 403, code, message: 'Solo un jefe de turno o administrador puede cerrar el turno de un operador' });
+    case 'MOTIVO_INVALIDO':
+      return new BadRequestException({ statusCode: 400, code, message: 'Indica el motivo del cierre (hasta 100 caracteres)' });
+    case 'SIN_TURNO_EN_CURSO':
+      return new ConflictException({ statusCode: 409, code, message: 'La máquina no tiene un turno en curso' });
     case 'TURNO_CERRADO_AUTOMATICAMENTE':
       return new ConflictException({
         statusCode: 409,

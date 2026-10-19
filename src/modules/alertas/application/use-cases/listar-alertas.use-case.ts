@@ -14,7 +14,7 @@ export interface ListarAlertasDto extends RangoPaginadoDto {
 export interface PaginaAlertas {
   alertas: AlertaTurno[];
   hayMas: boolean;
-  // Turnos abiertos hace más de 10 h ahora mismo, sin importar el rango (contador de la pestaña)
+  // Operadores con más de 10 h trabajadas ahora mismo (turno o jornada), sin importar el rango (contador de la pestaña)
   activas: number;
 }
 

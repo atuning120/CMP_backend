@@ -38,4 +38,10 @@ export class TurnoOrmEntity {
   @Column('text', { name: 'conflicto_detalle', nullable: true })
   conflicto_detalle: string | null;
 
+  @Column('integer', { name: 'cerrado_por', nullable: true })
+  cerrado_por: number | null;
+
+  @Column('varchar', { name: 'motivo_cierre', nullable: true })
+  motivo_cierre: string | null;
+
 }

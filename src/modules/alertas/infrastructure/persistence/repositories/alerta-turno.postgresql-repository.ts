@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { HORAS_AVISO_TURNO_EXTENDIDO } from '../../../domain/repositories/alerta-turno.repository.port';
+import { HORAS_AVISO_TURNO_EXTENDIDO, HORAS_DESCANSO_ENTRE_JORNADAS } from '../../../domain/repositories/alerta-turno.repository.port';
 import type { AlertaTurno, AlertaTurnoRepositoryPort, FiltroAlertas } from '../../../domain/repositories/alerta-turno.repository.port';
 
 interface FilaAlerta {
@@ -18,7 +18,43 @@ interface FilaAlerta {
   maquina: string;
   area: string | null;
   zona: string | null;
+  inicio_jornada: Date | null;
+  turnos_jornada: number | null;
+  segundos_jornada: number | null;
 }
+
+/**
+ * Jornadas de los operadores: sus turnos encadenados mientras el descanso entre uno y otro sea menor a $9 horas.
+ * Por cada turno: en qué jornada va (n), su lugar en ella (orden), cuánto trabajó antes en la jornada (antes) y cuándo
+ * empezó. Un turno en curso cuenta hasta ahora. Se miran solo los turnos desde $desde - 72 h (una jornada no dura más).
+ * Los parámetros $desde, $hasta y $9 se pasan como texto SQL para reutilizar el bloque en las dos consultas
+ */
+const JORNADAS = (desde: string, hasta: string, descanso: string) => `
+  turnos_recientes AS (
+    SELECT id_turno, id_operador, hora_inicio, COALESCE(hora_termino, CURRENT_TIMESTAMP) AS fin, estado
+    FROM turno
+    WHERE hora_inicio >= ${desde} - interval '72 hours'
+      AND (${hasta} IS NULL OR hora_inicio < ${hasta})
+  ),
+  encadenados AS (
+    SELECT *, LAG(fin) OVER (PARTITION BY id_operador ORDER BY hora_inicio, id_turno) AS fin_anterior
+    FROM turnos_recientes
+  ),
+  numerados AS (
+    SELECT *,
+           SUM(CASE WHEN fin_anterior IS NULL OR hora_inicio - fin_anterior >= make_interval(hours => ${descanso}) THEN 1 ELSE 0 END)
+             OVER (PARTITION BY id_operador ORDER BY hora_inicio, id_turno) AS n
+    FROM encadenados
+  ),
+  jornadas AS (
+    SELECT *,
+           COALESCE(SUM(fin - hora_inicio) OVER (
+             PARTITION BY id_operador, n ORDER BY hora_inicio, id_turno ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+           ), interval '0') AS antes,
+           ROW_NUMBER() OVER (PARTITION BY id_operador, n ORDER BY hora_inicio, id_turno) AS orden,
+           MIN(hora_inicio) OVER (PARTITION BY id_operador, n) AS inicio_jornada
+    FROM numerados
+  )`;
 
 // NUMERIC llega como string desde pg
 const numero = (valor: string | null) => (valor === null ? null : Number(valor));
@@ -33,10 +69,12 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
     // El rango del turno extendido se aplica sobre hora_inicio (desplazado 10 h) para usar su índice
     const filas: FilaAlerta[] = await this.dataSource.query(
       `
-      WITH alertas AS (
+      WITH ${JORNADAS('$3::timestamptz', '$4::timestamptz', '$9')},
+      alertas AS (
         (
           SELECT 'E-' || id_turno AS id, 'TURNO_EXTENDIDO' AS tipo,
-                 date_trunc('milliseconds', hora_inicio + make_interval(hours => $8)) AS fecha, id_turno
+                 date_trunc('milliseconds', hora_inicio + make_interval(hours => $8)) AS fecha, id_turno,
+                 NULL::timestamptz AS inicio_jornada, NULL::bigint AS turnos_jornada, NULL::float8 AS segundos_jornada
           FROM turno
           WHERE $1
             AND COALESCE(hora_termino, CURRENT_TIMESTAMP) >= hora_inicio + make_interval(hours => $8)
@@ -51,7 +89,8 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
         UNION ALL
 
         (
-          SELECT 'A-' || id_turno, 'CIERRE_AUTOMATICO', date_trunc('milliseconds', hora_termino), id_turno
+          SELECT 'A-' || id_turno, 'CIERRE_AUTOMATICO', date_trunc('milliseconds', hora_termino), id_turno,
+                 NULL::timestamptz, NULL::bigint, NULL::float8
           FROM turno
           WHERE $2
             AND estado = 'CERRADO_AUTO'
@@ -61,11 +100,34 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
           ORDER BY 3 DESC, 1 DESC
           LIMIT $7
         )
+
+        UNION ALL
+
+        (
+          -- El turno en que la jornada cruzó las $8 horas trabajadas; desde el segundo turno de la jornada
+          SELECT id, tipo, fecha, id_turno, inicio_jornada, orden, segundos_jornada
+          FROM (
+            SELECT 'J-' || id_turno AS id, 'JORNADA_EXTENDIDA' AS tipo,
+                   date_trunc('milliseconds', hora_inicio + (make_interval(hours => $8) - antes)) AS fecha, id_turno,
+                   inicio_jornada, orden, EXTRACT(EPOCH FROM antes + (fin - hora_inicio))::float8 AS segundos_jornada
+            FROM jornadas
+            WHERE $1
+              AND orden > 1
+              AND antes < make_interval(hours => $8)
+              AND antes + (fin - hora_inicio) >= make_interval(hours => $8)
+          ) j
+          WHERE fecha >= $3::timestamptz
+            AND ($4::timestamptz IS NULL OR fecha < $4::timestamptz)
+            AND ($5::timestamptz IS NULL OR (fecha, id) < ($5::timestamptz, $6::text))
+          ORDER BY fecha DESC, id DESC
+          LIMIT $7
+        )
       )
       SELECT a.id, a.tipo, a.fecha, t.id_turno, t.estado, t.hora_inicio, t.hora_termino,
              t.horometro_inicial, t.horometro_final,
              o.nombre || ' ' || o.apellido AS operador, m.id_maquina, m.nombre AS maquina,
-             ubicacion.area, ubicacion.zona
+             ubicacion.area, ubicacion.zona,
+             a.inicio_jornada, a.turnos_jornada::int AS turnos_jornada, a.segundos_jornada
       FROM alertas a
       JOIN turno t ON t.id_turno = a.id_turno
       JOIN operador o ON o.id_operador = t.id_operador
@@ -91,6 +153,7 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
         filtro.despuesDe?.id ?? null,
         filtro.limite,
         HORAS_AVISO_TURNO_EXTENDIDO,
+        HORAS_DESCANSO_ENTRE_JORNADAS,
       ],
     );
     return filas.map((fila) => ({
@@ -109,14 +172,27 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
       },
       area: fila.area,
       zona: fila.zona,
+      jornada:
+        fila.tipo === 'JORNADA_EXTENDIDA' && fila.inicio_jornada
+          ? {
+              inicio: fila.inicio_jornada,
+              turnos: Number(fila.turnos_jornada),
+              horas: Math.round((Number(fila.segundos_jornada) / 3600) * 10) / 10,
+            }
+          : null,
     }));
   }
 
+  // Un operador cuenta una vez, ya sea porque su turno pasó las horas de aviso o porque las pasó sumando su jornada
   async contarExtendidosEnCurso(): Promise<number> {
     const [fila]: { total: string }[] = await this.dataSource.query(
-      `SELECT COUNT(*) AS total FROM turno
-       WHERE estado = 'EN_CURSO' AND hora_inicio <= CURRENT_TIMESTAMP - make_interval(hours => $1)`,
-      [HORAS_AVISO_TURNO_EXTENDIDO],
+      `
+      WITH ${JORNADAS('CURRENT_TIMESTAMP', 'NULL::timestamptz', '$2')}
+      SELECT COUNT(DISTINCT id_operador) AS total
+      FROM jornadas
+      WHERE estado = 'EN_CURSO' AND antes + (fin - hora_inicio) >= make_interval(hours => $1)
+      `,
+      [HORAS_AVISO_TURNO_EXTENDIDO, HORAS_DESCANSO_ENTRE_JORNADAS],
     );
     return Number(fila.total);
   }

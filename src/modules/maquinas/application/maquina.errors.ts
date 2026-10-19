@@ -10,7 +10,8 @@ export type MaquinaErrorCode =
   | 'PATENTE_DUPLICADA'
   | 'MAQUINA_NO_ENCONTRADA'
   | 'SIN_CAMBIOS'
-  | 'MAQUINA_EN_USO';
+  | 'MAQUINA_EN_USO'
+  | 'SIN_RESPALDO';
 
 export const maquinaError = (code: MaquinaErrorCode, detalle?: string) => {
   switch (code) {
@@ -31,6 +32,12 @@ export const maquinaError = (code: MaquinaErrorCode, detalle?: string) => {
     case 'SIN_CAMBIOS':
       return new BadRequestException({ statusCode: 400, code, message: 'No hay cambios que guardar' });
     case 'MAQUINA_EN_USO':
-      return new ConflictException({ statusCode: 409, code, message: `${detalle} tiene un turno en curso: no se puede dejar fuera de servicio` });
+      return new ConflictException({
+        statusCode: 409,
+        code,
+        message: `${detalle} tiene un turno en curso: primero hay que cerrarlo para sacarla de operación`,
+      });
+    case 'SIN_RESPALDO':
+      return new ConflictException({ statusCode: 409, code, message: 'La máquina no tiene un respaldo que devolver' });
   }
 };

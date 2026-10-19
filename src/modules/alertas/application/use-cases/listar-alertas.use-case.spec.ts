@@ -10,6 +10,7 @@ const alerta = (n: number): AlertaTurno => ({
   turno: { id: n, estado: 'EN_CURSO', horaInicio: new Date(2026, 9, 7, 12, 0, n), horaTermino: null, horometroInicial: 10, horometroFinal: null },
   area: 'Área 15',
   zona: null,
+  jornada: null,
 });
 
 const crear = (cantidad = 0, activas = 0) => {
