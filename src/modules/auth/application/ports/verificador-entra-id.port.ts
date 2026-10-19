@@ -11,4 +11,6 @@ export interface IdentidadMicrosoft {
 export interface VerificadorEntraIdPort {
   // Lanza error si el token no es válido; devuelve null si la integración no está configurada
   verificar(idToken: string): Promise<IdentidadMicrosoft | null>;
+  // Tenant que verificó ese dominio en Entra ID (null si ninguno lo tiene). Lanza error si Microsoft no responde
+  tenantDelDominio(dominio: string): Promise<string | null>;
 }

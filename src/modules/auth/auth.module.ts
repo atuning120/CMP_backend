@@ -2,6 +2,9 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { leerJwtSecret } from '../../shared/infrastructure/config/secretos';
+import { LIMITE_INTENTOS } from './infrastructure/limite-intentos';
 import { AuthController } from './interface/http/controllers/auth.controller';
 import { LoginUseCase } from './application/use-cases/login.use-case';
 import { LoginWebUseCase } from './application/use-cases/login-web.use-case';
@@ -26,11 +29,12 @@ import { REFRESH_TOKEN_REPOSITORY } from './domain/repositories/refresh-token.re
     UsuariosModule,
     OperadoresModule,
     TypeOrmModule.forFeature([RefreshTokenOrmEntity]),
+    ThrottlerModule.forRoot(LIMITE_INTENTOS),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET', 'super_secret_dev_key'),
+        secret: leerJwtSecret(config.get<string>('JWT_SECRET')),
         signOptions: { expiresIn: config.get<string>('JWT_EXPIRES_IN', '1h') as any },
       }),
     }),

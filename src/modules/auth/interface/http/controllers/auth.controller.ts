@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Headers, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, Headers, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { LimiteIntentosGuard } from '../../../infrastructure/limite-intentos';
 import { LoginUseCase } from '../../../application/use-cases/login.use-case';
 import { LoginRequestDto } from '../dtos/login.request.dto';
 import { RegisterOperadorRequestDto } from '../dtos/register-operador.request.dto';
@@ -15,6 +16,8 @@ import { RefreshTokenRequestDto } from '../dtos/refresh-token.request.dto';
 import { RefrescarSesionUseCase } from '../../../application/use-cases/refrescar-sesion.use-case';
 import { CerrarSesionUseCase } from '../../../application/use-cases/cerrar-sesion.use-case';
 
+// Login y registro llevan límite de intentos (ver limite-intentos.ts); refresh y logout no: el refresh token es
+// aleatorio de 48 bytes (no se puede adivinar) y la app los reintenta seguido cuando vuelve la señal
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -29,17 +32,20 @@ export class AuthController {
   ) { }
 
   @Post('register/operador')
+  @UseGuards(LimiteIntentosGuard)
   async registerOperador(@Body() body: RegisterOperadorRequestDto) {
     return this.registerOperadorUseCase.execute(body);
   }
 
   @Post('register/jefe-turno')
+  @UseGuards(LimiteIntentosGuard)
   async registerJefeTurno(@Body() body: RegisterJefeTurnoRequestDto) {
     return this.registerJefeTurnoUseCase.execute(body);
   }
 
   // Protegido con la clave ADMIN_SETUP_KEY (header x-admin-setup-key)
   @Post('register/admin')
+  @UseGuards(LimiteIntentosGuard)
   async registerAdmin(
     @Body() body: RegisterAdminRequestDto,
     @Headers('x-admin-setup-key') claveSetup?: string,
@@ -48,6 +54,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @UseGuards(LimiteIntentosGuard)
   @HttpCode(HttpStatus.OK)
   async login(@Body() body: LoginRequestDto) {
     return this.loginUseCase.execute(body);
@@ -67,6 +74,7 @@ export class AuthController {
   }
 
   @Post('login/web')
+  @UseGuards(LimiteIntentosGuard)
   @HttpCode(HttpStatus.OK)
   async loginWeb(@Body() body: LoginWebRequestDto) {
     return this.loginWebUseCase.execute(body);
@@ -74,6 +82,7 @@ export class AuthController {
 
   // Login del panel web con email y contraseña; responde { accessToken, rol }
   @Post('login/web/credenciales')
+  @UseGuards(LimiteIntentosGuard)
   @HttpCode(HttpStatus.OK)
   async loginWebCredenciales(@Body() body: LoginWebCredencialesRequestDto) {
     return this.loginWebCredencialesUseCase.execute(body);

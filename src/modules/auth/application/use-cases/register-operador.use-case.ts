@@ -1,5 +1,6 @@
 import { Injectable, Inject, ConflictException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import { exigirPasswordSegura } from '../password-segura';
 import { USUARIO_REPOSITORY } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import { OPERADOR_REPOSITORY } from '../../../operadores/domain/repositories/operador.repository.port';
@@ -39,7 +40,7 @@ export class RegisterOperadorUseCase {
 
     // 4. Hashear la contraseña
     const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(dto.password, salt);
+    const passwordHash = await bcrypt.hash(exigirPasswordSegura(dto.password), salt);
 
     // 5. Crear el usuario vinculado al operador
     const idUsuario = await this.usuarioRepo.create({
