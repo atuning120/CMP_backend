@@ -1,7 +1,7 @@
 export type EstadoTurno = 'EN_CURSO' | 'CERRADO' | 'CERRADO_AUTO';
 
 // Un turno abierto por más de este tiempo se considera olvidado y se cierra automáticamente.
-export const DURACION_MAXIMA_TURNO_HORAS = 12;
+export const DURACION_MAXIMA_TURNO_HORAS = 13;
 const DURACION_MAXIMA_TURNO_MS = DURACION_MAXIMA_TURNO_HORAS * 60 * 60 * 1000;
 
 export class Turno {
@@ -35,9 +35,9 @@ export class Turno {
   /**
    * Cierre informado por el operador. `fecha` es el momento real del cierre (puede venir de un
    * registro offline sincronizado después).
-   * - Dentro de las 12 h: queda CERRADO. Si el sistema ya lo había cerrado automáticamente
+   * - Dentro de las 13 h: queda CERRADO. Si el sistema ya lo había cerrado automáticamente
    *   (porque el cierre llegó tarde por falta de conexión), se corrige con los datos reales.
-   * - Después de las 12 h: queda CERRADO_AUTO en el límite, pero se conserva el horómetro final.
+   * - Después de las 13 h: queda CERRADO_AUTO en el límite, pero se conserva el horómetro final.
    */
   finalizar(fecha: Date, horometro: number) {
     if (this.estadoActual === 'CERRADO') {
@@ -59,7 +59,7 @@ export class Turno {
     this.estadoActual = 'CERRADO';
   }
 
-  // Cierre por sistema: el término se fija en el límite de 12 h (no en el momento de la detección)
+  // Cierre por sistema: el término se fija en el límite de 13 h (no en el momento de la detección)
   // para no inflar las horas del turno. El horómetro final queda pendiente de regularizar.
   cerrarAutomaticamente() {
     if (!this.enCurso) {

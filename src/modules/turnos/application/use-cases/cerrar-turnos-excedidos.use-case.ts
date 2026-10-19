@@ -3,7 +3,7 @@ import { TURNO_REPOSITORY } from '../../domain/repositories/turno.repository.por
 import type { TurnoRepositoryPort } from '../../domain/repositories/turno.repository.port';
 import { DURACION_MAXIMA_TURNO_HORAS, Turno } from '../../domain/entities/turno.entity';
 
-// Cierra como CERRADO_AUTO todos los turnos que siguen abiertos después de 12 horas
+// Cierra como CERRADO_AUTO todos los turnos que siguen abiertos después de DURACION_MAXIMA_TURNO_HORAS (13 h)
 // (típicamente porque el operador olvidó cerrarlos).
 @Injectable()
 export class CerrarTurnosExcedidosUseCase {

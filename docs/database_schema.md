@@ -324,13 +324,13 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 
 - **Sincronización offline-first** (migración `002`): la app registra todo primero en su SQLite y lo envía después. `id_cliente` es el UUID que genera el teléfono; los endpoints son idempotentes por ese campo (reenviar no duplica). Las fechas (`hora_inicio`, `hora_termino`, `inicio`, `fecha_hora`) son las del momento real del evento, no las de la sincronización.
 - Si un inicio sincronizado tarde choca con el estado del servidor (máquina u operador con otro turno abierto, máquina/área/zona dadas de baja), el turno se acepta con `conflicto = TRUE` y el motivo en `conflicto_detalle`, para revisión del jefe de turno.
-- Un cierre real que llega después de que el servidor cerró el turno por 12 h lo corrige a `CERRADO` si ocurrió dentro de las 12 h; si ocurrió después, queda `CERRADO_AUTO` conservando `horometro_final`.
+- Un cierre real que llega después de que el servidor cerró el turno por 13 h lo corrige a `CERRADO` si ocurrió dentro de las 13 h; si ocurrió después, queda `CERRADO_AUTO` conservando `horometro_final`.
 - Al cerrar un turno se cierra también su `TURNO_ESTADO` vigente.
 
 - Sesión móvil: `/auth/login` entrega access token (JWT, `JWT_EXPIRES_IN`, por defecto 1 h) y refresh token (`REFRESH_TOKEN_TTL_DAYS`, por defecto 30 días). `/auth/refresh` revoca el token usado y emite uno nuevo; reutilizar un token rotado hace más de 60 s revoca todas las sesiones del usuario. `/auth/logout` revoca el token del dispositivo.
 
 - Un operador y una máquina tienen como máximo un `TURNO` con `hora_termino` NULL (validado en `IniciarTurnoUseCase`).
-- Un turno abierto más de 12 h pasa a `CERRADO_AUTO` con `hora_termino` = `hora_inicio` + 12 h y `horometro_final` NULL (`CerrarTurnosExcedidosUseCase` + scheduler cada 5 min).
+- Un turno abierto más de 13 h pasa a `CERRADO_AUTO` con `hora_termino` = `hora_inicio` + 13 h y `horometro_final` NULL (`CerrarTurnosExcedidosUseCase` + scheduler cada 5 min).
 - Al cerrar un turno (manual o automático) se cierra su `TURNO_UBICACION` vigente.
 - `TURNO_UBICACION.id_zona`, si viene, debe pertenecer al `id_area` del mismo registro (validado en la aplicación, no en la BD).
 

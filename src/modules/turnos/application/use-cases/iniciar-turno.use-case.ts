@@ -136,7 +136,7 @@ export class IniciarTurnoUseCase {
     return { area, zona };
   }
 
-  // Un turno olvidado (> 12 h) no debe bloquear el inicio de uno nuevo: se cierra automáticamente.
+  // Un turno olvidado (> 13 h) no debe bloquear el inicio de uno nuevo: se cierra automáticamente.
   private async liberarSiExcedido(turno: Turno | null, ahora: Date): Promise<Turno | null> {
     if (!turno || !turno.excedeDuracionMaxima(ahora)) {
       return turno;

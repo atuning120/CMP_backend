@@ -32,7 +32,7 @@ export class FinalizarTurnoUseCase {
   ) {}
 
   /**
-   * Devuelve el turno cerrado. Si el cierre ocurrió después de las 12 h, el turno queda
+   * Devuelve el turno cerrado. Si el cierre ocurrió después de las 13 h, el turno queda
    * CERRADO_AUTO (con el horómetro informado); la app lo distingue por `estadoActual`.
    */
   async execute(dto: FinalizarTurnoDto, ahora: Date = new Date()): Promise<Turno> {

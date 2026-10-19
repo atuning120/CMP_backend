@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { DURACION_MAXIMA_TURNO_HORAS } from '../domain/entities/turno.entity';
 
 // Errores de turnos: código estable para que la app decida qué mostrar, más un mensaje legible.
 export type TurnoErrorCode =
@@ -50,7 +51,7 @@ export const turnoError = (code: TurnoErrorCode) => {
       return new ConflictException({
         statusCode: 409,
         code,
-        message: 'El turno superó las 12 horas y fue cerrado automáticamente',
+        message: `El turno superó las ${DURACION_MAXIMA_TURNO_HORAS} horas y fue cerrado automáticamente`,
       });
   }
 };

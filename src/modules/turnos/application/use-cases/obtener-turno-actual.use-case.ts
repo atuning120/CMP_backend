@@ -95,7 +95,7 @@ export class ObtenerTurnoActualUseCase {
       };
     }
 
-    // El turno se pasó de 12 h: se cierra ahora mismo aunque el job periódico aún no haya corrido
+    // El turno se pasó de 13 h: se cierra ahora mismo aunque el job periódico aún no haya corrido
     if (activo) {
       activo.cerrarAutomaticamente();
       await this.turnoRepo.save(activo);
