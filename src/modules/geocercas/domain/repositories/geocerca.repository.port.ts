@@ -1,7 +1,13 @@
 export const GEOCERCA_REPOSITORY = Symbol('GEOCERCA_REPOSITORY');
 export const GEOCERCA_ESCRITURA_REPOSITORY = Symbol('GEOCERCA_ESCRITURA_REPOSITORY');
 
-export interface AreaResumen {
+// Distintivo del área en el listado del panel web: un código corto (p. ej. "51") o, si no hay, un ícono
+export interface DistintivoArea {
+  codigo: string | null;
+  icono: string | null;
+}
+
+export interface AreaResumen extends DistintivoArea {
   idArea: number;
   nombre: string;
   descripcion: string | null;
@@ -61,8 +67,8 @@ export interface GeocercaEscrituraPort {
   zonaDentroDeArea(poligono: PoligonoGeoJson, idArea: number): Promise<boolean>;
   // Zonas activas del área que quedarían fuera si el área pasa a tener este polígono
   contarZonasFueraDe(idArea: number, poligono: PoligonoGeoJson): Promise<number>;
-  crearArea(datos: DatosGeocerca, idUsuario: number): Promise<number>;
-  editarArea(idArea: number, edicion: EdicionGeocerca, idUsuario: number): Promise<void>;
+  crearArea(datos: DatosGeocerca & DistintivoArea, idUsuario: number): Promise<number>;
+  editarArea(idArea: number, edicion: EdicionGeocerca & DistintivoArea, idUsuario: number): Promise<void>;
   // Desactiva el área y sus zonas activas
   desactivarArea(idArea: number, idUsuario: number): Promise<void>;
   crearZona(idArea: number, datos: DatosGeocerca, idUsuario: number): Promise<number>;

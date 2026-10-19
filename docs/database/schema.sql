@@ -35,6 +35,8 @@ CREATE TABLE AREA (
     id_area         SERIAL PRIMARY KEY,
     nombre          VARCHAR(100) NOT NULL,
     descripcion     TEXT,
+    codigo          VARCHAR(4),
+    icono           VARCHAR(30),
     poligono        GEOMETRY(Polygon, 4326),
     estado          VARCHAR(30),
     creado_en       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,

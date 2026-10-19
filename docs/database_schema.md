@@ -46,6 +46,8 @@ erDiagram
         int id_area PK
         string nombre
         string descripcion
+        string codigo "distintivo corto en el listado web"
+        string icono "clave de ícono si no hay código"
         geometry poligono
         string estado
         timestamptz creado_en

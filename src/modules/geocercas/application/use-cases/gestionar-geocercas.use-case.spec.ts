@@ -10,7 +10,7 @@ const CUADRADO: PoligonoGeoJson = {
   type: 'Polygon',
   coordinates: [[[-70.81, -28.30], [-70.80, -28.30], [-70.80, -28.29], [-70.81, -28.29], [-70.81, -28.30]]],
 };
-const AREA = { idArea: 5, nombre: 'Área 51', descripcion: null, estado: 'ACTIVA' };
+const AREA = { idArea: 5, nombre: 'Área 51', descripcion: null, codigo: '51', icono: null, estado: 'ACTIVA' };
 const ZONA = { idZona: 9, idArea: 5, nombre: 'Tolva', descripcion: 'Descarga', estado: 'ACTIVA' };
 
 const crear = (opciones: { valido?: boolean; dentro?: boolean; fuera?: number; area?: typeof AREA | null } = {}) => {
@@ -68,7 +68,39 @@ describe('GestionarGeocercasUseCase', () => {
     const { escritura, useCase } = crear();
 
     expect(await useCase.crearArea({ nombre: '  Área 60 ', descripcion: '', poligono: CUADRADO }, ADMIN)).toEqual({ idArea: 7 });
-    expect(escritura.crearArea).toHaveBeenCalledWith({ nombre: 'Área 60', descripcion: null, poligono: CUADRADO }, 1);
+    expect(escritura.crearArea).toHaveBeenCalledWith(
+      { nombre: 'Área 60', descripcion: null, poligono: CUADRADO, codigo: null, icono: null },
+      1,
+    );
+  });
+
+  it('crea un área con su distintivo', async () => {
+    const { escritura, useCase } = crear();
+
+    await useCase.crearArea({ nombre: 'Taller', poligono: CUADRADO, codigo: ' 10 ', icono: 'herramienta' }, ADMIN);
+
+    expect(escritura.crearArea).toHaveBeenCalledWith(expect.objectContaining({ codigo: '10', icono: 'herramienta' }), 1);
+  });
+
+  it('editar el ícono conserva el código y vaciar el código lo quita', async () => {
+    const { escritura, useCase } = crear();
+
+    await useCase.editarArea(5, { icono: 'fabrica' }, ADMIN);
+    expect(escritura.editarArea).toHaveBeenLastCalledWith(5, expect.objectContaining({ codigo: '51', icono: 'fabrica' }), 1);
+
+    await useCase.editarArea(5, { codigo: '' }, ADMIN);
+    expect(escritura.editarArea).toHaveBeenLastCalledWith(5, expect.objectContaining({ codigo: null, icono: null }), 1);
+  });
+
+  it.each([
+    ['un código largo', { codigo: '12345' }],
+    ['un código con espacios', { codigo: 'A 1' }],
+    ['un ícono con formato inválido', { icono: '<svg>' }],
+  ])('rechaza %s', async (_caso, distintivo) => {
+    const { escritura, useCase } = crear();
+
+    expect(await codigoDe(useCase.crearArea({ nombre: 'X', poligono: CUADRADO, ...distintivo }, ADMIN))).toBe('DATOS_INVALIDOS');
+    expect(escritura.crearArea).not.toHaveBeenCalled();
   });
 
   it.each(['JEFE_TURNO', 'VISOR', 'OPERADOR'])('un %s no puede modificar geocercas', async (rol) => {

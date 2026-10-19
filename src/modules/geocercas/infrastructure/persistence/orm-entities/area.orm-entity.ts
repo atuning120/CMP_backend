@@ -11,6 +11,12 @@ export class AreaOrmEntity {
   @Column('text', { name: 'descripcion', nullable: true })
   descripcion: string | null;
 
+  @Column('varchar', { name: 'codigo', nullable: true })
+  codigo: string | null;
+
+  @Column('varchar', { name: 'icono', nullable: true })
+  icono: string | null;
+
   @Column('geometry', { name: 'poligono', nullable: true })
   poligono: string | null;
 
