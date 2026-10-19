@@ -98,6 +98,21 @@ export class GestionarGeocercasUseCase {
     await this.escrituraRepo.editarArea(idArea, { ...edicion, ...this.leerDistintivo(dto, actual) }, autor.idUsuario);
   }
 
+  // Recibe todas las áreas activas en el nuevo orden; una lista desactualizada (otro ADMIN creó o
+  // desactivó un área entretanto) se rechaza para no dejar posiciones repetidas o huecas
+  async reordenarAreas(dto: { idsAreas?: unknown }, autor: Autor): Promise<void> {
+    this.exigirPermiso(autor);
+    const ids = dto?.idsAreas;
+    if (!Array.isArray(ids) || !ids.every((id) => Number.isInteger(id) && id > 0) || new Set(ids).size !== ids.length) {
+      throw geocercaError('DATOS_INVALIDOS', 'Se espera la lista de ids de las áreas, sin repetir');
+    }
+    const activas = new Set((await this.lecturaRepo.findAreasActivas()).map((a) => a.idArea));
+    if (ids.length !== activas.size || !ids.every((id: number) => activas.has(id))) {
+      throw geocercaError('ORDEN_DESACTUALIZADO');
+    }
+    await this.escrituraRepo.reordenarAreas(ids);
+  }
+
   async desactivarArea(idArea: number, autor: Autor): Promise<void> {
     this.exigirPermiso(autor);
     const actual = await this.lecturaRepo.findAreaById(idArea);

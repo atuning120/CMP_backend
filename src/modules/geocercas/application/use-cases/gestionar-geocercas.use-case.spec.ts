@@ -15,7 +15,7 @@ const ZONA = { idZona: 9, idArea: 5, nombre: 'Tolva', descripcion: 'Descarga', e
 
 const crear = (opciones: { valido?: boolean; dentro?: boolean; fuera?: number; area?: typeof AREA | null } = {}) => {
   const lectura = {
-    findAreasActivas: jest.fn(),
+    findAreasActivas: jest.fn(async () => [AREA, { ...AREA, idArea: 6 }, { ...AREA, idArea: 8 }]),
     findAreaById: jest.fn(async () => (opciones.area === undefined ? AREA : opciones.area)),
     findZonasActivasByArea: jest.fn(),
     findZonasActivas: jest.fn(),
@@ -28,6 +28,7 @@ const crear = (opciones: { valido?: boolean; dentro?: boolean; fuera?: number; a
     contarZonasFueraDe: jest.fn(async () => opciones.fuera ?? 0),
     crearArea: jest.fn(async () => 7),
     editarArea: jest.fn(async () => undefined),
+    reordenarAreas: jest.fn(async () => undefined),
     desactivarArea: jest.fn(async () => undefined),
     crearZona: jest.fn(async () => 11),
     editarZona: jest.fn(async () => undefined),
@@ -146,6 +147,36 @@ describe('GestionarGeocercasUseCase', () => {
 
     expect(escritura.editarZona).toHaveBeenCalledWith(9, { nombre: 'Tolva Norte', descripcion: 'Descarga', poligono: null }, 1);
     expect(escritura.zonaDentroDeArea).not.toHaveBeenCalled();
+  });
+
+  it('guarda el nuevo orden de las áreas', async () => {
+    const { escritura, useCase } = crear();
+
+    await useCase.reordenarAreas({ idsAreas: [8, 5, 6] }, ADMIN);
+
+    expect(escritura.reordenarAreas).toHaveBeenCalledWith([8, 5, 6]);
+  });
+
+  it('solo un ADMIN reordena las áreas', async () => {
+    const { escritura, useCase } = crear();
+
+    expect(await codigoDe(useCase.reordenarAreas({ idsAreas: [8, 5, 6] }, { rol: 'JEFE_TURNO', idUsuario: 2 }))).toBe(
+      'SIN_PERMISO',
+    );
+    expect(escritura.reordenarAreas).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['sin lista', {}, 'DATOS_INVALIDOS'],
+    ['con ids repetidos', { idsAreas: [5, 5, 6] }, 'DATOS_INVALIDOS'],
+    ['con ids no numéricos', { idsAreas: ['5', 6, 8] }, 'DATOS_INVALIDOS'],
+    ['a la que le falta un área activa', { idsAreas: [5, 6] }, 'ORDEN_DESACTUALIZADO'],
+    ['con un área que ya no está activa', { idsAreas: [5, 6, 9] }, 'ORDEN_DESACTUALIZADO'],
+  ])('rechaza una lista %s', async (_caso, dto, codigo) => {
+    const { escritura, useCase } = crear();
+
+    expect(await codigoDe(useCase.reordenarAreas(dto, ADMIN))).toBe(codigo);
+    expect(escritura.reordenarAreas).not.toHaveBeenCalled();
   });
 
   it('exige nombre al crear', async () => {

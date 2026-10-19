@@ -48,6 +48,7 @@ erDiagram
         string descripcion
         string codigo "distintivo corto en el listado web"
         string icono "clave de ícono si no hay código"
+        int orden "posición en el listado (NULL al final)"
         geometry poligono
         string estado
         timestamptz creado_en

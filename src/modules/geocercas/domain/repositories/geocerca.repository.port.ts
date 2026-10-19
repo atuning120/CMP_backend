@@ -69,6 +69,8 @@ export interface GeocercaEscrituraPort {
   contarZonasFueraDe(idArea: number, poligono: PoligonoGeoJson): Promise<number>;
   crearArea(datos: DatosGeocerca & DistintivoArea, idUsuario: number): Promise<number>;
   editarArea(idArea: number, edicion: EdicionGeocerca & DistintivoArea, idUsuario: number): Promise<void>;
+  // Orden del listado: cada área toma la posición que ocupa en idsAreas
+  reordenarAreas(idsAreas: number[]): Promise<void>;
   // Desactiva el área y sus zonas activas
   desactivarArea(idArea: number, idUsuario: number): Promise<void>;
   crearZona(idArea: number, datos: DatosGeocerca, idUsuario: number): Promise<number>;

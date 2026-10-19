@@ -17,6 +17,9 @@ export class AreaOrmEntity {
   @Column('varchar', { name: 'icono', nullable: true })
   icono: string | null;
 
+  @Column('integer', { name: 'orden', nullable: true })
+  orden: number | null;
+
   @Column('geometry', { name: 'poligono', nullable: true })
   poligono: string | null;
 

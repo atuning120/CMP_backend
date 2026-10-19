@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../../auth/infrastructure/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../auth/interface/http/decorators/current-user.decorator';
 import { ObtenerMapaGeocercasUseCase } from '../../../application/use-cases/obtener-mapa-geocercas.use-case';
@@ -22,6 +22,13 @@ export class GeocercaController {
   @Post('areas')
   async crearArea(@Body() body: GeocercaDto, @CurrentUser() user: Autor) {
     return this.gestionarUseCase.crearArea(body, user);
+  }
+
+  // Cuerpo: { idsAreas: number[] } con todas las áreas activas en el orden del listado
+  @Put('areas/orden')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async reordenarAreas(@Body() body: { idsAreas?: unknown }, @CurrentUser() user: Autor) {
+    await this.gestionarUseCase.reordenarAreas(body, user);
   }
 
   @Patch('areas/:idArea')

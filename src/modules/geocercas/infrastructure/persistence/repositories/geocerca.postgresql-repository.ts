@@ -48,7 +48,8 @@ export class GeocercaPostgresqlRepository implements GeocercaRepositoryPort, Geo
     const areas = await this.areaRepository.find({
       select: AREA_COLUMNS,
       where: { estado: 'ACTIVA' },
-      order: { nombre: 'ASC' },
+      // Orden elegido por el ADMIN; las áreas sin orden (nuevas) quedan al final (NULLS LAST en ASC)
+      order: { orden: 'ASC', nombre: 'ASC' },
     });
     return areas.map((area) => this.mapArea(area));
   }
@@ -85,7 +86,7 @@ export class GeocercaPostgresqlRepository implements GeocercaRepositoryPort, Geo
     const [areas, zonas]: [FilaGeocercaMapa[], FilaGeocercaMapa[]] = await Promise.all([
       this.areaRepository.query(
         `SELECT id_area AS id, id_area, nombre, descripcion, codigo, icono, estado, ST_AsGeoJSON(poligono)::json AS poligono
-         FROM area WHERE estado = 'ACTIVA' ORDER BY nombre`,
+         FROM area WHERE estado = 'ACTIVA' ORDER BY orden, nombre`,
       ),
       this.zonaRepository.query(
         `SELECT z.id_zona AS id, z.id_area, z.nombre, z.descripcion, z.estado, ST_AsGeoJSON(z.poligono)::json AS poligono
@@ -167,6 +168,15 @@ export class GeocercaPostgresqlRepository implements GeocercaRepositoryPort, Geo
         ],
       );
     });
+  }
+
+  async reordenarAreas(idsAreas: number[]): Promise<void> {
+    await this.areaRepository.query(
+      `UPDATE area a SET orden = o.posicion
+       FROM unnest($1::int[]) WITH ORDINALITY AS o(id_area, posicion)
+       WHERE a.id_area = o.id_area`,
+      [idsAreas],
+    );
   }
 
   async desactivarArea(idArea: number, idUsuario: number): Promise<void> {

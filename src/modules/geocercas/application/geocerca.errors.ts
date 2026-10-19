@@ -7,7 +7,8 @@ export type GeocercaErrorCode =
   | 'AREA_NO_ENCONTRADA'
   | 'ZONA_NO_ENCONTRADA'
   | 'ZONA_FUERA_DEL_AREA'
-  | 'ZONAS_FUERA_DEL_AREA';
+  | 'ZONAS_FUERA_DEL_AREA'
+  | 'ORDEN_DESACTUALIZADO';
 
 // Código estable para el cliente + mensaje en español, como el resto de los módulos
 export const geocercaError = (code: GeocercaErrorCode, detalle?: string) => {
@@ -24,6 +25,12 @@ export const geocercaError = (code: GeocercaErrorCode, detalle?: string) => {
       return new NotFoundException({ statusCode: 404, code, message: 'La zona no existe o está inactiva' });
     case 'ZONA_FUERA_DEL_AREA':
       return new ConflictException({ statusCode: 409, code, message: 'La zona debe quedar dentro del polígono de su área' });
+    case 'ORDEN_DESACTUALIZADO':
+      return new ConflictException({
+        statusCode: 409,
+        code,
+        message: 'La lista de áreas cambió mientras ordenabas. Se recargó; vuelve a intentarlo',
+      });
     case 'ZONAS_FUERA_DEL_AREA':
       return new ConflictException({ statusCode: 409, code, message: detalle ?? 'Hay zonas que quedarían fuera del área' });
   }
