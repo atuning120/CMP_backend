@@ -20,6 +20,9 @@ const maquina = (id: number, nombre: string, extra: Partial<MaquinaFlota> = {}):
   idAreaActual: null,
   idZonaActual: null,
   horometroActual: 100,
+  regresoEstimado: null,
+  respaldo: null,
+  cubreA: null,
   ...extra,
 });
 
@@ -41,6 +44,7 @@ const crear = (opciones: { enUso?: boolean } = {}) => {
     findOperadoresAsignables: jest.fn(async () => []),
     findOperadorAsignable: jest.fn(async () => null),
     reemplazar: jest.fn(async (r: ReemplazoMaquina) => ('idMaquina' in r.entrante ? r.entrante.idMaquina : 21)),
+    devolver: jest.fn(async () => undefined),
     findTipos: jest.fn(async () => ['Cargador Frontal']),
     findMarcas: jest.fn(async () => ['Komatsu']),
   } satisfies MaquinaRepositoryPort;
@@ -69,9 +73,19 @@ describe('ReemplazarMaquinaUseCase', () => {
     const resultado = await reemplazar.execute({ ...base, idMaquinaEntrante: 9 });
     expect(maquinaRepo.reemplazar).toHaveBeenCalledWith({
       idSaliente: 3,
+      // Ya estaba fuera de servicio: lo conserva. El respaldo recuerda su estado para la devolución
+      estadoSaliente: 'BAJA',
+      regresoEstimado: null,
+      estadoPrevioEntrante: 'BAJA',
       entrante: { idMaquina: 9, habilitar: true },
       idOperador: 1,
-      accionesSaliente: [{ ...registro, accion: 'REEMPLAZAR', detalle: { entrante: 'CF-09', operador: 'Ana Soto' } }],
+      accionesSaliente: [
+        {
+          ...registro,
+          accion: 'REEMPLAZAR',
+          detalle: { entrante: 'CF-09', operador: 'Ana Soto', antes: { estado: 'BAJA' }, despues: { estado: 'BAJA' } },
+        },
+      ],
       accionesEntrante: [
         { ...registro, accion: 'HABILITAR', detalle: { reemplazaA: 'CF-03', antes: { estado: 'BAJA' }, despues: { estado: 'ACTIVA' } } },
         { ...registro, accion: 'EDITAR', detalle: { antes: { operador: null }, despues: { operador: 'Ana Soto' } } },
@@ -117,10 +131,42 @@ describe('ReemplazarMaquinaUseCase', () => {
     expect(await codigoDe(enUso.reemplazar.execute({ ...base, idMaquinaEntrante: 9 }))).toBe('MAQUINA_EN_USO');
   });
 
-  it('solo reemplaza una máquina fuera de servicio', async () => {
+  it('reemplaza una máquina operativa en un paso: queda en mantenimiento con su regreso estimado', async () => {
     const { maquinaRepo, reemplazar } = crear();
-    maquinaRepo.findFlotaById.mockImplementation(async (id: number) => maquina(id, `CF-0${id}`, { estado: 'EN_MANTENIMIENTO' }));
-    expect(await codigoDe(reemplazar.execute({ ...base, idMaquinaEntrante: 9 }))).toBe('DATOS_INVALIDOS');
+    const operativa = maquina(3, 'BD-01', { estado: 'ACTIVA', operadorAsignado: { idOperador: 1, nombre: 'Ana Soto' } });
+    const reserva = maquina(9, 'BD-05', { estado: 'EN_RESERVA' });
+    maquinaRepo.findFlotaById.mockImplementation(async (id: number) => (id === 3 ? operativa : reserva));
+    const regreso = new Date(Date.now() + 40 * 3600_000);
+
+    await reemplazar.execute({ ...base, idMaquinaEntrante: 9, estadoSaliente: 'EN_MANTENIMIENTO', regresoEstimado: regreso.toISOString() });
+
+    const [r] = maquinaRepo.reemplazar.mock.calls[0];
+    expect(r).toMatchObject({ estadoSaliente: 'EN_MANTENIMIENTO', regresoEstimado: regreso, estadoPrevioEntrante: 'EN_RESERVA', idOperador: 1 });
+    expect(r.accionesSaliente[0].detalle).toMatchObject({
+      antes: { estado: 'ACTIVA' },
+      despues: { estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso.toISOString() },
+    });
+  });
+
+  it('sin estado indicado, una operativa queda fuera de servicio', async () => {
+    const { maquinaRepo, reemplazar } = crear();
+    maquinaRepo.findFlotaById.mockImplementation(async (id: number) => (id === 3 ? maquina(3, 'BD-01') : respaldo));
+    await reemplazar.execute({ ...base, idMaquinaEntrante: 9 });
+    expect(maquinaRepo.reemplazar.mock.calls[0][0].estadoSaliente).toBe('BAJA');
+  });
+
+  it('el respaldo tiene que poder trabajar y no estar cubriendo a otra; la saliente no puede tener ya un respaldo', async () => {
+    const { maquinaRepo, reemplazar } = crear();
+    const casos: [MaquinaFlota, MaquinaFlota][] = [
+      [saliente, maquina(9, 'CF-09', { estado: 'EN_MANTENIMIENTO' })],
+      [saliente, maquina(9, 'CF-09', { estado: 'EN_RESERVA', cubreA: { idMaquina: 4, nombre: 'CF-04' } })],
+      [{ ...saliente, respaldo: { idMaquina: 6, nombre: 'CF-06', estadoAlDevolver: 'EN_RESERVA' } }, respaldo],
+    ];
+    for (const [sal, ent] of casos) {
+      maquinaRepo.findFlotaById.mockImplementation(async (id: number) => (id === 3 ? sal : ent));
+      expect(await codigoDe(reemplazar.execute({ ...base, idMaquinaEntrante: 9 }))).toBe('DATOS_INVALIDOS');
+    }
+    expect(await codigoDe(reemplazar.execute({ ...base, idMaquinaEntrante: 9, estadoSaliente: 'EN_RESERVA' }))).toBe('DATOS_INVALIDOS');
     expect(maquinaRepo.reemplazar).not.toHaveBeenCalled();
   });
 

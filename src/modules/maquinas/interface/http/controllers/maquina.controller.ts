@@ -10,6 +10,7 @@ import { CrearMaquinaRequestDto } from '../dtos/crear-maquina.request.dto';
 import { EditarMaquinaUseCase } from '../../../application/use-cases/editar-maquina.use-case';
 import { ReemplazarMaquinaUseCase } from '../../../application/use-cases/reemplazar-maquina.use-case';
 import { ReemplazarMaquinaRequestDto } from '../dtos/reemplazar-maquina.request.dto';
+import { DevolverMaquinaUseCase } from '../../../application/use-cases/devolver-maquina.use-case';
 import { ListarOperadoresAsignablesUseCase } from '../../../application/use-cases/listar-operadores-asignables.use-case';
 import { EditarMaquinaRequestDto } from '../dtos/editar-maquina.request.dto';
 
@@ -25,6 +26,7 @@ export class MaquinaController {
     private readonly editarMaquinaUseCase: EditarMaquinaUseCase,
     private readonly listarOperadoresAsignablesUseCase: ListarOperadoresAsignablesUseCase,
     private readonly reemplazarMaquinaUseCase: ReemplazarMaquinaUseCase,
+    private readonly devolverMaquinaUseCase: DevolverMaquinaUseCase,
   ) {}
 
   @Get()
@@ -92,6 +94,24 @@ export class MaquinaController {
       idMaquinaEntrante: body?.idMaquinaEntrante,
       maquinaNueva: body?.maquinaNueva,
       idOperador: body?.idOperador,
+      estadoSaliente: body?.estadoSaliente,
+      regresoEstimado: body?.regresoEstimado,
+      motivo: body?.motivo,
+      observacion: body?.observacion,
+    });
+  }
+
+  // Devolución (jefe de turno): la máquina :id vuelve de la reparación y su respaldo vuelve a su estado anterior
+  @Post(':id/devolucion')
+  async devolver(
+    @Param('id') id: string,
+    @Body() body: { motivo?: string; observacion?: string | null },
+    @CurrentUser() user: { rol: string; idUsuario: number },
+  ) {
+    return this.devolverMaquinaUseCase.execute({
+      rol: user?.rol,
+      idUsuario: user?.idUsuario,
+      idMaquina: id,
       motivo: body?.motivo,
       observacion: body?.observacion,
     });
@@ -118,6 +138,7 @@ export class MaquinaController {
       esContratista: body?.esContratista,
       idOperador: body?.idOperador,
       estado: body?.estado,
+      regresoEstimado: body?.regresoEstimado,
       motivo: body?.motivo,
       observacion: body?.observacion,
     });

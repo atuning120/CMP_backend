@@ -75,6 +75,8 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
       id_cliente: turno.idCliente,
       conflicto: turno.conflicto,
       conflicto_detalle: turno.conflictoDetalle,
+      cerrado_por: turno.cerradoPor,
+      motivo_cierre: turno.motivoCierre,
     });
     return manager.save(ormEntity);
   }
@@ -139,6 +141,8 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
       ormEntity.id_cliente,
       ormEntity.conflicto ?? false,
       ormEntity.conflicto_detalle,
+      ormEntity.cerrado_por ?? null,
+      ormEntity.motivo_cierre ?? null,
     );
   }
 }

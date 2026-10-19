@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { MAQUINA_REPOSITORY } from '../../domain/repositories/maquina.repository.port';
+import { esEstadoMaquina, MAQUINA_REPOSITORY } from '../../domain/repositories/maquina.repository.port';
 import type {
   AccionBitacora,
+  EstadoMaquina,
+  EstadoSaliente,
   MaquinaFlota,
   MaquinaRepositoryPort,
   OperadorAsignable,
@@ -11,7 +13,14 @@ import type {
 import { MODELO_MAQUINA_REPOSITORY } from '../../domain/repositories/modelo-maquina.repository.port';
 import type { ModeloMaquinaRepositoryPort } from '../../domain/repositories/modelo-maquina.repository.port';
 import { maquinaError } from '../maquina.errors';
-import { leerNuevaMaquina, leerOperador, registrarModeloSiEsNuevo, ROLES_GESTION_FLOTA, texto } from '../maquina.datos';
+import {
+  leerNuevaMaquina,
+  leerOperador,
+  leerRegresoEstimado,
+  registrarModeloSiEsNuevo,
+  ROLES_GESTION_FLOTA,
+  texto,
+} from '../maquina.datos';
 import type { MarcaYTipo, NuevaMaquinaDto } from '../maquina.datos';
 
 export interface ReemplazarMaquinaDto {
@@ -23,12 +32,28 @@ export interface ReemplazarMaquinaDto {
   maquinaNueva?: NuevaMaquinaDto | null;
   // Operador de la entrante; ausente = el que tenía la saliente; null = sin operador
   idOperador?: unknown;
+  // Cómo queda la saliente: EN_MANTENIMIENTO (vuelve tras la reparación) o BAJA. Ausente: si ya estaba en uno de
+  // esos estados lo conserva; si no, BAJA
+  estadoSaliente?: unknown;
+  regresoEstimado?: unknown; // ISO; cuándo se espera que la saliente vuelva a operar
   motivo?: unknown;
   observacion?: unknown;
 }
 
 // La entrante que estaba fuera de servicio o en reserva entra a operar
 const habilitar = (maquina: MaquinaFlota) => maquina.estado === 'BAJA' || maquina.estado === 'EN_RESERVA';
+
+const ESTADOS_SALIENTE: readonly EstadoSaliente[] = ['EN_MANTENIMIENTO', 'BAJA'];
+
+const leerEstadoSaliente = (valor: unknown, actual: string | null): EstadoSaliente => {
+  if (valor === undefined || valor === null) {
+    return ESTADOS_SALIENTE.includes(actual as EstadoSaliente) ? (actual as EstadoSaliente) : 'BAJA';
+  }
+  if (!ESTADOS_SALIENTE.includes(valor as EstadoSaliente)) {
+    throw maquinaError('DATOS_INVALIDOS', 'La máquina que sale queda en mantenimiento o fuera de servicio');
+  }
+  return valor as EstadoSaliente;
+};
 
 export interface ResultadoReemplazo {
   saliente: MaquinaFlota;
@@ -60,9 +85,14 @@ export class ReemplazarMaquinaUseCase {
     const nueva = dto.maquinaNueva !== undefined && dto.maquinaNueva !== null;
     if (deLaFlota === nueva) throw maquinaError('DATOS_INVALIDOS', 'Indica la máquina entrante: una de la flota o una nueva');
 
-    // Solo se reemplaza una máquina que ya está fuera de servicio
-    if (saliente.estado !== 'BAJA') throw maquinaError('DATOS_INVALIDOS', 'Solo se puede reemplazar una máquina fuera de servicio');
-    // Un operador la está usando: no se puede sacar de servicio con su turno abierto
+    // El reemplazo saca a la saliente de operación (en mantenimiento o fuera de servicio) en el mismo paso
+    const estadoSaliente = leerEstadoSaliente(dto.estadoSaliente, saliente.estado);
+    const regresoEstimado = leerRegresoEstimado(dto.regresoEstimado) ?? null;
+    // Ya tiene un respaldo: primero se devuelve ese (si no, se perdería a qué estado vuelve)
+    if (saliente.respaldo) {
+      throw maquinaError('DATOS_INVALIDOS', `${saliente.nombre} ya está cubierta por ${saliente.respaldo.nombre}`);
+    }
+    // Un operador la está usando: el jefe de turno primero cierra ese turno con el horómetro final
     if (await this.maquinaRepo.tieneTurnoEnCurso(saliente.idMaquina)) throw maquinaError('MAQUINA_EN_USO', saliente.nombre);
 
     let existente: MaquinaFlota | null = null;
@@ -72,6 +102,13 @@ export class ReemplazarMaquinaUseCase {
       if (!existente) throw maquinaError('DATOS_INVALIDOS', 'La máquina entrante no existe');
       if (existente.idMaquina === saliente.idMaquina) {
         throw maquinaError('DATOS_INVALIDOS', 'La máquina entrante debe ser distinta de la que sale');
+      }
+      // El respaldo tiene que poder trabajar
+      if (existente.estado === 'EN_MANTENIMIENTO') {
+        throw maquinaError('DATOS_INVALIDOS', `${existente.nombre} está en mantenimiento: no puede ser el respaldo`);
+      }
+      if (existente.cubreA) {
+        throw maquinaError('DATOS_INVALIDOS', `${existente.nombre} ya es el respaldo de ${existente.cubreA.nombre}`);
       }
     } else {
       datosNueva = await leerNuevaMaquina(this.maquinaRepo, dto.maquinaNueva as NuevaMaquinaDto);
@@ -84,7 +121,16 @@ export class ReemplazarMaquinaUseCase {
 
     const registro = { idUsuario: dto.idUsuario, motivo, observacion };
     const accionesSaliente: AccionBitacora[] = [
-      { ...registro, accion: 'REEMPLAZAR', detalle: { entrante: codigoEntrante, operador: operador?.nombre ?? null } },
+      {
+        ...registro,
+        accion: 'REEMPLAZAR',
+        detalle: {
+          entrante: codigoEntrante,
+          operador: operador?.nombre ?? null,
+          antes: { estado: saliente.estado },
+          despues: { estado: estadoSaliente, ...(regresoEstimado ? { regresoEstimado: regresoEstimado.toISOString() } : {}) },
+        },
+      },
     ];
 
     const accionesEntrante: AccionBitacora[] = [];
@@ -127,8 +173,13 @@ export class ReemplazarMaquinaUseCase {
           ]
         : [];
 
+    // Al devolver, el respaldo vuelve a su estado anterior; una máquina recién incorporada queda en reserva
+    const estadoPrevioEntrante: EstadoMaquina = existente ? (esEstadoMaquina(existente.estado) ? existente.estado : 'ACTIVA') : 'EN_RESERVA';
     const reemplazo: ReemplazoMaquina = {
       idSaliente: saliente.idMaquina,
+      estadoSaliente,
+      regresoEstimado,
+      estadoPrevioEntrante,
       entrante: existente ? { idMaquina: existente.idMaquina, habilitar: habilitar(existente) } : { nueva: datosNueva!.datos },
       idOperador: operador?.idOperador ?? null,
       accionesSaliente,

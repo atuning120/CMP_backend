@@ -71,6 +71,7 @@ const crearRepos = () => {
     findOperadoresAsignables: jest.fn(async () => []),
     findOperadorAsignable: jest.fn(async () => null),
     reemplazar: jest.fn(async () => 0),
+    devolver: jest.fn(async () => undefined),
     findMarcas: jest.fn(async () => []),
   } satisfies MaquinaRepositoryPort;
   const geocercaRepo = {
@@ -122,6 +123,7 @@ describe('ObtenerTurnoActualUseCase', () => {
       ubicacion: { area, zona },
       historialEstados: [{ ...registro, estado: produccion }],
       turnoCerradoAutomaticamente: null,
+      turnoCerradoPorJefe: null,
     });
     expect(repos.turnoRepo.save.mock.calls).toHaveLength(0);
   });
@@ -138,6 +140,20 @@ describe('ObtenerTurnoActualUseCase', () => {
     expect(repos.turnoRepo.save.mock.calls).toContainEqual([turno]);
     expect(result.turno).toBeNull();
     expect(result.turnoCerradoAutomaticamente).toBe(turno);
+  });
+
+  it('avisa al operador si el jefe de turno le cerró el turno', async () => {
+    const repos = crearRepos();
+    const cerrado = turnoIniciadoHace(5);
+    cerrado.cerrarPorJefe(new Date(), 1006, 7, 'Falla mecánica');
+    repos.turnoRepo.findActivoByOperador.mockResolvedValue(null);
+    repos.turnoRepo.findUltimoByOperador.mockResolvedValue(cerrado);
+
+    const result = await obtener(repos).execute(ID_OPERADOR);
+
+    expect(result.turno).toBeNull();
+    expect(result.turnoCerradoPorJefe).toBe(cerrado);
+    expect(result.turnoCerradoAutomaticamente).toBeNull();
   });
 
   it('un turno de 12 h y media sigue en curso: el límite es de 13 h', async () => {

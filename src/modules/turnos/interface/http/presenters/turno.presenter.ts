@@ -14,6 +14,8 @@ const presentTurno = (turno: Turno) => ({
   horometroFinal: turno.horometroFinal,
   conflicto: turno.conflicto,
   conflictoDetalle: turno.conflictoDetalle,
+  cerradoPorJefe: turno.cerradoPor !== null,
+  motivoCierre: turno.motivoCierre,
 });
 
 export const presentTurnoEstado = (registro: TurnoEstadoRegistro) => ({
@@ -32,6 +34,7 @@ export const presentTurnoActual = ({
   ubicacion,
   historialEstados,
   turnoCerradoAutomaticamente,
+  turnoCerradoPorJefe,
 }: TurnoActualResult) => ({
   turno: turno
     ? {
@@ -43,6 +46,7 @@ export const presentTurnoActual = ({
       }
     : null,
   turnoCerradoAutomaticamente: turnoCerradoAutomaticamente ? presentTurno(turnoCerradoAutomaticamente) : null,
+  turnoCerradoPorJefe: turnoCerradoPorJefe ? presentTurno(turnoCerradoPorJefe) : null,
 });
 
 export const presentTurnoCerrado = presentTurno;

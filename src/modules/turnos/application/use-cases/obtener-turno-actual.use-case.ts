@@ -33,6 +33,8 @@ export interface TurnoActualResult {
   // Último turno del operador si fue cerrado por sistema y aún no inicia uno nuevo,
   // para avisarle que debe regularizarlo con su jefe de turno.
   turnoCerradoAutomaticamente: Turno | null;
+  // Último turno del operador si lo cerró el jefe de turno (p. ej. por una falla de la máquina) y aún no inicia otro
+  turnoCerradoPorJefe: Turno | null;
 }
 
 export const detallarUbicacion = async (
@@ -92,6 +94,7 @@ export class ObtenerTurnoActualUseCase {
         ubicacion: await detallarUbicacion(this.geocercaRepo, ubicacion),
         historialEstados,
         turnoCerradoAutomaticamente: null,
+        turnoCerradoPorJefe: null,
       };
     }
 
@@ -107,7 +110,8 @@ export class ObtenerTurnoActualUseCase {
       maquina: null,
       ubicacion: null,
       historialEstados: [],
-      turnoCerradoAutomaticamente: ultimo?.estadoActual === 'CERRADO_AUTO' ? ultimo : null,
+      turnoCerradoAutomaticamente: ultimo?.estadoActual === 'CERRADO_AUTO' && ultimo.cerradoPor === null ? ultimo : null,
+      turnoCerradoPorJefe: ultimo && ultimo.cerradoPor !== null ? ultimo : null,
     };
   }
 }

@@ -18,6 +18,9 @@ export class Turno {
     public readonly idCliente: string | null = null,
     public conflicto: boolean = false,
     public conflictoDetalle: string | null = null,
+    // Si lo cerró un jefe de turno (p. ej. la máquina falló en terreno): quién y por qué
+    public cerradoPor: number | null = null,
+    public motivoCierre: string | null = null,
   ) {}
 
   get enCurso(): boolean {
@@ -57,6 +60,19 @@ export class Turno {
     }
     this.fechaFin = fecha;
     this.estadoActual = 'CERRADO';
+  }
+
+  /**
+   * Cierre hecho por el jefe de turno en nombre del operador (la máquina falló y hay que sacarla de operación):
+   * mismas reglas que el cierre del operador, con el horómetro final que el jefe obtiene en terreno o por radio
+   */
+  cerrarPorJefe(fecha: Date, horometro: number, idUsuario: number, motivo: string) {
+    if (!this.enCurso) {
+      throw new Error('El turno ya está finalizado');
+    }
+    this.finalizar(fecha, horometro);
+    this.cerradoPor = idUsuario;
+    this.motivoCierre = motivo;
   }
 
   // Cierre por sistema: el término se fija en el límite de 13 h (no en el momento de la detección)

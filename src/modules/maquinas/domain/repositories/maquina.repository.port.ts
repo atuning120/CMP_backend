@@ -40,6 +40,12 @@ export interface MaquinaFlota extends MaquinaResumen {
   idAreaActual: number | null;
   idZonaActual: number | null;
   horometroActual: number | null; // último horómetro registrado en un turno
+  // En mantenimiento o fuera de servicio: cuándo se espera que vuelva a operar (lo informa el jefe de turno)
+  regresoEstimado: Date | null;
+  // Máquina que la cubre mientras no opera (tras un reemplazo). estadoAlDevolver: a qué estado vuelve el respaldo
+  respaldo: { idMaquina: number; nombre: string; estadoAlDevolver: EstadoMaquina } | null;
+  // Si esta máquina es el respaldo de otra: la original a la que cubre
+  cubreA: { idMaquina: number; nombre: string } | null;
 }
 
 export interface NuevaMaquina {
@@ -68,6 +74,15 @@ export const ESTADOS_MAQUINA = ['ACTIVA', 'BAJO_OBSERVACION', 'EN_MANTENIMIENTO'
 export type EstadoMaquina = (typeof ESTADOS_MAQUINA)[number];
 export const esEstadoMaquina = (valor: unknown): valor is EstadoMaquina => ESTADOS_MAQUINA.includes(valor as EstadoMaquina);
 
+// Estados en que la máquina no trabaja: no se puede iniciar turno en ella (sin conexión se acepta como conflicto)
+// ni pasarla a ellos con un turno en curso. "Bajo observación" sí opera, vigilada
+export const ESTADOS_SIN_OPERAR: readonly EstadoMaquina[] = ['EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA'];
+export const operaEnEstado = (estado: string | null) => !ESTADOS_SIN_OPERAR.includes(estado as EstadoMaquina);
+// Estados con fecha estimada de regreso (una reparación de 40 h, una falla mayor)
+export const ESTADOS_CON_REGRESO: readonly EstadoMaquina[] = ['EN_MANTENIMIENTO', 'BAJA'];
+// Estado de la máquina que sale en un reemplazo
+export type EstadoSaliente = 'EN_MANTENIMIENTO' | 'BAJA';
+
 // Datos de la ficha que el jefe de turno puede editar (el horómetro sale de los turnos)
 export interface FichaMaquina {
   nombre: string;
@@ -84,15 +99,21 @@ export interface FichaMaquina {
 
 export interface AccionBitacora extends RegistroBitacora {
   // HABILITAR: sale de BAJA; DESHABILITAR: pasa a BAJA; CAMBIAR_ESTADO: entre estados que no son BAJA
-  accion: 'INCORPORAR' | 'EDITAR' | 'HABILITAR' | 'DESHABILITAR' | 'CAMBIAR_ESTADO' | 'REEMPLAZAR';
+  // DEVOLVER: la original vuelve a operar y su respaldo vuelve al estado que tenía antes del reemplazo
+  accion: 'INCORPORAR' | 'EDITAR' | 'HABILITAR' | 'DESHABILITAR' | 'CAMBIAR_ESTADO' | 'REEMPLAZAR' | 'DEVOLVER';
   detalle: Record<string, unknown> | null;
   // Otra máquina afectada (p. ej. la que pierde a su operador al reasignarlo); por defecto, la que se guarda
   idMaquina?: number;
 }
 
-// Reemplazo: la saliente queda fuera de servicio y la entrante (de la flota o nueva) toma su lugar
+// Reemplazo: la saliente queda en mantenimiento o fuera de servicio y la entrante (de la flota o nueva) toma su
+// lugar. La saliente recuerda a su respaldo para poder devolver todo como estaba cuando vuelva
 export interface ReemplazoMaquina {
   idSaliente: number;
+  estadoSaliente: EstadoSaliente;
+  regresoEstimado: Date | null;
+  // Estado del respaldo antes de entrar (al devolver vuelve a él); una máquina nueva queda en reserva
+  estadoPrevioEntrante: EstadoMaquina;
   // De la flota (habilitar: estaba fuera de servicio) o una máquina nueva que se crea
   entrante: { idMaquina: number; habilitar: boolean } | { nueva: Omit<NuevaMaquina, 'idOperador'> };
   idOperador: number | null; // operador a cargo de la entrante al terminar
@@ -100,6 +121,19 @@ export interface ReemplazoMaquina {
   accionesEntrante: AccionBitacora[]; // se registran con el id de la entrante (que aún no existe si es nueva)
   accionesOtras: AccionBitacora[]; // con idMaquina explícito (p. ej. la máquina de donde viene el operador)
 }
+
+// Devolución: deshace un reemplazo cuando la original vuelve a operar
+export interface DevolucionMaquina {
+  idOriginal: number;
+  idRespaldo: number;
+  estadoRespaldo: EstadoMaquina; // al que vuelve el respaldo
+  idOperador: number | null; // el operador del respaldo vuelve a la original
+  accionesOriginal: AccionBitacora[];
+  accionesRespaldo: AccionBitacora[];
+}
+
+// Cambios de una edición; regresoEstimado no es parte de la ficha (acompaña al estado)
+export type CambiosMaquina = Partial<FichaMaquina> & { regresoEstimado?: Date | null };
 
 export interface MaquinaRepositoryPort {
   findById(idMaquina: number): Promise<MaquinaResumen | null>;
@@ -112,13 +146,16 @@ export interface MaquinaRepositoryPort {
   existePatente(patente: string, exceptoId?: number): Promise<boolean>;
   tieneTurnoEnCurso(idMaquina: number): Promise<boolean>;
   // Los cambios y sus registros en la bitácora se guardan en una misma transacción
-  actualizar(idMaquina: number, cambios: Partial<FichaMaquina>, acciones: AccionBitacora[]): Promise<void>;
+  // Al volver a un estado operativo se borra el regreso estimado
+  actualizar(idMaquina: number, cambios: CambiosMaquina, acciones: AccionBitacora[]): Promise<void>;
   // La máquina, su operador y los registros en la bitácora se guardan en una misma transacción.
   // Asignar un operador cierra su asignación anterior (otra máquina); acciones: registros extra en la bitácora
   create(datos: NuevaMaquina, registro: RegistroBitacora, acciones?: AccionBitacora[]): Promise<MaquinaFlota>;
   findOperadoresAsignables(): Promise<OperadorAsignable[]>;
   // Todo el reemplazo en una transacción; devuelve el id de la entrante
   reemplazar(reemplazo: ReemplazoMaquina): Promise<number>;
+  // Toda la devolución en una transacción
+  devolver(devolucion: DevolucionMaquina): Promise<void>;
   findOperadorAsignable(idOperador: number): Promise<OperadorAsignable | null>;
   // Tipos de máquina en uso: los de la flota y los del catálogo de modelos activos, sin repetir
   findTipos(): Promise<string[]>;

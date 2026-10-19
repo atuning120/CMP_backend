@@ -5,6 +5,8 @@ export class ReemplazarMaquinaRequestDto {
   idMaquinaEntrante?: number;
   maquinaNueva?: Omit<CrearMaquinaRequestDto, 'motivo' | 'observacion' | 'idOperador'>;
   idOperador?: number | null; // ausente: el operador de la saliente pasa a la entrante
+  estadoSaliente?: 'EN_MANTENIMIENTO' | 'BAJA'; // ausente: conserva el suyo si ya es uno de esos; si no, BAJA
+  regresoEstimado?: string | null; // ISO
   motivo: string;
   observacion?: string | null;
 }

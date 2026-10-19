@@ -82,7 +82,14 @@ CREATE TABLE MAQUINA (
     patente           VARCHAR(15),
     numero_chasis     VARCHAR(50), -- N° de chasis / serie (VIN)
     horometro_inicial NUMERIC(10,2), -- al incorporarse a planta; luego manda el horómetro de los turnos
-    es_contratista    BOOLEAN NOT NULL DEFAULT FALSE -- equipo de contratista o arriendo
+    es_contratista    BOOLEAN NOT NULL DEFAULT FALSE, -- equipo de contratista o arriendo
+    regreso_estimado  TIMESTAMPTZ, -- en mantenimiento o fuera de servicio: cuándo se espera que vuelva a operar
+    -- Tras un reemplazo: la máquina que la cubre y a qué estado vuelve ese respaldo al devolverla
+    id_maquina_respaldo    INT,
+    estado_previo_respaldo VARCHAR(20),
+    CONSTRAINT fk_maquina_respaldo FOREIGN KEY (id_maquina_respaldo) REFERENCES MAQUINA(id_maquina) ON DELETE SET NULL,
+    CONSTRAINT ck_maquina_estado_previo_respaldo
+        CHECK (estado_previo_respaldo IN ('ACTIVA', 'BAJO_OBSERVACION', 'EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA'))
 );
 
 -- El código interno (nombre) y la patente identifican a la máquina en faena: no se pueden repetir
@@ -188,6 +195,9 @@ CREATE TABLE TURNO (
     id_cliente        UUID UNIQUE, -- generado en el teléfono; hace idempotente la sincronización offline
     conflicto         BOOLEAN NOT NULL DEFAULT FALSE, -- aceptado pese a chocar con otro turno; revisar
     conflicto_detalle TEXT,
+    cerrado_por       INT, -- jefe de turno que lo cerró por el operador
+    motivo_cierre     VARCHAR(100),
+    CONSTRAINT fk_turno_cerrado_por FOREIGN KEY (cerrado_por) REFERENCES USUARIO(id_usuario) ON DELETE SET NULL,
     CONSTRAINT fk_turno_operador FOREIGN KEY (id_operador) REFERENCES OPERADOR(id_operador),
     CONSTRAINT fk_turno_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina)
 );
@@ -240,7 +250,8 @@ CREATE TABLE EVIDENCIA (
 -- Acciones del jefe de turno sobre la flota, con motivo y observación (pestaña Historial junto con TURNO)
 CREATE TABLE BITACORA_JEFE_TURNO (
     id_bitacora     SERIAL PRIMARY KEY,
-    accion          VARCHAR(20) NOT NULL CHECK (accion IN ('INCORPORAR', 'EDITAR', 'HABILITAR', 'DESHABILITAR', 'CAMBIAR_ESTADO', 'REEMPLAZAR')),
+    accion          VARCHAR(20) NOT NULL CONSTRAINT bitacora_jefe_turno_accion_check
+                    CHECK (accion IN ('INCORPORAR', 'EDITAR', 'HABILITAR', 'DESHABILITAR', 'CAMBIAR_ESTADO', 'REEMPLAZAR', 'DEVOLVER')),
     id_maquina      INT NOT NULL,
     id_usuario      INT NOT NULL, -- jefe de turno que realizó la acción (sale de la sesión)
     motivo          VARCHAR(100) NOT NULL,

@@ -20,6 +20,9 @@ const maquina: MaquinaFlota = {
   idAreaActual: null,
   idZonaActual: null,
   horometroActual: 1500,
+  regresoEstimado: null,
+  respaldo: null,
+  cubreA: null,
 };
 
 const crear = (opciones: { nombres?: string[]; patentes?: string[]; enUso?: boolean; tipos?: string[] } = {}) => {
@@ -37,6 +40,7 @@ const crear = (opciones: { nombres?: string[]; patentes?: string[]; enUso?: bool
     findOperadoresAsignables: jest.fn(async () => []),
     findOperadorAsignable: jest.fn(async () => null),
     reemplazar: jest.fn(async () => 0),
+    devolver: jest.fn(async () => undefined),
     findMarcas: jest.fn(async () => ['Komatsu']),
   } satisfies MaquinaRepositoryPort;
   const modeloRepo = {
@@ -177,6 +181,58 @@ describe('EditarMaquinaUseCase', () => {
     await editar.execute({ ...base, idOperador: null });
     expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { idOperador: null }, [
       { ...registro, accion: 'EDITAR', detalle: { antes: { operador: 'Ana Soto' }, despues: { operador: null } } },
+    ]);
+  });
+
+  it.each(['EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA'])('no pasa a %s una máquina con turno en curso', async (estado) => {
+    const { maquinaRepo, editar } = crear({ enUso: true });
+    expect(await codigoDe(editar.execute({ ...base, estado }))).toBe('MAQUINA_EN_USO');
+    expect(maquinaRepo.actualizar).not.toHaveBeenCalled();
+  });
+
+  it('bajo observación sigue operando: se puede marcar con un turno en curso', async () => {
+    const { maquinaRepo, editar } = crear({ enUso: true });
+    await editar.execute({ ...base, estado: 'BAJO_OBSERVACION' });
+    expect(maquinaRepo.actualizar).toHaveBeenCalled();
+  });
+
+  it('en mantenimiento guarda la fecha estimada de regreso y la deja en la bitácora', async () => {
+    const { maquinaRepo, editar } = crear();
+    const regreso = new Date(Date.now() + 40 * 3600_000);
+    const resultado = await editar.execute({ ...base, estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso.toISOString() });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso }, [
+      {
+        ...registro,
+        accion: 'CAMBIAR_ESTADO',
+        detalle: { antes: { estado: 'ACTIVA' }, despues: { estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso.toISOString() } },
+      },
+    ]);
+    expect(resultado.regresoEstimado).toEqual(regreso);
+  });
+
+  it('valida la fecha de regreso: futura, de menos de un año y solo fuera de operación', async () => {
+    const { editar } = crear();
+    const pasada = new Date(Date.now() - 3600_000).toISOString();
+    const lejana = new Date(Date.now() + 400 * 24 * 3600_000).toISOString();
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_MANTENIMIENTO', regresoEstimado: pasada }))).toBe('DATOS_INVALIDOS');
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_MANTENIMIENTO', regresoEstimado: lejana }))).toBe('DATOS_INVALIDOS');
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_MANTENIMIENTO', regresoEstimado: 'mañana' }))).toBe('DATOS_INVALIDOS');
+    const futura = new Date(Date.now() + 3600_000).toISOString();
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA', regresoEstimado: futura }))).toBe('DATOS_INVALIDOS');
+  });
+
+  it('reprogramar el regreso sin cambiar de estado queda como edición', async () => {
+    const { maquinaRepo, editar } = crear();
+    const antes = new Date(Date.now() + 10 * 3600_000);
+    const despues = new Date(Date.now() + 30 * 3600_000);
+    maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, estado: 'EN_MANTENIMIENTO', regresoEstimado: antes });
+    await editar.execute({ ...base, regresoEstimado: despues.toISOString() });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { regresoEstimado: despues }, [
+      {
+        ...registro,
+        accion: 'EDITAR',
+        detalle: { antes: { regresoEstimado: antes.toISOString() }, despues: { regresoEstimado: despues.toISOString() } },
+      },
     ]);
   });
 });

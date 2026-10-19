@@ -1,7 +1,13 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { esEstadoMaquina, MAQUINA_REPOSITORY } from '../../domain/repositories/maquina.repository.port';
+import {
+  ESTADOS_CON_REGRESO,
+  esEstadoMaquina,
+  MAQUINA_REPOSITORY,
+  operaEnEstado,
+} from '../../domain/repositories/maquina.repository.port';
 import type {
   AccionBitacora,
+  CambiosMaquina,
   EstadoMaquina,
   FichaMaquina,
   MaquinaFlota,
@@ -15,6 +21,7 @@ import {
   accionesPorReasignacion,
   leerAnio,
   leerOperador,
+  leerRegresoEstimado,
   normalizarMarcaYTipo,
   registrarModeloSiEsNuevo,
   ROLES_GESTION_FLOTA,
@@ -37,6 +44,8 @@ export interface EditarMaquinaDto {
   esContratista?: unknown;
   idOperador?: unknown; // null deja la máquina sin operador asignado
   estado?: unknown;
+  // Solo en mantenimiento o fuera de servicio: ISO; null o '' la borra
+  regresoEstimado?: unknown;
   motivo?: unknown;
   observacion?: unknown;
 }
@@ -83,7 +92,15 @@ export class EditarMaquinaUseCase {
 
     const cambiados = CAMPOS_FICHA.filter((campo) => despues[campo] !== antes[campo]);
     const cambiaEstado = despues.estado !== antes.estado;
-    if (cambiados.length === 0 && !cambiaEstado) throw maquinaError('SIN_CAMBIOS');
+
+    const regreso = leerRegresoEstimado(dto.regresoEstimado);
+    if (regreso && !ESTADOS_CON_REGRESO.includes(despues.estado)) {
+      throw maquinaError('DATOS_INVALIDOS', 'Solo una máquina en mantenimiento o fuera de servicio tiene fecha estimada de regreso');
+    }
+    // Al volver a operar el regreso se borra solo (lo hace el repositorio)
+    const regresoAntes = actual.regresoEstimado?.getTime() ?? null;
+    const cambiaRegreso = regreso !== undefined && (regreso?.getTime() ?? null) !== regresoAntes && ESTADOS_CON_REGRESO.includes(despues.estado);
+    if (cambiados.length === 0 && !cambiaEstado && !cambiaRegreso) throw maquinaError('SIN_CAMBIOS');
 
     // Al editar se compara sin la propia máquina; cambiar solo mayúsculas no es un duplicado
     if (cambiados.includes('nombre') && (await this.maquinaRepo.existeNombre(despues.nombre, idMaquina))) {
@@ -92,8 +109,9 @@ export class EditarMaquinaUseCase {
     if (cambiados.includes('patente') && despues.patente && (await this.maquinaRepo.existePatente(despues.patente, idMaquina))) {
       throw maquinaError('PATENTE_DUPLICADA', despues.patente);
     }
-    // Un operador la está usando: sacarla de servicio dejaría su turno en una máquina dada de baja
-    if (cambiaEstado && despues.estado === 'BAJA' && (await this.maquinaRepo.tieneTurnoEnCurso(idMaquina))) {
+    // Un operador la está usando: sacarla de operación dejaría su turno en una máquina que no trabaja.
+    // El jefe de turno primero cierra ese turno (con el horómetro final) y luego cambia el estado
+    if (cambiaEstado && !operaEnEstado(despues.estado) && (await this.maquinaRepo.tieneTurnoEnCurso(idMaquina))) {
       throw maquinaError('MAQUINA_EN_USO', antes.nombre);
     }
 
@@ -107,13 +125,26 @@ export class EditarMaquinaUseCase {
       acciones.push({ ...registro, accion: 'EDITAR', detalle: { antes: valores(antes, 'antes'), despues: valores(despues, 'despues') } });
       if (cambiados.includes('idOperador')) acciones.push(...accionesPorReasignacion(operador, idMaquina, despues.nombre, registro));
     }
+    const regresoNuevo = cambiaRegreso ? (regreso ?? null) : ESTADOS_CON_REGRESO.includes(despues.estado) ? actual.regresoEstimado : null;
     if (cambiaEstado) {
       const accion = despues.estado === 'BAJA' ? 'DESHABILITAR' : antes.estado === 'BAJA' ? 'HABILITAR' : 'CAMBIAR_ESTADO';
-      acciones.push({ ...registro, accion, detalle: { antes: { estado: antes.estado }, despues: { estado: despues.estado } } });
+      const despuesEstado = { estado: despues.estado, ...(regresoNuevo ? { regresoEstimado: regresoNuevo.toISOString() } : {}) };
+      acciones.push({ ...registro, accion, detalle: { antes: { estado: antes.estado }, despues: despuesEstado } });
+    } else if (cambiaRegreso) {
+      // Se reprogramó el regreso sin cambiar de estado (la reparación se alargó o se adelantó)
+      acciones.push({
+        ...registro,
+        accion: 'EDITAR',
+        detalle: {
+          antes: { regresoEstimado: actual.regresoEstimado?.toISOString() ?? null },
+          despues: { regresoEstimado: regresoNuevo?.toISOString() ?? null },
+        },
+      });
     }
 
-    const cambios: Partial<FichaMaquina> = Object.fromEntries(cambiados.map((campo) => [campo, despues[campo]]));
+    const cambios: CambiosMaquina = Object.fromEntries(cambiados.map((campo) => [campo, despues[campo]]));
     if (cambiaEstado) cambios.estado = despues.estado;
+    if (cambiaRegreso) cambios.regresoEstimado = regreso ?? null;
     await this.maquinaRepo.actualizar(idMaquina, cambios, acciones);
 
     // Solo cambió el estado: la respuesta se arma sin volver a consultar la flota (ahorra la consulta más pesada)
@@ -121,6 +152,7 @@ export class EditarMaquinaUseCase {
       return {
         ...actual,
         estado: despues.estado,
+        regresoEstimado: regresoNuevo,
         motivoEstado: despues.estado === 'ACTIVA' ? null : { motivo, observacion, fecha: new Date(), reemplazadaPor: null },
       };
     }

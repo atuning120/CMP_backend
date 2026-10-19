@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
+import { esEstadoMaquina, operaEnEstado } from '../../../domain/repositories/maquina.repository.port';
 import type {
   AccionBitacora,
-  FichaMaquina,
+  CambiosMaquina,
+  DevolucionMaquina,
   MaquinaCatalogo,
   MaquinaFlota,
   MaquinaRepositoryPort,
@@ -33,7 +35,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       SELECT m.id_maquina, m.nombre, m.marca, m.modelo, m.tipo_maquina, m.estado, ao.id_operador
       FROM maquina m
       LEFT JOIN asignacion_operador ao ON ao.id_maquina = m.id_maquina AND ao.vigente_hasta IS NULL
-      WHERE m.estado <> 'BAJA'
+      WHERE m.estado IN ('ACTIVA', 'BAJO_OBSERVACION')
       ORDER BY m.nombre ASC
     `);
     return filas.map((fila) => ({
@@ -67,8 +69,12 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
              baja.motivo AS motivo_baja, baja.observacion AS observacion_baja, baja.fecha AS fecha_baja,
              baja.reemplazada_por,
              actual.operador, actual.ubicacion, actual.id_area, actual.id_zona,
-             COALESCE(ultimo.horometro, m.horometro_inicial) AS horometro
+             COALESCE(ultimo.horometro, m.horometro_inicial) AS horometro,
+             m.regreso_estimado, m.id_maquina_respaldo, r.nombre AS respaldo, m.estado_previo_respaldo,
+             cubierta.id_maquina AS id_cubre_a, cubierta.nombre AS cubre_a
       FROM maquina m
+      LEFT JOIN maquina r ON r.id_maquina = m.id_maquina_respaldo
+      LEFT JOIN maquina cubierta ON cubierta.id_maquina_respaldo = m.id_maquina
       LEFT JOIN asignacion_operador ao ON ao.id_maquina = m.id_maquina AND ao.vigente_hasta IS NULL
       LEFT JOIN operador oa ON oa.id_operador = ao.id_operador
       -- Por qué está en su estado (si no es ACTIVA): el último cambio de estado o reemplazo
@@ -129,6 +135,16 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       idZonaActual: fila.id_zona,
       // NUMERIC llega como string desde pg
       horometroActual: fila.horometro === null ? null : Number(fila.horometro),
+      regresoEstimado: fila.regreso_estimado,
+      respaldo:
+        fila.id_maquina_respaldo === null
+          ? null
+          : {
+              idMaquina: fila.id_maquina_respaldo,
+              nombre: fila.respaldo ?? '',
+              estadoAlDevolver: esEstadoMaquina(fila.estado_previo_respaldo) ? fila.estado_previo_respaldo : 'EN_RESERVA',
+            },
+      cubreA: fila.id_cubre_a === null ? null : { idMaquina: fila.id_cubre_a, nombre: fila.cubre_a ?? '' },
     }));
   }
 
@@ -165,7 +181,15 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
         idEntrante = entrante.idMaquina;
         if (entrante.habilitar) await repo.update({ id_maquina: idEntrante }, { estado: 'ACTIVA' });
       }
-      await repo.update({ id_maquina: reemplazo.idSaliente }, { estado: 'BAJA' });
+      await repo.update(
+        { id_maquina: reemplazo.idSaliente },
+        {
+          estado: reemplazo.estadoSaliente,
+          regreso_estimado: reemplazo.regresoEstimado,
+          id_maquina_respaldo: idEntrante,
+          estado_previo_respaldo: reemplazo.estadoPrevioEntrante,
+        },
+      );
       // La saliente queda sin operador; el elegido pasa a la entrante (cerrando la asignación que tuviera)
       await manager.query(
         `UPDATE asignacion_operador SET vigente_hasta = CURRENT_TIMESTAMP WHERE id_maquina = $1 AND vigente_hasta IS NULL`,
@@ -176,6 +200,25 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       await this.registrarAcciones(manager, idEntrante, reemplazo.accionesEntrante);
       await this.registrarAcciones(manager, idEntrante, reemplazo.accionesOtras);
       return idEntrante;
+    });
+  }
+
+  async devolver(devolucion: DevolucionMaquina): Promise<void> {
+    await this.ormRepository.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(MaquinaOrmEntity);
+      await repo.update(
+        { id_maquina: devolucion.idOriginal },
+        { estado: 'ACTIVA', regreso_estimado: null, id_maquina_respaldo: null, estado_previo_respaldo: null },
+      );
+      await repo.update({ id_maquina: devolucion.idRespaldo }, { estado: devolucion.estadoRespaldo });
+      // El respaldo queda sin operador; el operador vuelve a la original
+      await manager.query(
+        `UPDATE asignacion_operador SET vigente_hasta = CURRENT_TIMESTAMP WHERE id_maquina = $1 AND vigente_hasta IS NULL`,
+        [devolucion.idRespaldo],
+      );
+      await this.asignarOperador(manager, devolucion.idOriginal, devolucion.idOperador);
+      await this.registrarAcciones(manager, devolucion.idOriginal, devolucion.accionesOriginal);
+      await this.registrarAcciones(manager, devolucion.idRespaldo, devolucion.accionesRespaldo);
     });
   }
 
@@ -258,7 +301,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
     }
   }
 
-  async actualizar(idMaquina: number, cambios: Partial<FichaMaquina>, acciones: AccionBitacora[]): Promise<void> {
+  async actualizar(idMaquina: number, cambios: CambiosMaquina, acciones: AccionBitacora[]): Promise<void> {
     const columnas: Partial<MaquinaOrmEntity> = {
       nombre: cambios.nombre,
       marca: cambios.marca,
@@ -269,6 +312,8 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       numero_chasis: cambios.numeroChasis,
       es_contratista: cambios.esContratista,
       estado: cambios.estado,
+      // De vuelta en operación ya no hay regreso pendiente
+      regreso_estimado: cambios.estado && operaEnEstado(cambios.estado) ? null : cambios.regresoEstimado,
     };
     // Solo las columnas que cambian (undefined = no se toca; null sí se guarda)
     const set = Object.fromEntries(Object.entries(columnas).filter(([, valor]) => valor !== undefined));
@@ -356,6 +401,12 @@ interface FilaFlota {
   id_area: number | null;
   id_zona: number | null;
   horometro: string | null;
+  regreso_estimado: Date | null;
+  id_maquina_respaldo: number | null;
+  respaldo: string | null;
+  estado_previo_respaldo: string | null;
+  id_cubre_a: number | null;
+  cubre_a: string | null;
 }
 
 interface FilaMaquina {

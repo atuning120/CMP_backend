@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, HttpCode, HttpStatus, Param, UseGuards } from '@nestjs/common';
+import { CerrarTurnoPorJefeUseCase } from '../../../application/use-cases/cerrar-turno-por-jefe.use-case';
 import { JwtAuthGuard } from '../../../../auth/infrastructure/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../auth/interface/http/decorators/current-user.decorator';
 import { IniciarTurnoUseCase } from '../../../application/use-cases/iniciar-turno.use-case';
@@ -20,6 +21,7 @@ export class TurnoController {
     private readonly finalizarTurnoUseCase: FinalizarTurnoUseCase,
     private readonly obtenerTurnoActualUseCase: ObtenerTurnoActualUseCase,
     private readonly registrarEstadoUseCase: RegistrarEstadoUseCase,
+    private readonly cerrarTurnoPorJefeUseCase: CerrarTurnoPorJefeUseCase,
   ) { }
 
   @Get('actual')
@@ -58,6 +60,24 @@ export class TurnoController {
       idClienteTurno: body.idClienteTurno,
       horometroFinal: Number(body.horometroFinal),
       fechaFin: body.fechaFin,
+    });
+    return presentTurnoCerrado(turno);
+  }
+
+  // Jefe de turno: cierra el turno en curso de la máquina :idMaquina (para sacarla de operación o reemplazarla)
+  @Post('maquina/:idMaquina/cierre')
+  @HttpCode(HttpStatus.OK)
+  async cerrarPorJefe(
+    @Param('idMaquina') idMaquina: string,
+    @Body() body: { horometroFinal?: number; motivo?: string },
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    const turno = await this.cerrarTurnoPorJefeUseCase.execute({
+      rol: user?.rol,
+      idUsuario: user?.idUsuario,
+      idMaquina,
+      horometroFinal: body?.horometroFinal,
+      motivo: body?.motivo,
     });
     return presentTurnoCerrado(turno);
   }

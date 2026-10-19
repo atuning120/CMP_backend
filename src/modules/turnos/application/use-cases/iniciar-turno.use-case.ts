@@ -3,7 +3,7 @@ import { TURNO_REPOSITORY } from '../../domain/repositories/turno.repository.por
 import type { TurnoRepositoryPort } from '../../domain/repositories/turno.repository.port';
 import { TURNO_ESTADO_REPOSITORY } from '../../domain/repositories/turno-estado.repository.port';
 import type { TurnoEstadoRepositoryPort } from '../../domain/repositories/turno-estado.repository.port';
-import { MAQUINA_REPOSITORY } from '../../../maquinas/domain/repositories/maquina.repository.port';
+import { MAQUINA_REPOSITORY, operaEnEstado } from '../../../maquinas/domain/repositories/maquina.repository.port';
 import type { MaquinaRepositoryPort } from '../../../maquinas/domain/repositories/maquina.repository.port';
 import { GEOCERCA_REPOSITORY } from '../../../geocercas/domain/repositories/geocerca.repository.port';
 import type {
@@ -74,8 +74,9 @@ export class IniciarTurnoUseCase {
       idCliente,
     );
 
-    if (maquina.estado === 'BAJA') {
-      nuevoTurno.marcarConflicto(`La máquina ${maquina.nombre} estaba fuera de servicio al sincronizar`);
+    // En mantenimiento, en reserva o fuera de servicio no trabaja; sin conexión el operador pudo no saberlo
+    if (!operaEnEstado(maquina.estado)) {
+      nuevoTurno.marcarConflicto(`La máquina ${maquina.nombre} no estaba operativa (${maquina.estado}) al sincronizar`);
     }
     if (area.estado !== 'ACTIVA') {
       nuevoTurno.marcarConflicto(`El área ${area.nombre} no estaba activa al sincronizar`);
@@ -100,6 +101,7 @@ export class IniciarTurnoUseCase {
       ubicacion: { area, zona },
       historialEstados: [],
       turnoCerradoAutomaticamente: null,
+      turnoCerradoPorJefe: null,
     };
   }
 
@@ -115,6 +117,7 @@ export class IniciarTurnoUseCase {
       ubicacion: await detallarUbicacion(this.geocercaRepo, ubicacion),
       historialEstados,
       turnoCerradoAutomaticamente: null,
+      turnoCerradoPorJefe: null,
     };
   }
 

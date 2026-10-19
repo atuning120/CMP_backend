@@ -49,12 +49,15 @@ export class HistorialPostgresqlRepository implements HistorialRepositoryPort {
                  'area', ubicacion.area,
                  'zona', ubicacion.zona,
                  'estadoTurno', t.estado,
-                 'horaTermino', t.hora_termino
+                 'horaTermino', t.hora_termino,
+                 -- Si lo cerró un jefe de turno en nombre del operador (falla de la máquina, mantención)
+                 'cerradoPor', jefe.nombre,
+                 'motivoCierre', t.motivo_cierre
                )
         -- Primero se eligen los turnos de la página y recién después se buscan sus datos
         FROM (
           SELECT 'T-' || id_turno AS id, id_turno, date_trunc('milliseconds', hora_inicio) AS fecha,
-                 id_operador, id_maquina, horometro_inicial, estado, hora_termino
+                 id_operador, id_maquina, horometro_inicial, estado, hora_termino, cerrado_por, motivo_cierre
           FROM turno
           WHERE $1
             AND hora_inicio >= $3::timestamptz
@@ -65,6 +68,7 @@ export class HistorialPostgresqlRepository implements HistorialRepositoryPort {
         ) t
         JOIN operador o ON o.id_operador = t.id_operador
         JOIN maquina m ON m.id_maquina = t.id_maquina
+        LEFT JOIN usuario jefe ON jefe.id_usuario = t.cerrado_por
         -- Ubicación con que se inició el turno
         LEFT JOIN LATERAL (
           SELECT a.nombre AS area, z.nombre AS zona

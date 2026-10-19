@@ -10,6 +10,7 @@ import { IniciarTurnoUseCase } from './application/use-cases/iniciar-turno.use-c
 import { FinalizarTurnoUseCase } from './application/use-cases/finalizar-turno.use-case';
 import { ObtenerTurnoActualUseCase } from './application/use-cases/obtener-turno-actual.use-case';
 import { CerrarTurnosExcedidosUseCase } from './application/use-cases/cerrar-turnos-excedidos.use-case';
+import { CerrarTurnoPorJefeUseCase } from './application/use-cases/cerrar-turno-por-jefe.use-case';
 import { RegistrarEstadoUseCase } from './application/use-cases/registrar-estado.use-case';
 import { ListarEstadosOperacionalesUseCase } from './application/use-cases/listar-estados-operacionales.use-case';
 
@@ -57,6 +58,7 @@ import { GeocercasModule } from '../geocercas/geocercas.module';
     CerrarTurnosExcedidosUseCase,
     CierreAutomaticoTurnosScheduler,
     RegistrarEstadoUseCase,
+    CerrarTurnoPorJefeUseCase,
     ListarEstadosOperacionalesUseCase,
   ],
   // Evidencias resuelve el turno de un reporte por su idCliente
