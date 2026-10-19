@@ -1,4 +1,4 @@
-import { Turno } from '../../domain/entities/turno.entity';
+import { DURACION_MAXIMA_TURNO_HORAS, Turno } from '../../domain/entities/turno.entity';
 import type { TurnoRepositoryPort } from '../../domain/repositories/turno.repository.port';
 import type {
   EstadoOperacionalResumen,
@@ -19,6 +19,8 @@ import { CerrarTurnosExcedidosUseCase } from './cerrar-turnos-excedidos.use-case
 import { RegistrarEstadoUseCase } from './registrar-estado.use-case';
 
 const HORA = 60 * 60 * 1000;
+// Un turno que ya pasó el límite de cierre automático
+const EXCEDIDO = DURACION_MAXIMA_TURNO_HORAS + 1;
 const ID_OPERADOR = 10;
 const UUID_TURNO = '6f1c2a3b-4d5e-4f60-8a71-92b3c4d5e6f7';
 const UUID_ESTADO = '0a1b2c3d-4e5f-4061-8273-8495a6b7c8d9';
@@ -124,9 +126,9 @@ describe('ObtenerTurnoActualUseCase', () => {
     expect(repos.turnoRepo.save.mock.calls).toHaveLength(0);
   });
 
-  it('cierra automáticamente un turno de más de 12 h y lo informa', async () => {
+  it('cierra automáticamente un turno de más de 13 h y lo informa', async () => {
     const repos = crearRepos();
-    const turno = turnoIniciadoHace(13);
+    const turno = turnoIniciadoHace(EXCEDIDO);
     repos.turnoRepo.findActivoByOperador.mockResolvedValue(turno);
     repos.turnoRepo.findUltimoByOperador.mockResolvedValue(turno);
 
@@ -136,6 +138,19 @@ describe('ObtenerTurnoActualUseCase', () => {
     expect(repos.turnoRepo.save.mock.calls).toContainEqual([turno]);
     expect(result.turno).toBeNull();
     expect(result.turnoCerradoAutomaticamente).toBe(turno);
+  });
+
+  it('un turno de 12 h y media sigue en curso: el límite es de 13 h', async () => {
+    const repos = crearRepos();
+    const turno = turnoIniciadoHace(12.5);
+    repos.turnoRepo.findActivoByOperador.mockResolvedValue(turno);
+    repos.turnoRepo.findUltimoByOperador.mockResolvedValue(turno);
+
+    const result = await obtener(repos).execute(ID_OPERADOR);
+
+    expect(turno.estadoActual).toBe('EN_CURSO');
+    expect(result.turno).toBe(turno);
+    expect(result.turnoCerradoAutomaticamente).toBeFalsy();
   });
 });
 
@@ -194,7 +209,7 @@ describe('IniciarTurnoUseCase', () => {
     expect(result.turno?.conflicto).toBe(true);
   });
 
-  it('un turno olvidado de más de 12 h se cierra y no genera conflicto', async () => {
+  it('un turno olvidado de más de 13 h se cierra y no genera conflicto', async () => {
     const repos = crearRepos();
     const olvidado = turnoIniciadoHace(14);
     repos.turnoRepo.findActivoByOperador.mockResolvedValue(olvidado);
@@ -252,7 +267,7 @@ describe('FinalizarTurnoUseCase', () => {
     expect(code).toBe('TURNO_NO_ENCONTRADO');
   });
 
-  it('corrige un cierre automático del servidor cuando llega el cierre real hecho offline dentro de las 12 h', async () => {
+  it('corrige un cierre automático del servidor cuando llega el cierre real hecho offline dentro de las 13 h', async () => {
     const repos = crearRepos();
     const turno = turnoIniciadoHace(20);
     turno.cerrarAutomaticamente(); // el servidor lo cerró porque el cierre offline aún no llegaba
@@ -266,9 +281,9 @@ describe('FinalizarTurnoUseCase', () => {
     expect(cerrado).toMatchObject({ estadoActual: 'CERRADO', fechaFin: fechaFinReal, horometroFinal: 1009 });
   });
 
-  it('un cierre después de las 12 h queda CERRADO_AUTO en el límite, conservando el horómetro', async () => {
+  it('un cierre después de las 13 h queda CERRADO_AUTO en el límite, conservando el horómetro', async () => {
     const repos = crearRepos();
-    const turno = turnoIniciadoHace(13);
+    const turno = turnoIniciadoHace(EXCEDIDO);
     repos.turnoRepo.findById.mockResolvedValue(turno);
 
     const cerrado = await new FinalizarTurnoUseCase(repos.turnoRepo).execute({ idOperador: ID_OPERADOR, idTurno: 1, horometroFinal: 1013 });
@@ -325,15 +340,15 @@ describe('RegistrarEstadoUseCase', () => {
 });
 
 describe('CerrarTurnosExcedidosUseCase', () => {
-  it('cierra todos los turnos abiertos iniciados hace más de 12 h', async () => {
+  it('cierra todos los turnos abiertos iniciados hace más de 13 h', async () => {
     const { turnoRepo } = crearRepos();
     const ahora = new Date();
-    const excedidos = [turnoIniciadoHace(13), turnoIniciadoHace(30)];
+    const excedidos = [turnoIniciadoHace(EXCEDIDO), turnoIniciadoHace(30)];
     turnoRepo.findActivosIniciadosAntesDe.mockResolvedValue(excedidos);
 
     const cerrados = await new CerrarTurnosExcedidosUseCase(turnoRepo).execute(ahora);
 
-    expect(turnoRepo.findActivosIniciadosAntesDe.mock.calls).toEqual([[new Date(ahora.getTime() - 12 * HORA)]]);
+    expect(turnoRepo.findActivosIniciadosAntesDe.mock.calls).toEqual([[new Date(ahora.getTime() - DURACION_MAXIMA_TURNO_HORAS * HORA)]]);
     expect(cerrados).toHaveLength(2);
     expect(cerrados.every((t) => t.estadoActual === 'CERRADO_AUTO')).toBe(true);
   });

@@ -1,11 +1,11 @@
 export const ALERTA_TURNO_REPOSITORY = Symbol('ALERTA_TURNO_REPOSITORY');
 
-// Un turno que pasa estas horas abierto genera la alerta de turno extendido (a las 12 h se cierra solo)
+// Un turno que pasa estas horas abierto genera la alerta de turno extendido (a las 13 h se cierra solo)
 export const HORAS_AVISO_TURNO_EXTENDIDO = 10;
 
 // Alertas de turno: se calculan desde TURNO (fuente de verdad), no se guardan aparte
 // - TURNO_EXTENDIDO: el turno llegó a las 10 h (fecha = inicio + 10 h)
-// - CIERRE_AUTOMATICO: el sistema lo cerró a las 12 h, probablemente porque el operador olvidó finalizarlo
+// - CIERRE_AUTOMATICO: el sistema lo cerró a las 13 h, probablemente porque el operador olvidó finalizarlo
 export type TipoAlertaTurno = 'TURNO_EXTENDIDO' | 'CIERRE_AUTOMATICO';
 
 export interface AlertaTurno {
