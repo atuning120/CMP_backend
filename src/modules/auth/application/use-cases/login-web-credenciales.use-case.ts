@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcryptjs';
+import { passwordCorrecta } from '../password-segura';
 import { USUARIO_REPOSITORY } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import { LoginWebCredencialesRequestDto } from '../../interface/http/dtos/login-web-credenciales.request.dto';
@@ -42,12 +42,8 @@ export class LoginWebCredencialesUseCase {
 
     // findByEmail solo devuelve usuarios activos
     const usuario = await this.usuarioRepo.findByEmail(dto.email.trim());
-    if (!usuario || !usuario.passwordHash) {
-      throw loginWebError('CREDENCIALES_INVALIDAS');
-    }
-
-    const isValid = await bcrypt.compare(dto.password, usuario.passwordHash);
-    if (!isValid) {
+    // Se compara aunque la cuenta no exista, para que el tiempo de respuesta no lo revele
+    if (!(await passwordCorrecta(dto.password, usuario?.passwordHash)) || !usuario) {
       throw loginWebError('CREDENCIALES_INVALIDAS');
     }
 

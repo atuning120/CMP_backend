@@ -30,6 +30,7 @@ export type LoginMicrosoftErrorCode =
   | 'TOKEN_INVALIDO'
   | 'MICROSOFT_NO_CONFIGURADO'
   | 'DOMINIO_NO_PERMITIDO'
+  | 'MICROSOFT_NO_DISPONIBLE'
   | 'USUARIO_INACTIVO'
   | 'SIN_ACCESO_WEB'
   | 'CUENTA_YA_VINCULADA';
@@ -40,6 +41,8 @@ const loginMicrosoftError = (code: LoginMicrosoftErrorCode) => {
       return new UnauthorizedException({ statusCode: 401, code, message: 'No se pudo validar la cuenta de Microsoft' });
     case 'MICROSOFT_NO_CONFIGURADO':
       return new ServiceUnavailableException({ statusCode: 503, code, message: 'El inicio de sesión con Microsoft no está configurado' });
+    case 'MICROSOFT_NO_DISPONIBLE':
+      return new ServiceUnavailableException({ statusCode: 503, code, message: 'No se pudo validar la cuenta con Microsoft. Intenta nuevamente' });
     case 'DOMINIO_NO_PERMITIDO':
       return new ForbiddenException({ statusCode: 403, code, message: 'Solo pueden ingresar cuentas institucionales de CMP, IMOPAC o la UCN' });
     case 'USUARIO_INACTIVO':
@@ -96,6 +99,7 @@ export class LoginWebUseCase {
   async execute(dto: LoginWebRequestDto): Promise<SesionWebMicrosoft> {
     const identidad = await this.verificar(dto?.entraIdToken);
     this.exigirOrganizacionPermitida(identidad);
+    await this.exigirDominioDelTenant(identidad);
 
     const { usuario, nuevo } = await this.buscarOCrear(identidad);
     if (!usuario.activo) throw loginMicrosoftError('USUARIO_INACTIVO');
@@ -130,6 +134,24 @@ export class LoginWebUseCase {
       throw loginMicrosoftError('DOMINIO_NO_PERMITIDO');
     }
     if (this.tenants.length > 0 && !this.tenants.includes(tid.toLowerCase())) {
+      throw loginMicrosoftError('DOMINIO_NO_PERMITIDO');
+    }
+  }
+
+  // El correo de un ID token multi-tenant lo controla el tenant que lo emite: cualquier organización puede
+  // asignar "alguien@cmp.cl" a un usuario suyo (ataque "nOAuth"). Como las cuentas se buscan y vinculan por
+  // correo, solo se acepta si el token viene del tenant que verificó ese dominio en Entra ID
+  private async exigirDominioDelTenant({ email, tid }: IdentidadMicrosoft) {
+    const dominio = email!.split('@').pop()!;
+    let dueno: string | null;
+    try {
+      dueno = await this.verificador.tenantDelDominio(dominio);
+    } catch (error) {
+      this.logger.warn(`No se pudo resolver el tenant de @${dominio}: ${error instanceof Error ? error.message : String(error)}`);
+      throw loginMicrosoftError('MICROSOFT_NO_DISPONIBLE');
+    }
+    if (!dueno || dueno.toLowerCase() !== tid.toLowerCase()) {
+      this.logger.warn(`Login con Microsoft rechazado: correo @${dominio} emitido por el tenant ${tid}, que no es dueño del dominio`);
       throw loginMicrosoftError('DOMINIO_NO_PERMITIDO');
     }
   }

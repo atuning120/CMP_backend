@@ -13,6 +13,7 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HistorialModule } from './modules/historial/historial.module';
 import { HealthController } from './health.controller';
+import { leerDbPassword } from './shared/infrastructure/config/secretos';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { HealthController } from './health.controller';
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432', 10),
       username: process.env.DB_USER || 'cmp_user',
-      password: process.env.DB_PASSWORD || 'cmp_pass',
+      password: leerDbPassword(process.env.DB_PASSWORD),
       database: process.env.DB_NAME || 'cmp_db',
       ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
       autoLoadEntities: true,

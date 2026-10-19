@@ -1,5 +1,6 @@
 import { Injectable, Inject, ConflictException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import { exigirPasswordSegura } from '../password-segura';
 import { USUARIO_REPOSITORY } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import { RegisterJefeTurnoRequestDto } from '../../interface/http/dtos/register-jefe-turno.request.dto';
@@ -20,7 +21,7 @@ export class RegisterJefeTurnoUseCase {
 
     // 2. Hashear la contraseña
     const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(dto.password, salt);
+    const passwordHash = await bcrypt.hash(exigirPasswordSegura(dto.password), salt);
 
     // 3. Crear el usuario (un jefe de turno no está vinculado a un operador)
     const idUsuario = await this.usuarioRepo.create({

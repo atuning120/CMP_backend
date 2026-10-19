@@ -20,13 +20,24 @@ export const EXTENSIONES_IMAGEN: Record<string, string> = {
   'image/heic': 'heic',
 };
 
-// Algunos clientes (p. ej. expo/fetch con un File) envían application/octet-stream: se usa la extensión
-const MIME_POR_EXTENSION: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic' };
+// Marcas HEIF/HEIC que dejan las cámaras en la caja "ftyp" (bytes 8-11)
+const MARCAS_HEIC = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1']);
 
-export const mimeDeArchivo = (archivo: { mimetype: string; originalname?: string }): string => {
-  if (EXTENSIONES_IMAGEN[archivo.mimetype]) return archivo.mimetype;
-  const extension = archivo.originalname?.split('.').pop()?.toLowerCase() ?? '';
-  return MIME_POR_EXTENSION[extension] ?? archivo.mimetype;
+const empiezaCon = (buffer: Buffer, firma: number[], desde = 0) =>
+  buffer.length >= desde + firma.length && firma.every((byte, i) => buffer[desde + i] === byte);
+const textoEn = (buffer: Buffer, desde: number, largo: number) => buffer.subarray(desde, desde + largo).toString('latin1');
+
+/**
+ * Tipo de imagen según los primeros bytes del archivo, no según el mimetype o el nombre que declara el cliente
+ * (ambos los controla quien sube). Así un HTML o un ejecutable renombrado a .jpg no se guarda como evidencia.
+ * Devuelve null si el contenido no es una imagen aceptada.
+ */
+export const mimeDelContenido = (buffer: Buffer): string | null => {
+  if (empiezaCon(buffer, [0xff, 0xd8, 0xff])) return 'image/jpeg';
+  if (empiezaCon(buffer, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png';
+  if (textoEn(buffer, 0, 4) === 'RIFF' && textoEn(buffer, 8, 4) === 'WEBP') return 'image/webp';
+  if (textoEn(buffer, 4, 4) === 'ftyp' && MARCAS_HEIC.has(textoEn(buffer, 8, 4))) return 'image/heic';
+  return null;
 };
 
 export interface SubirEvidenciaDto {
@@ -66,15 +77,16 @@ export class SubirEvidenciaUseCase {
       return existente;
     }
 
-    const extension = dto.archivo ? EXTENSIONES_IMAGEN[mimeDeArchivo(dto.archivo)] : undefined;
-    if (!dto.archivo || !extension || dto.archivo.size === 0 || dto.archivo.size > TAMANO_MAXIMO_EVIDENCIA) {
+    const mime = dto.archivo ? mimeDelContenido(dto.archivo.buffer) : null;
+    if (!dto.archivo || !mime || dto.archivo.size === 0 || dto.archivo.size > TAMANO_MAXIMO_EVIDENCIA) {
       throw evidenciaError('ARCHIVO_INVALIDO');
     }
+    const extension = EXTENSIONES_IMAGEN[mime];
 
     const fechaHora = fechaDelEvento(dto.fechaHora, ahora);
     const clave = `turno-${turno.id}/${idCliente}.${extension}`;
     // Primero el archivo y luego el registro: si falla el registro, el reintento sobrescribe el mismo archivo
-    await this.almacenamiento.guardar(clave, dto.archivo.buffer, mimeDeArchivo(dto.archivo));
+    await this.almacenamiento.guardar(clave, dto.archivo.buffer, mime);
     return this.evidenciaRepo.create({ idReporte: reporte.idReporte, claveArchivo: clave, fechaHora, idCliente });
   }
 }

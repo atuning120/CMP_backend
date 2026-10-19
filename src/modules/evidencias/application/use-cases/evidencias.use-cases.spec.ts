@@ -17,7 +17,12 @@ const UUID_REPORTE = '1a2b3c4d-5e6f-4a70-8b81-92c3d4e5f6a7';
 const UUID_EVIDENCIA = '9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a';
 const turno = new Turno(1, 10, 20, new Date(Date.now() - 3600_000), null, 1000, null, 'EN_CURSO', UUID_TURNO);
 const reporte: ReporteRegistro = { idReporte: 5, idTurno: 1, tipo: 'NOVEDAD', descripcion: 'Fuga', fechaHora: new Date(), idCliente: UUID_REPORTE };
-const foto = { buffer: Buffer.from('jpeg'), mimetype: 'image/jpeg', size: 4 };
+// Encabezado JPEG real: el tipo se decide por el contenido
+const foto = { buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]), mimetype: 'image/jpeg', size: 6 };
+const conContenido = (bytes: number[] | string) => {
+  const buffer = Buffer.from(bytes as never);
+  return { ...foto, buffer, size: buffer.length };
+};
 
 const crear = () => {
   const turnoRepo = {
@@ -88,10 +93,12 @@ describe('SubirEvidenciaUseCase', () => {
   it('rechaza archivos que no son imagen, vacíos o de un reporte ajeno', async () => {
     const { subir } = crear();
     const base = { idOperador: 10, idCliente: UUID_EVIDENCIA, idClienteReporte: UUID_REPORTE };
-    expect(await codigoDe(subir.execute({ ...base, archivo: { ...foto, mimetype: 'application/pdf' } }))).toBe('ARCHIVO_INVALIDO');
+    expect(await codigoDe(subir.execute({ ...base, archivo: conContenido('%PDF-1.7') }))).toBe('ARCHIVO_INVALIDO');
     expect(await codigoDe(subir.execute({ ...base, archivo: { ...foto, size: 0 } }))).toBe('ARCHIVO_INVALIDO');
     expect(await codigoDe(subir.execute({ ...base, archivo: undefined }))).toBe('ARCHIVO_INVALIDO');
-    expect(await codigoDe(subir.execute({ ...base, archivo: { ...foto, mimetype: 'application/octet-stream', originalname: 'x.pdf' } }))).toBe('ARCHIVO_INVALIDO');
+    // Un HTML que dice ser JPEG (mimetype y nombre los controla el cliente) no pasa
+    const disfrazado = { ...conContenido('<html><script>alert(1)</script>'), mimetype: 'image/jpeg', originalname: 'foto.jpg' };
+    expect(await codigoDe(subir.execute({ ...base, archivo: disfrazado }))).toBe('ARCHIVO_INVALIDO');
     expect(await codigoDe(subir.execute({ ...base, idOperador: 99, archivo: foto }))).toBe('REPORTE_NO_ENCONTRADO');
   });
 
@@ -102,6 +109,20 @@ describe('SubirEvidenciaUseCase', () => {
       archivo: { ...foto, mimetype: 'application/octet-stream', originalname: `${UUID_EVIDENCIA}.jpg` },
     });
     expect(evidencia.claveArchivo).toBe(`turno-1/${UUID_EVIDENCIA}.jpg`);
+  });
+
+  it.each([
+    ['png', [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]],
+    ['webp', 'RIFF\u0000\u0000\u0000\u0000WEBPVP8 '],
+    ['heic', '\u0000\u0000\u0000\u0018ftypheic\u0000\u0000'],
+  ])('guarda con la extensión que indica el contenido (%s), no la declarada', async (extension, bytes) => {
+    const { subir, almacenamiento } = crear();
+    const evidencia = await subir.execute({
+      idOperador: 10, idCliente: UUID_EVIDENCIA, idClienteReporte: UUID_REPORTE,
+      archivo: { ...conContenido(bytes), mimetype: 'image/jpeg', originalname: 'foto.jpg' },
+    });
+    expect(evidencia.claveArchivo).toBe(`turno-1/${UUID_EVIDENCIA}.${extension}`);
+    expect(almacenamiento.guardar.mock.calls[0][2]).toBe(`image/${extension}`);
   });
 });
 

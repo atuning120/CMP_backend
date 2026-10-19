@@ -1,5 +1,5 @@
 import { Injectable, Inject, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
+import { passwordCorrecta } from '../password-segura';
 import { USUARIO_REPOSITORY } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import { OPERADOR_REPOSITORY } from '../../../operadores/domain/repositories/operador.repository.port';
@@ -57,27 +57,22 @@ export class LoginUseCase {
 
     // 1. Buscar por RUT (solo operadores) o Email
     if (dto.rut) {
+      // Sin operador no se corta aquí: la contraseña se compara igual (ver passwordCorrecta)
       const operador = await this.operadorRepo.findByRut(dto.rut);
-      if (!operador) {
-        throw loginError('CREDENCIALES_INVALIDAS');
-      }
-      operadorActivo = operador.estado === 'ACTIVO';
-      perfilOperador = { nombre: operador.nombre, apellido: operador.apellido, rut: operador.rut };
-      usuario = await this.usuarioRepo.findByIdOperador(operador.idOperador);
-      if (usuario) {
-        usuario = { ...usuario, idOperador: operador.idOperador };
+      if (operador) {
+        operadorActivo = operador.estado === 'ACTIVO';
+        perfilOperador = { nombre: operador.nombre, apellido: operador.apellido, rut: operador.rut };
+        usuario = await this.usuarioRepo.findByIdOperador(operador.idOperador);
+        if (usuario) {
+          usuario = { ...usuario, idOperador: operador.idOperador };
+        }
       }
     } else if (dto.email) {
       usuario = await this.usuarioRepo.findByEmail(dto.email);
     }
 
     // 2. Verificar usuario y contraseña
-    if (!usuario || !usuario.passwordHash) {
-      throw loginError('CREDENCIALES_INVALIDAS');
-    }
-
-    const isValid = await bcrypt.compare(dto.password, usuario.passwordHash);
-    if (!isValid) {
+    if (!(await passwordCorrecta(dto.password, usuario?.passwordHash)) || !usuario) {
       throw loginError('CREDENCIALES_INVALIDAS');
     }
 

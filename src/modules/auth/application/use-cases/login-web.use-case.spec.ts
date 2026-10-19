@@ -23,6 +23,8 @@ const crear = (opciones: {
   porOid?: UsuarioCuentaMicrosoft | null;
   porEmail?: UsuarioCuentaMicrosoft | null;
   config?: Record<string, string>;
+  // Tenant dueño de cada dominio; por defecto, el del propio token
+  tenants?: Record<string, string | null | Error>;
 } = {}) => {
   const repo = {
     findByEntraOid: jest.fn(async () => opciones.porOid ?? null),
@@ -41,6 +43,12 @@ const crear = (opciones: {
     verificar: jest.fn(async () => {
       if (opciones.identidad instanceof Error) throw opciones.identidad;
       return opciones.identidad === undefined ? IDENTIDAD : opciones.identidad;
+    }),
+    tenantDelDominio: jest.fn(async (dominio: string) => {
+      const tenant = opciones.tenants?.[dominio];
+      if (tenant instanceof Error) throw tenant;
+      if (tenant !== undefined) return tenant;
+      return opciones.identidad instanceof Error || !opciones.identidad ? CMP_TENANT : opciones.identidad.tid;
     }),
   };
   const jwt = { sign: jest.fn(() => 'jwt-firmado') };
@@ -118,6 +126,28 @@ describe('LoginWebUseCase (Microsoft)', () => {
     const { useCase } = crear({ config: { AZURE_AD_TENANTS_PERMITIDOS: '22222222-2222-2222-2222-222222222222' } });
 
     expect(await codigoDe(useCase.execute({ entraIdToken: 'token' }))).toBe('DOMINIO_NO_PERMITIDO');
+  });
+
+  it('rechaza un correo @cmp.cl emitido por un tenant que no es dueño del dominio (nOAuth)', async () => {
+    const ajeno = { ...IDENTIDAD, tid: '22222222-2222-2222-2222-222222222222' };
+    const { repo, useCase } = crear({ identidad: ajeno, porEmail: { ...USUARIO, entraOid: null }, tenants: { 'cmp.cl': CMP_TENANT } });
+
+    expect(await codigoDe(useCase.execute({ entraIdToken: 'token' }))).toBe('DOMINIO_NO_PERMITIDO');
+    expect(repo.vincularEntraOid).not.toHaveBeenCalled();
+    expect(repo.crearDesdeMicrosoft).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un dominio que ningún tenant verificó', async () => {
+    const { useCase } = crear({ tenants: { 'cmp.cl': null } });
+
+    expect(await codigoDe(useCase.execute({ entraIdToken: 'token' }))).toBe('DOMINIO_NO_PERMITIDO');
+  });
+
+  it('si Microsoft no responde no deja entrar', async () => {
+    const { repo, useCase } = crear({ tenants: { 'cmp.cl': new Error('timeout') } });
+
+    expect(await codigoDe(useCase.execute({ entraIdToken: 'token' }))).toBe('MICROSOFT_NO_DISPONIBLE');
+    expect(repo.findByEntraOid).not.toHaveBeenCalled();
   });
 
   it('un usuario desactivado no entra ni se vuelve a registrar', async () => {

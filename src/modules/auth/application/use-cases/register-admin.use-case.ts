@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
+import { exigirPasswordSegura } from '../password-segura';
 import { createHash, timingSafeEqual } from 'crypto';
 import { USUARIO_REPOSITORY } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
@@ -38,6 +39,8 @@ export class RegisterAdminUseCase {
     if (!dto?.nombre?.trim() || !dto.apellido?.trim() || !dto.email?.trim() || !dto.password) {
       throw new BadRequestException('Debe ingresar nombre, apellido, email y contraseña');
     }
+
+    exigirPasswordSegura(dto.password);
 
     // 1. Validar que no exista un usuario con el mismo Email
     const existeUsuario = await this.usuarioRepo.findByEmail(dto.email);
