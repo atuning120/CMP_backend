@@ -8,7 +8,6 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
 import { CUENTA_MICROSOFT_REPOSITORY } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import type {
   CuentaMicrosoftRepositoryPort,
@@ -18,6 +17,7 @@ import { VERIFICADOR_ENTRA_ID } from '../ports/verificador-entra-id.port';
 import type { IdentidadMicrosoft, VerificadorEntraIdPort } from '../ports/verificador-entra-id.port';
 import { LoginWebRequestDto } from '../../interface/http/dtos/login-web.request.dto';
 import { ROLES_WEB } from './login-web-credenciales.use-case';
+import { EmisorSesionService, SesionWebResponse } from '../services/emisor-sesion.service';
 
 // Personal de CMP, de IMOPAC (contratista) y de la UCN (universidad del proyecto: académicos y alumnos).
 // Dominios exactos, sin subdominios. Se puede cambiar con WEB_DOMINIOS_PERMITIDOS
@@ -60,9 +60,7 @@ const lista = (valor: string) =>
     .map((v) => v.trim().toLowerCase())
     .filter(Boolean);
 
-export interface SesionWebMicrosoft {
-  accessToken: string;
-  rol: string;
+export interface SesionWebMicrosoft extends SesionWebResponse {
   email: string;
   nombre: string;
   // true si la cuenta se registró en este login (alta automática como VISOR)
@@ -89,7 +87,7 @@ export class LoginWebUseCase {
     private readonly cuentaRepo: CuentaMicrosoftRepositoryPort,
     @Inject(VERIFICADOR_ENTRA_ID)
     private readonly verificador: VerificadorEntraIdPort,
-    private readonly jwtService: JwtService,
+    private readonly emisorSesion: EmisorSesionService,
     configService: ConfigService,
   ) {
     this.dominios = lista(configService.get<string>('WEB_DOMINIOS_PERMITIDOS', '') || DOMINIOS_POR_DEFECTO);
@@ -105,8 +103,8 @@ export class LoginWebUseCase {
     if (!usuario.activo) throw loginMicrosoftError('USUARIO_INACTIVO');
     if (!ROLES_WEB.includes(usuario.rol)) throw loginMicrosoftError('SIN_ACCESO_WEB');
 
-    const accessToken = this.jwtService.sign({ sub: usuario.idUsuario, rol: usuario.rol });
-    return { accessToken, rol: usuario.rol, email: usuario.email, nombre: usuario.nombre, nuevo };
+    const sesion = await this.emisorSesion.emitirWeb(usuario);
+    return { ...sesion, email: usuario.email, nombre: usuario.nombre, nuevo };
   }
 
   private async verificar(idToken: unknown): Promise<IdentidadMicrosoft> {
