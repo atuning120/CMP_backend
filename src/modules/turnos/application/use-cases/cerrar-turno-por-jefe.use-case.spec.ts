@@ -18,6 +18,9 @@ const crear = (turno: Turno | null) => {
     findUltimoByOperador: jest.fn(),
     findActivosIniciadosAntesDe: jest.fn(),
     findUbicacionVigente: jest.fn(),
+    findUbicacionByIdCliente: jest.fn(),
+    registrarUbicacion: jest.fn(),
+    findUltimoHorometroFinal: jest.fn(),
   } satisfies TurnoRepositoryPort;
   return { turnoRepo, cerrar: new CerrarTurnoPorJefeUseCase(turnoRepo) };
 };

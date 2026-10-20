@@ -3,10 +3,14 @@ import { Workbook } from 'exceljs';
 import type { Border, CellValue, Fill, Worksheet } from 'exceljs';
 import type { EventoHistorial, TipoEventoHistorial, TurnoConciliacion } from '../../domain/repositories/historial.repository.port';
 import type { ContenidoExcelHistorial, DatosExcelHistorial, HistorialExcelPort } from '../../domain/ports/historial-excel.port';
+import { desgloseTurno, horasTramo, tramosPorUbicacion, tramosTurno } from './tramos-turno';
+import type { TipoTramo } from './tramos-turno';
 
 // Los mismos textos que muestran el panel web y la app (HistorialEvento, ESTADOS_MAQUINA)
 const TIPOS: Record<TipoEventoHistorial, { etiqueta: string; verbo: string }> = {
   INICIO_TURNO: { etiqueta: 'Inicio de turno', verbo: 'Inició turno en' },
+  FIN_TURNO: { etiqueta: 'Cierre de turno', verbo: 'Cerró turno en' },
+  CAMBIO_UBICACION: { etiqueta: 'Cambio de área/zona', verbo: 'Trasladó' },
   INCORPORAR: { etiqueta: 'Incorporación', verbo: 'Incorporó' },
   EDITAR: { etiqueta: 'Edición', verbo: 'Editó' },
   HABILITAR: { etiqueta: 'Habilitación', verbo: 'Habilitó' },
@@ -15,6 +19,8 @@ const TIPOS: Record<TipoEventoHistorial, { etiqueta: string; verbo: string }> = 
   REEMPLAZAR: { etiqueta: 'Reemplazo', verbo: 'Reemplazó' },
   DEVOLVER: { etiqueta: 'Devolución', verbo: 'Devolvió a operación' },
 };
+
+const EVENTOS_DE_TURNO: TipoEventoHistorial[] = ['INICIO_TURNO', 'FIN_TURNO', 'CAMBIO_UBICACION'];
 
 const ESTADOS_MAQUINA: Record<string, string> = {
   ACTIVA: 'Operativa',
@@ -46,9 +52,27 @@ interface Columna {
   ancho: number;
   formato?: string;
   ajustar?: boolean; // texto largo: varias líneas dentro de la celda
+  tramo?: TipoTramo; // horas de ese grupo: encabezado y celdas con su color
 }
 
 const HORAS = '#,##0.0';
+
+// Mismos grupos y colores que el operador ve en la app al cambiar de estado (verde, amarillo, rojo)
+const TRAMOS: Record<TipoTramo, { etiqueta: string; fuerte: string; texto: string; suave: string }> = {
+  EFECTIVO: { etiqueta: 'Horas efectivas', fuerte: 'FF1E8E3E', texto: 'FFFFFFFF', suave: 'FFE6F4EA' },
+  DEMORA: { etiqueta: 'Demoras operacionales', fuerte: 'FFF9AB00', texto: 'FF000000', suave: 'FFFEF7E0' },
+  MANTENCION: { etiqueta: 'Mantención y fallas', fuerte: 'FFD93025', texto: 'FFFFFFFF', suave: 'FFFCE8E6' },
+  SIN_ESTADO: { etiqueta: 'Sin estado registrado', fuerte: 'FF80868B', texto: 'FFFFFFFF', suave: 'FFF1F3F4' },
+};
+
+// Horas del turno por grupo de estado; suman la duración del turno
+const COLUMNAS_TRAMOS: Columna[] = [
+  { clave: 'efectivas', titulo: 'Horas efectivas', ancho: 11, formato: HORAS, tramo: 'EFECTIVO' },
+  { clave: 'demoras', titulo: 'Demoras operacionales (hrs)', ancho: 12, formato: HORAS, tramo: 'DEMORA' },
+  { clave: 'mantencion', titulo: 'Mantención y fallas (hrs)', ancho: 12, formato: HORAS, tramo: 'MANTENCION' },
+  { clave: 'sinEstado', titulo: 'Sin estado registrado (hrs)', ancho: 12, formato: HORAS, tramo: 'SIN_ESTADO' },
+];
+const CLAVE_TRAMO: Record<TipoTramo, string> = { EFECTIVO: 'efectivas', DEMORA: 'demoras', MANTENCION: 'mantencion', SIN_ESTADO: 'sinEstado' };
 
 // Las primeras columnas siguen el orden del reporte mensual de la contratista (equipo, categoría, fecha, hora,
 // horómetros, diferencia, área) para compararlos lado a lado; después lo que solo registra GeoPlanta
@@ -68,7 +92,8 @@ const COLUMNAS_TURNOS: Columna[] = [
   { clave: 'contratista', titulo: 'Contratista', ancho: 11 },
   { clave: 'operador', titulo: 'Operador', ancho: 24 },
   { clave: 'horaTermino', titulo: 'Término', ancho: 16, formato: 'dd-mm-yyyy hh:mm' },
-  { clave: 'duracion', titulo: 'Duración turno (hrs)', ancho: 11, formato: HORAS },
+  { clave: 'duracion', titulo: 'Duración (hrs)', ancho: 11, formato: HORAS },
+  ...COLUMNAS_TRAMOS,
   { clave: 'estado', titulo: 'Estado', ancho: 16 },
   { clave: 'revisar', titulo: 'Revisar', ancho: 9 },
   { clave: 'observaciones', titulo: 'Observaciones', ancho: 44, ajustar: true },
@@ -82,9 +107,25 @@ const COLUMNAS_RESUMEN: Columna[] = [
   { clave: 'turnos', titulo: 'Turnos', ancho: 9 },
   { clave: 'horas', titulo: 'Horas horómetro', ancho: 12, formato: HORAS },
   { clave: 'duracion', titulo: 'Horas en turno', ancho: 12, formato: HORAS },
+  ...COLUMNAS_TRAMOS,
   { clave: 'revisar', titulo: 'Turnos a revisar', ancho: 10 },
   { clave: 'horasContratista', titulo: 'Horas según contratista', ancho: 13, formato: HORAS },
   { clave: 'diferencia', titulo: 'Diferencia (contratista − GeoPlanta)', ancho: 16, formato: `${HORAS};[Red]-${HORAS}` },
+];
+
+// Un tramo por estado operacional y ubicación: al filtrar por categoría o área se ven sus horas
+const COLUMNAS_ESTADOS: Columna[] = [
+  { clave: 'n', titulo: 'N° turno', ancho: 8 },
+  { clave: 'equipo', titulo: 'Equipo', ancho: 12 },
+  { clave: 'operador', titulo: 'Operador', ancho: 24 },
+  { clave: 'fecha', titulo: 'Fecha', ancho: 11, formato: 'dd-mm-yyyy' },
+  { clave: 'inicio', titulo: 'Inicio', ancho: 8, formato: 'hh:mm' },
+  { clave: 'termino', titulo: 'Término', ancho: 8, formato: 'hh:mm' },
+  { clave: 'horas', titulo: 'Horas', ancho: 9, formato: HORAS },
+  { clave: 'categoria', titulo: 'Categoría', ancho: 22 },
+  { clave: 'estado', titulo: 'Estado operacional', ancho: 30, ajustar: true },
+  { clave: 'area', titulo: 'Área', ancho: 30, ajustar: true },
+  { clave: 'zona', titulo: 'Zona', ancho: 22, ajustar: true },
 ];
 
 const COLUMNAS_MOVIMIENTOS: Columna[] = [
@@ -125,10 +166,6 @@ const estadoMaquina = (valor: unknown) => {
 // Horómetros con decimales: 8381.8 - 8372.8 no debe quedar en 9.000000000001
 const redondear = (valor: number) => Math.round(valor * 100) / 100;
 
-// Elementos seguidos sin repetir: un turno que vuelve a la misma área no la lista dos veces seguidas
-const recorrido = (valores: (string | null)[]) =>
-  valores.filter((valor, i): valor is string => valor !== null && valor !== valores[i - 1]).join(' → ') || null;
-
 const serieDe = (equipo: TurnoConciliacion['equipo']) => [equipo.patente, equipo.numeroChasis].filter(Boolean).join(' / ') || null;
 
 // Lo que conviene mirar antes de comparar con la contratista
@@ -166,9 +203,10 @@ const escribirTabla = (hoja: Worksheet, columnas: Columna[], filas: Fila[], dest
   const encabezado = hoja.getRow(FILA_ENCABEZADO);
   encabezado.values = columnas.map((c) => c.titulo);
   encabezado.height = 32;
-  encabezado.eachCell((celda) => {
-    celda.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    celda.fill = relleno(COLOR_ENCABEZADO);
+  encabezado.eachCell((celda, numero) => {
+    const tramo = columnas[numero - 1].tramo;
+    celda.font = { bold: true, color: { argb: tramo ? TRAMOS[tramo].texto : 'FFFFFFFF' } };
+    celda.fill = relleno(tramo ? TRAMOS[tramo].fuerte : COLOR_ENCABEZADO);
     celda.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     celda.border = { top: BORDE, bottom: BORDE, left: BORDE, right: BORDE };
   });
@@ -182,7 +220,8 @@ const escribirTabla = (hoja: Worksheet, columnas: Columna[], filas: Fila[], dest
       if (columna.formato) celda.numFmt = columna.formato;
       celda.alignment = { vertical: 'top', wrapText: columna.ajustar ?? false };
       celda.border = { bottom: BORDE };
-      if (color) celda.fill = relleno(color);
+      if (columna.tramo) celda.fill = relleno(TRAMOS[columna.tramo].suave);
+      else if (color) celda.fill = relleno(color);
     });
   });
 
@@ -229,7 +268,8 @@ export class HistorialExcelExceljs implements HistorialExcelPort {
     libro.created = datos.generado;
 
     if (datos.tipo !== 'FLOTA') {
-      // Hoja 1: un turno por fila, para cotejar con el reporte de la contratista
+      // Hoja 1: una fila por cada área/zona de cada turno (cada una con su desglose de horas), para cotejar con el
+      // reporte de la contratista. El horómetro se lee al inicio y al cierre del turno: va solo en su primera fila
       const turnos = contenido.turnos.map((turno, i) => {
         const inicio = enZona(new Date(turno.horaInicio));
         const diferencia = turno.horometroFinal === null ? null : redondear(turno.horometroFinal - turno.horometroInicial);
@@ -237,49 +277,66 @@ export class HistorialExcelExceljs implements HistorialExcelPort {
           ? redondear((new Date(turno.horaTermino).getTime() - new Date(turno.horaInicio).getTime()) / 3600000)
           : null;
         const notas = observacionesTurno(turno, diferencia, duracion);
+        const tramos = tramosTurno(turno);
+        // Un turno en curso no tiene tramos: sus columnas de horas quedan vacías
+        const desglose = tramos.length > 0 ? desgloseTurno(tramos) : null;
         const hora = inicio.getUTCHours();
-        const fila: Fila = {
-          n: i + 1,
-          equipo: turno.equipo.codigo,
-          categoria: turno.equipo.tipo,
-          fecha: new Date(Date.UTC(inicio.getUTCFullYear(), inicio.getUTCMonth(), inicio.getUTCDate())),
-          // Los turnos de día parten cerca de las 07:00 y los de noche cerca de las 19:00
-          turno: hora >= 5 && hora < 17 ? 'Día' : 'Noche',
-          horaInicio: inicio,
-          horometroInicial: turno.horometroInicial,
-          horometroFinal: turno.horometroFinal,
-          diferencia,
-          area: recorrido(turno.ubicaciones.map((u) => u.area)),
-          zona: recorrido(turno.ubicaciones.map((u) => u.zona)),
-          serie: serieDe(turno.equipo),
-          contratista: turno.equipo.esContratista ? 'Sí' : 'No',
-          operador: turno.operador,
-          horaTermino: turno.horaTermino ? enZona(new Date(turno.horaTermino)) : null,
-          duracion,
-          estado: ESTADOS_TURNO[turno.estado] ?? turno.estado,
-          revisar: notas.length > 0 ? 'Sí' : null,
-          observaciones: notas.join(' · ') || null,
-        };
-        return { turno, fila, diferencia, duracion, revisar: notas.length > 0 };
+        const filas = tramosPorUbicacion(turno).map<Fila>((ubicacion, j) => {
+          const desgloseUbicacion = ubicacion.tramos.length > 0 ? desgloseTurno(ubicacion.tramos) : null;
+          const primera = j === 0;
+          return {
+            n: i + 1,
+            equipo: turno.equipo.codigo,
+            categoria: turno.equipo.tipo,
+            fecha: new Date(Date.UTC(inicio.getUTCFullYear(), inicio.getUTCMonth(), inicio.getUTCDate())),
+            // Los turnos de día parten cerca de las 07:00 y los de noche cerca de las 19:00
+            turno: hora >= 5 && hora < 17 ? 'Día' : 'Noche',
+            horaInicio: enZona(ubicacion.inicio),
+            horometroInicial: primera ? turno.horometroInicial : null,
+            horometroFinal: primera ? turno.horometroFinal : null,
+            diferencia: primera ? diferencia : null,
+            area: ubicacion.area,
+            zona: ubicacion.zona,
+            serie: serieDe(turno.equipo),
+            contratista: turno.equipo.esContratista ? 'Sí' : 'No',
+            operador: turno.operador,
+            horaTermino: ubicacion.fin ? enZona(ubicacion.fin) : null,
+            duracion: ubicacion.fin ? redondear((ubicacion.fin.getTime() - ubicacion.inicio.getTime()) / 3600000) : null,
+            ...Object.fromEntries(
+              (Object.keys(CLAVE_TRAMO) as TipoTramo[]).map((tipo) => [
+                CLAVE_TRAMO[tipo],
+                desgloseUbicacion ? redondear(desgloseUbicacion[tipo]) : null,
+              ]),
+            ),
+            estado: ESTADOS_TURNO[turno.estado] ?? turno.estado,
+            revisar: notas.length > 0 ? 'Sí' : null,
+            observaciones: primera ? notas.join(' · ') || null : null,
+          };
+        });
+        return { turno, filas, diferencia, duracion, tramos, desglose, revisar: notas.length > 0 };
       });
+      // Cada fila del Excel con el turno al que pertenece (un turno ocupa tantas filas como ubicaciones tuvo)
+      const filasTurnos = turnos.flatMap((t) => t.filas.map((fila, j) => ({ fila, primera: j === 0, turno: t })));
 
       const hoja = libro.addWorksheet('Turnos');
       encabezadoHoja(hoja, 'Turnos por equipo', [
-        `Rango: ${rango}  ·  ${turnos.length} turnos  ·  En amarillo, los turnos con algo que revisar antes de comparar`,
+        `Rango: ${rango}  ·  ${turnos.length} turnos  ·  Una fila por área/zona de cada turno; el horómetro va en su primera fila  ·  En amarillo, los turnos con algo que revisar antes de comparar`,
         generado,
       ]);
       const ultima = escribirTabla(
         hoja,
         COLUMNAS_TURNOS,
-        turnos.map((t) => t.fila),
-        (i) => (turnos[i].revisar ? COLOR_REVISAR : null),
+        filasTurnos.map((f) => f.fila),
+        (i) => (filasTurnos[i].turno.revisar ? COLOR_REVISAR : null),
       );
 
       // Diferencia como fórmula: si se corrige un horómetro a mano, la diferencia y los totales se recalculan
       const [ini, fin, dif, dur] = ['horometroInicial', 'horometroFinal', 'diferencia', 'duracion'].map((clave) => letra(hoja, clave));
-      turnos.forEach((t, i) => {
+      filasTurnos.forEach((f, i) => {
         const fila = FILA_ENCABEZADO + 1 + i;
-        if (t.diferencia !== null) hoja.getCell(`${dif}${fila}`).value = { formula: `${fin}${fila}-${ini}${fila}`, result: t.diferencia };
+        if (f.primera && f.turno.diferencia !== null) {
+          hoja.getCell(`${dif}${fila}`).value = { formula: `${fin}${fila}-${ini}${fila}`, result: f.turno.diferencia };
+        }
       });
 
       // Totales sobre las filas visibles (SUBTOTAL 109): al filtrar por equipo muestran sus horas del período
@@ -294,17 +351,30 @@ export class HistorialExcelExceljs implements HistorialExcelPort {
       etiqueta.value = 'Total filas visibles';
       etiqueta.font = { bold: true };
       etiqueta.alignment = { horizontal: 'right' };
-      total(dif, turnos.reduce((suma, t) => suma + (t.diferencia ?? 0), 0));
-      total(dur, turnos.reduce((suma, t) => suma + (t.duracion ?? 0), 0));
+      const sumaFilas = (clave: string) => filasTurnos.reduce((suma, f) => suma + (Number(f.fila[clave]) || 0), 0);
+      total(dif, sumaFilas('diferencia'));
+      total(dur, sumaFilas('duracion'));
+      for (const clave of Object.values(CLAVE_TRAMO)) total(letra(hoja, clave), sumaFilas(clave));
 
       // Hoja 2: horas del período por equipo, con una columna para anotar las que cobra la contratista
-      const equipos = new Map<string, { turno: TurnoConciliacion; turnos: number; horas: number; duracion: number; revisar: number }>();
+      const equipos = new Map<
+        string,
+        { turno: TurnoConciliacion; turnos: number; horas: number; duracion: number; revisar: number; desglose: Record<TipoTramo, number> }
+      >();
       for (const t of turnos) {
-        const resumen = equipos.get(t.turno.equipo.codigo) ?? { turno: t.turno, turnos: 0, horas: 0, duracion: 0, revisar: 0 };
+        const resumen = equipos.get(t.turno.equipo.codigo) ?? {
+          turno: t.turno,
+          turnos: 0,
+          horas: 0,
+          duracion: 0,
+          revisar: 0,
+          desglose: { EFECTIVO: 0, DEMORA: 0, MANTENCION: 0, SIN_ESTADO: 0 },
+        };
         resumen.turnos += 1;
         resumen.horas += t.diferencia ?? 0;
         resumen.duracion += t.duracion ?? 0;
         resumen.revisar += t.revisar ? 1 : 0;
+        for (const tipo of Object.keys(CLAVE_TRAMO) as TipoTramo[]) resumen.desglose[tipo] += t.desglose?.[tipo] ?? 0;
         equipos.set(t.turno.equipo.codigo, resumen);
       }
       const filasResumen = [...equipos.values()]
@@ -317,6 +387,7 @@ export class HistorialExcelExceljs implements HistorialExcelPort {
           turnos: r.turnos,
           horas: redondear(r.horas),
           duracion: redondear(r.duracion),
+          ...Object.fromEntries((Object.keys(CLAVE_TRAMO) as TipoTramo[]).map((tipo) => [CLAVE_TRAMO[tipo], redondear(r.desglose[tipo])])),
           revisar: r.revisar || null,
           horasContratista: null,
         }));
@@ -338,7 +409,7 @@ export class HistorialExcelExceljs implements HistorialExcelPort {
         filaTotal.getCell(1).value = 'Total';
         COLUMNAS_RESUMEN.forEach((columna, j) => {
           const celda = filaTotal.getCell(j + 1);
-          if (['turnos', 'horas', 'duracion', 'revisar', 'horasContratista', 'diferencia'].includes(columna.clave)) {
+          if (['turnos', 'horas', 'duracion', ...Object.values(CLAVE_TRAMO), 'revisar', 'horasContratista', 'diferencia'].includes(columna.clave)) {
             const l = letra(resumen, columna.clave);
             celda.value = { formula: `SUM(${l}${FILA_ENCABEZADO + 1}:${l}${ultimaResumen})` };
             if (columna.formato) celda.numFmt = columna.formato;
@@ -348,6 +419,51 @@ export class HistorialExcelExceljs implements HistorialExcelPort {
           celda.border = { top: BORDE };
         });
       }
+
+      // Hoja 3: la línea de tiempo de cada turno cerrado, con los colores de los estados en la app
+      const tramos = turnos.flatMap((t, i) =>
+        t.tramos.map((tramo) => {
+          const inicioTramo = enZona(tramo.inicio);
+          const fila: Fila = {
+            n: i + 1,
+            equipo: t.turno.equipo.codigo,
+            operador: t.turno.operador,
+            fecha: new Date(Date.UTC(inicioTramo.getUTCFullYear(), inicioTramo.getUTCMonth(), inicioTramo.getUTCDate())),
+            inicio: inicioTramo,
+            termino: enZona(tramo.fin),
+            horas: redondear(horasTramo(tramo)),
+            categoria: TRAMOS[tramo.tipo].etiqueta,
+            estado: tramo.estado,
+            area: tramo.area,
+            zona: tramo.zona,
+          };
+          return { tipo: tramo.tipo, fila };
+        }),
+      );
+      const hojaEstados = libro.addWorksheet('Estados operacionales');
+      encabezadoHoja(hojaEstados, 'Estados operacionales por turno', [
+        `Rango: ${rango}  ·  ${tramos.length} tramos de turnos cerrados  ·  Filtra por Categoría o Área para ver sus horas (verde: efectivas, amarillo: demoras, rojo: mantención y fallas)`,
+        generado,
+      ]);
+      const ultimaEstados = escribirTabla(
+        hojaEstados,
+        COLUMNAS_ESTADOS,
+        tramos.map((t) => t.fila),
+        (i) => TRAMOS[tramos[i].tipo].suave,
+      );
+      const horasEstados = letra(hojaEstados, 'horas');
+      const etiquetaEstados = hojaEstados.getCell(`${letra(hojaEstados, 'termino')}4`);
+      etiquetaEstados.value = 'Total filas visibles';
+      etiquetaEstados.font = { bold: true };
+      etiquetaEstados.alignment = { horizontal: 'right' };
+      const totalEstados = hojaEstados.getCell(`${horasEstados}4`);
+      totalEstados.value = {
+        formula: `SUBTOTAL(109,${horasEstados}${FILA_ENCABEZADO + 1}:${horasEstados}${ultimaEstados})`,
+        result: redondear(tramos.reduce((suma, t) => suma + Number(t.fila.horas), 0)),
+      };
+      totalEstados.numFmt = HORAS;
+      totalEstados.font = { bold: true };
+      totalEstados.fill = relleno(COLOR_TOTAL);
     }
 
     if (datos.tipo !== 'TURNOS') {
@@ -398,9 +514,10 @@ export class HistorialExcelExceljs implements HistorialExcelPort {
         return partesTexto.join(' · ');
       };
 
-      // Hoja 3: mantenciones, reemplazos y cambios de estado; explican los días en que un equipo no tuvo turnos
+      // Hoja 4: mantenciones, reemplazos y cambios de estado; explican los días en que un equipo no tuvo turnos
       const movimientos = contenido.movimientos
-        .filter((evento) => evento.tipo !== 'INICIO_TURNO' && TIPOS[evento.tipo])
+        // Los turnos (inicios, cierres y cambios de área) ya están en sus propias hojas
+        .filter((evento) => !EVENTOS_DE_TURNO.includes(evento.tipo) && TIPOS[evento.tipo])
         .map<Fila>((evento) => {
           const detalle = objeto(evento.detalle);
           const fecha = enZona(new Date(evento.fecha));

@@ -31,10 +31,17 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
   }
 
   async findActivas(): Promise<MaquinaCatalogo[]> {
-    const filas: (FilaMaquina & { id_operador: number | null })[] = await this.ormRepository.query(`
-      SELECT m.id_maquina, m.nombre, m.marca, m.modelo, m.tipo_maquina, m.estado, ao.id_operador
+    const filas: (FilaMaquina & { id_operador: number | null; horometro_final: string | null })[] = await this.ormRepository.query(`
+      SELECT m.id_maquina, m.nombre, m.marca, m.modelo, m.tipo_maquina, m.estado, ao.id_operador, ultimo.horometro_final
       FROM maquina m
       LEFT JOIN asignacion_operador ao ON ao.id_maquina = m.id_maquina AND ao.vigente_hasta IS NULL
+      LEFT JOIN LATERAL (
+        SELECT t.horometro_final
+        FROM turno t
+        WHERE t.id_maquina = m.id_maquina AND t.horometro_final IS NOT NULL
+        ORDER BY t.hora_inicio DESC
+        LIMIT 1
+      ) ultimo ON TRUE
       WHERE m.estado IN ('ACTIVA', 'BAJO_OBSERVACION')
       ORDER BY m.nombre ASC
     `);
@@ -46,6 +53,8 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       tipoMaquina: fila.tipo_maquina,
       estado: fila.estado,
       idOperadorAsignado: fila.id_operador,
+      // NUMERIC llega como string desde pg
+      horometroUltimo: fila.horometro_final === null ? null : Number(fila.horometro_final),
     }));
   }
 

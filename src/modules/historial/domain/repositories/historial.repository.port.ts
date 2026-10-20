@@ -2,6 +2,8 @@ export const HISTORIAL_REPOSITORY = Symbol('HISTORIAL_REPOSITORY');
 
 export type TipoEventoHistorial =
   | 'INICIO_TURNO'
+  | 'FIN_TURNO'
+  | 'CAMBIO_UBICACION'
   | 'INCORPORAR'
   | 'EDITAR'
   | 'HABILITAR'
@@ -10,9 +12,12 @@ export type TipoEventoHistorial =
   | 'REEMPLAZAR'
   | 'DEVOLVER';
 
-// Un evento del historial del jefe de turno: una acción de la bitácora o un turno de un operador (inicio y, si ya cerró, su fin)
+// Un evento del historial del jefe de turno: una acción de la bitácora, el inicio o el cierre de un turno de un
+// operador, o un cambio de área/zona que el operador hizo durante su turno
 export interface EventoHistorial {
-  id: string; // 'B-<id_bitacora>' o 'T-<id_turno>': únicos aunque vengan de tablas distintas
+  // 'B-<id_bitacora>', 'T-<id_turno>' (inicio), 'F-<id_turno>' (cierre) o 'U-<id_turno_ubicacion>': únicos aunque
+  // vengan de tablas distintas
+  id: string;
   tipo: TipoEventoHistorial;
   fecha: Date;
   actor: string; // jefe de turno (bitácora) u operador (turno)
@@ -38,6 +43,18 @@ export interface FiltroHistorial {
   limite: number;
 }
 
+// Mismas categorías que el catálogo de estados operacionales (ESTADO_OPERACIONAL.categoria)
+export type CategoriaEstadoTurno = 'PRODUCTIVO' | 'DEMORA' | 'MANTENCION';
+
+// Un estado operacional registrado por el operador durante el turno
+export interface EstadoTurnoConciliacion {
+  nombre: string; // "Categoría / Detalle", como en el catálogo
+  categoria: CategoriaEstadoTurno | null;
+  esProductivo: boolean; // suma como hora efectiva
+  inicio: Date;
+  fin: Date | null; // null = vigente
+}
+
 // Un turno con todo lo que se concilia contra el reporte mensual de la contratista (horómetros, equipo, áreas)
 export interface TurnoConciliacion {
   idTurno: number;
@@ -48,7 +65,8 @@ export interface TurnoConciliacion {
   horometroFinal: number | null;
   equipo: { codigo: string; patente: string | null; numeroChasis: string | null; tipo: string | null; esContratista: boolean };
   operador: string;
-  ubicaciones: { area: string; zona: string | null }[]; // en el orden en que se recorrieron
+  ubicaciones: { area: string; zona: string | null; inicio: Date }[]; // en el orden en que se recorrieron
+  estados: EstadoTurnoConciliacion[]; // en orden de inicio
   conflicto: string | null; // detalle si se aceptó pese a chocar con otro turno
   cerradoPor: string | null; // jefe de turno que lo cerró en nombre del operador
   motivoCierre: string | null;

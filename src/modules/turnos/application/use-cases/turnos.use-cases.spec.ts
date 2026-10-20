@@ -11,12 +11,13 @@ import type {
   GeocercaRepositoryPort,
   ZonaTrabajoResumen,
 } from '../../../geocercas/domain/repositories/geocerca.repository.port';
-import type { UbicacionTurno } from '../../domain/entities/ubicacion-turno';
+import type { UbicacionTurno, UbicacionTurnoRegistro } from '../../domain/entities/ubicacion-turno';
 import { ObtenerTurnoActualUseCase } from './obtener-turno-actual.use-case';
 import { IniciarTurnoUseCase } from './iniciar-turno.use-case';
 import { FinalizarTurnoUseCase } from './finalizar-turno.use-case';
 import { CerrarTurnosExcedidosUseCase } from './cerrar-turnos-excedidos.use-case';
 import { RegistrarEstadoUseCase } from './registrar-estado.use-case';
+import { CambiarUbicacionUseCase } from './cambiar-ubicacion.use-case';
 
 const HORA = 60 * 60 * 1000;
 // Un turno que ya pasó el límite de cierre automático
@@ -24,6 +25,7 @@ const EXCEDIDO = DURACION_MAXIMA_TURNO_HORAS + 1;
 const ID_OPERADOR = 10;
 const UUID_TURNO = '6f1c2a3b-4d5e-4f60-8a71-92b3c4d5e6f7';
 const UUID_ESTADO = '0a1b2c3d-4e5f-4061-8273-8495a6b7c8d9';
+const UUID_UBICACION = '1b2c3d4e-5f60-4172-8384-95a6b7c8d9e0';
 
 const maquina: MaquinaResumen = {
   idMaquina: 20,
@@ -56,10 +58,13 @@ const crearRepos = () => {
     findActivoByOperador: jest.fn<Promise<Turno | null>, [number]>(async () => null),
     findUltimoByOperador: jest.fn<Promise<Turno | null>, [number]>(async () => null),
     findActivosIniciadosAntesDe: jest.fn<Promise<Turno[]>, [Date]>(async () => []),
+    findUbicacionByIdCliente: jest.fn<Promise<UbicacionTurnoRegistro | null>, [string]>(async () => null),
+    registrarUbicacion: jest.fn(async (data: Omit<UbicacionTurnoRegistro, 'idTurnoUbicacion'>) => ({ idTurnoUbicacion: 4, ...data })),
+    findUltimoHorometroFinal: jest.fn<Promise<number | null>, [number, Date]>(async () => null),
   } satisfies TurnoRepositoryPort;
   const maquinaRepo = {
     findById: jest.fn<Promise<MaquinaResumen | null>, [number]>(async () => maquina),
-    findActivas: jest.fn(async () => [{ ...maquina, idOperadorAsignado: null }]),
+    findActivas: jest.fn(async () => [{ ...maquina, idOperadorAsignado: null, horometroUltimo: null }]),
     findFlota: jest.fn(async () => []),
     findFlotaById: jest.fn(async () => null),
     tieneTurnoEnCurso: jest.fn(async () => false),
@@ -236,6 +241,28 @@ describe('IniciarTurnoUseCase', () => {
     expect(result.turno?.conflicto).toBe(false);
   });
 
+  it('acepta y marca conflicto si el horómetro inicial es menor al último final de la máquina', async () => {
+    const repos = crearRepos();
+    const fechaInicio = new Date(Date.now() - HORA);
+    repos.turnoRepo.findUltimoHorometroFinal.mockResolvedValue(1500.5);
+
+    const result = await iniciar(repos).execute({ ...datos, fechaInicio: fechaInicio.toISOString() });
+
+    expect(repos.turnoRepo.findUltimoHorometroFinal.mock.calls).toEqual([[maquina.idMaquina, fechaInicio]]);
+    expect(result.turno?.conflicto).toBe(true);
+    expect(result.turno?.conflictoDetalle).toContain('horómetro inicial es menor');
+    expect(repos.turnoRepo.iniciar.mock.calls).toHaveLength(1);
+  });
+
+  it('un horómetro inicial igual o mayor al último final no genera conflicto', async () => {
+    const repos = crearRepos();
+    repos.turnoRepo.findUltimoHorometroFinal.mockResolvedValue(datos.horometroInicial);
+
+    const result = await iniciar(repos).execute(datos);
+
+    expect(result.turno?.conflicto).toBe(false);
+  });
+
   it('rechaza datos imposibles de guardar: máquina o área inexistente, zona de otra área, fecha futura', async () => {
     const repos = crearRepos();
     repos.maquinaRepo.findById.mockResolvedValueOnce(null);
@@ -352,6 +379,64 @@ describe('RegistrarEstadoUseCase', () => {
       }),
     );
     expect(code).toBe('ESTADO_NO_DISPONIBLE');
+  });
+});
+
+describe('CambiarUbicacionUseCase', () => {
+  const otraArea: AreaResumen = { ...area, idArea: 8, nombre: 'Área 84 - Botadero de Estéril', codigo: '84' };
+  const cambiar = (repos: ReturnType<typeof crearRepos>) => new CambiarUbicacionUseCase(repos.turnoRepo, repos.geocercaRepo);
+  const dto = { idOperador: ID_OPERADOR, idClienteTurno: UUID_TURNO, idCliente: UUID_UBICACION, idArea: otraArea.idArea, idZona: null };
+
+  it('registra la nueva área con la fecha real y es idempotente por idCliente', async () => {
+    const repos = crearRepos();
+    repos.turnoRepo.findByIdCliente.mockResolvedValue(turnoIniciadoHace(4));
+    repos.geocercaRepo.findAreaById.mockImplementation(async (id) => (id === otraArea.idArea ? otraArea : null));
+    const inicio = new Date(Date.now() - HORA);
+
+    const registro = await cambiar(repos).execute({ ...dto, inicio: inicio.toISOString() });
+    expect(registro).toMatchObject({ idTurno: 1, idArea: otraArea.idArea, idZona: null, inicio, fin: null, idCliente: UUID_UBICACION });
+
+    repos.turnoRepo.findUbicacionByIdCliente.mockResolvedValue(registro);
+    await cambiar(repos).execute(dto);
+    expect(repos.turnoRepo.registrarUbicacion.mock.calls).toHaveLength(1);
+    expect(repos.turnoRepo.save.mock.calls).toHaveLength(0);
+  });
+
+  it('acepta un área dada de baja marcando conflicto en el turno', async () => {
+    const repos = crearRepos();
+    const turno = turnoIniciadoHace(2);
+    repos.turnoRepo.findByIdCliente.mockResolvedValue(turno);
+    repos.geocercaRepo.findAreaById.mockResolvedValue({ ...otraArea, estado: 'INACTIVA' });
+
+    await cambiar(repos).execute(dto);
+
+    expect(turno.conflicto).toBe(true);
+    expect(repos.turnoRepo.save.mock.calls).toEqual([[turno]]);
+  });
+
+  it('acepta un cambio offline que llega después del cierre si ocurrió durante el turno', async () => {
+    const repos = crearRepos();
+    const turno = turnoIniciadoHace(8);
+    turno.finalizar(new Date(Date.now() - HORA), 1008);
+    repos.turnoRepo.findByIdCliente.mockResolvedValue(turno);
+
+    const registro = await cambiar(repos).execute({ ...dto, idArea: area.idArea, inicio: new Date(Date.now() - 2 * HORA).toISOString() });
+    expect(registro.fin).toEqual(turno.fechaFin);
+
+    expect(await codigoDe(cambiar(repos).execute({ ...dto, idArea: area.idArea, idCliente: UUID_ESTADO }))).toBe('TURNO_NO_ACTIVO');
+  });
+
+  it('rechaza datos imposibles: área inexistente, zona de otra área, turno ajeno, cambio anterior al inicio', async () => {
+    const repos = crearRepos();
+    const turno = turnoIniciadoHace(2);
+    repos.turnoRepo.findByIdCliente.mockResolvedValue(turno);
+    expect(await codigoDe(cambiar(repos).execute({ ...dto, idArea: 999 }))).toBe('AREA_NO_DISPONIBLE');
+    expect(await codigoDe(cambiar(repos).execute({ ...dto, idArea: area.idArea, idZona: 77 }))).toBe('ZONA_NO_DISPONIBLE');
+    const antes = new Date(turno.fechaInicio.getTime() - HORA).toISOString();
+    expect(await codigoDe(cambiar(repos).execute({ ...dto, idArea: area.idArea, inicio: antes }))).toBe('FECHA_INVALIDA');
+    expect(await codigoDe(cambiar(repos).execute({ ...dto, idOperador: 999 }))).toBe('TURNO_NO_ENCONTRADO');
+    expect(await codigoDe(cambiar(repos).execute({ ...dto, idCliente: 'no-es-uuid' }))).toBe('ID_CLIENTE_INVALIDO');
+    expect(repos.turnoRepo.registrarUbicacion.mock.calls).toHaveLength(0);
   });
 });
 

@@ -12,6 +12,8 @@ export interface MaquinaResumen {
 // Catálogo del operador: con el operador asignado, para preseleccionar su máquina al iniciar turno
 export interface MaquinaCatalogo extends MaquinaResumen {
   idOperadorAsignado: number | null;
+  // Último horómetro final registrado en un turno: la app no acepta un horómetro inicial menor
+  horometroUltimo: number | null;
 }
 
 export interface OperadorAsignado {

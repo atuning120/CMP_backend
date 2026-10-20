@@ -12,6 +12,7 @@ import { ObtenerTurnoActualUseCase } from './application/use-cases/obtener-turno
 import { CerrarTurnosExcedidosUseCase } from './application/use-cases/cerrar-turnos-excedidos.use-case';
 import { CerrarTurnoPorJefeUseCase } from './application/use-cases/cerrar-turno-por-jefe.use-case';
 import { RegistrarEstadoUseCase } from './application/use-cases/registrar-estado.use-case';
+import { CambiarUbicacionUseCase } from './application/use-cases/cambiar-ubicacion.use-case';
 import { ListarEstadosOperacionalesUseCase } from './application/use-cases/listar-estados-operacionales.use-case';
 
 // Persistence (Infrastructure)
@@ -58,6 +59,7 @@ import { GeocercasModule } from '../geocercas/geocercas.module';
     CerrarTurnosExcedidosUseCase,
     CierreAutomaticoTurnosScheduler,
     RegistrarEstadoUseCase,
+    CambiarUbicacionUseCase,
     CerrarTurnoPorJefeUseCase,
     ListarEstadosOperacionalesUseCase,
   ],

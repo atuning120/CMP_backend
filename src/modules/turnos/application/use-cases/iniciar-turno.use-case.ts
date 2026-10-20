@@ -6,15 +6,12 @@ import type { TurnoEstadoRepositoryPort } from '../../domain/repositories/turno-
 import { MAQUINA_REPOSITORY, operaEnEstado } from '../../../maquinas/domain/repositories/maquina.repository.port';
 import type { MaquinaRepositoryPort } from '../../../maquinas/domain/repositories/maquina.repository.port';
 import { GEOCERCA_REPOSITORY } from '../../../geocercas/domain/repositories/geocerca.repository.port';
-import type {
-  AreaResumen,
-  GeocercaRepositoryPort,
-  ZonaTrabajoResumen,
-} from '../../../geocercas/domain/repositories/geocerca.repository.port';
+import type { GeocercaRepositoryPort } from '../../../geocercas/domain/repositories/geocerca.repository.port';
 import { IniciarTurnoDto } from '../dtos/iniciar-turno.dto';
 import { Turno } from '../../domain/entities/turno.entity';
 import { turnoError } from '../turno.errors';
 import { fechaDelEvento, validarIdCliente } from '../datos-cliente';
+import { marcarUbicacionInactiva, validarUbicacion } from '../ubicacion';
 import { detallarHistorial, detallarUbicacion } from './obtener-turno-actual.use-case';
 import type { TurnoActualResult } from './obtener-turno-actual.use-case';
 
@@ -60,7 +57,7 @@ export class IniciarTurnoUseCase {
     if (!maquina) {
       throw turnoError('MAQUINA_NO_DISPONIBLE');
     }
-    const { area, zona } = await this.validarUbicacion(dto.idArea, dto.idZona);
+    const { area, zona } = await validarUbicacion(this.geocercaRepo, dto.idArea, dto.idZona);
 
     const nuevoTurno = new Turno(
       null, // DB autogenerates id_turno
@@ -78,11 +75,12 @@ export class IniciarTurnoUseCase {
     if (!operaEnEstado(maquina.estado)) {
       nuevoTurno.marcarConflicto(`La máquina ${maquina.nombre} no estaba operativa (${maquina.estado}) al sincronizar`);
     }
-    if (area.estado !== 'ACTIVA') {
-      nuevoTurno.marcarConflicto(`El área ${area.nombre} no estaba activa al sincronizar`);
-    }
-    if (zona && zona.estado !== 'ACTIVA') {
-      nuevoTurno.marcarConflicto(`La zona ${zona.nombre} no estaba activa al sincronizar`);
+    marcarUbicacionInactiva(nuevoTurno, { area, zona });
+    // El horómetro no retrocede: un inicial menor al último final de la máquina es un error de tipeo o una
+    // adulteración. La app lo impide, pero pudo registrarse offline contra un dato desactualizado
+    const ultimoHorometroFinal = await this.turnoRepo.findUltimoHorometroFinal(dto.idMaquina, fechaInicio);
+    if (ultimoHorometroFinal !== null && dto.horometroInicial < ultimoHorometroFinal) {
+      nuevoTurno.marcarConflicto('El horómetro inicial es menor al último horómetro final registrado de la máquina');
     }
 
     const turnoOperador = await this.liberarSiExcedido(await this.turnoRepo.findActivoByOperador(dto.idOperador), ahora);
@@ -119,24 +117,6 @@ export class IniciarTurnoUseCase {
       turnoCerradoAutomaticamente: null,
       turnoCerradoPorJefe: null,
     };
-  }
-
-  private async validarUbicacion(
-    idArea: number,
-    idZona: number | null,
-  ): Promise<{ area: AreaResumen; zona: ZonaTrabajoResumen | null }> {
-    const area = Number.isInteger(idArea) ? await this.geocercaRepo.findAreaById(idArea) : null;
-    if (!area) {
-      throw turnoError('AREA_NO_DISPONIBLE');
-    }
-    if (idZona === null) {
-      return { area, zona: null };
-    }
-    const zona = Number.isInteger(idZona) ? await this.geocercaRepo.findZonaById(idZona) : null;
-    if (!zona || zona.idArea !== area.idArea) {
-      throw turnoError('ZONA_NO_DISPONIBLE');
-    }
-    return { area, zona };
   }
 
   // Un turno olvidado (> 13 h) no debe bloquear el inicio de uno nuevo: se cierra automáticamente.

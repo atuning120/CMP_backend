@@ -6,7 +6,8 @@ import { ExportarHistorialUseCase } from '../../../application/use-cases/exporta
 
 const TIPO_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-// Pestaña Historial del jefe de turno: acciones sobre la flota e inicios de turno, del más reciente al más antiguo
+// Pestaña Historial del jefe de turno: acciones sobre la flota, inicios y cierres de turno y cambios de área/zona
+// de los operadores, del más reciente al más antiguo
 @Controller('historial')
 @UseGuards(JwtAuthGuard)
 export class HistorialController {

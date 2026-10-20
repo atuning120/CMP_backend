@@ -30,6 +30,7 @@ const turno = (n: number): TurnoConciliacion => ({
   equipo: { codigo: 'CF-01', patente: null, numeroChasis: null, tipo: 'Cargador Frontal', esContratista: true },
   operador: 'María López',
   ubicaciones: [],
+  estados: [],
   conflicto: null,
   cerradoPor: null,
   motivoCierre: null,
