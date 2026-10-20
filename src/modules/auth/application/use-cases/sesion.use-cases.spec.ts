@@ -7,6 +7,8 @@ import type {
 import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import { EmisorSesionService, hashRefreshToken } from '../services/emisor-sesion.service';
 import { RefrescarSesionUseCase } from './refrescar-sesion.use-case';
+import { RefrescarSesionWebUseCase } from './refrescar-sesion-web.use-case';
+import { RotacionRefreshTokenService } from '../services/rotacion-refresh-token.service';
 import { CerrarSesionUseCase } from './cerrar-sesion.use-case';
 
 const AHORA = new Date('2026-10-05T12:00:00Z');
@@ -31,10 +33,17 @@ const crear = (registro: Partial<RefreshTokenRegistro> | null, usuario = { idUsu
     create: jest.fn(),
     findById: jest.fn(async () => usuario),
   } satisfies UsuarioRepositoryPort;
-  const jwt = { sign: jest.fn(() => 'jwt-firmado') } as unknown as JwtService;
+  const sign = jest.fn(() => 'jwt-firmado');
+  const jwt = { sign } as unknown as JwtService;
   const config = { get: jest.fn((_key: string, def: string) => def) } as unknown as ConfigService;
   const emisor = new EmisorSesionService(jwt, config, refreshTokenRepo);
-  return { refreshTokenRepo, refrescar: new RefrescarSesionUseCase(refreshTokenRepo, usuarioRepo, emisor) };
+  const rotacion = new RotacionRefreshTokenService(refreshTokenRepo, usuarioRepo);
+  return {
+    refreshTokenRepo,
+    sign,
+    refrescar: new RefrescarSesionUseCase(rotacion, emisor),
+    refrescarWeb: new RefrescarSesionWebUseCase(rotacion, emisor),
+  };
 };
 
 const codigoDe = async (promise: Promise<unknown>) => {
@@ -99,6 +108,44 @@ describe('RefrescarSesionUseCase', () => {
     expect(await codigoDe(crear({}, { idUsuario: 7, rol: 'VISOR', idOperador: null }).refrescar.execute(TOKEN, AHORA))).toBe(
       'SESION_INVALIDA',
     );
+  });
+});
+
+describe('RefrescarSesionWebUseCase', () => {
+  it.each(['ADMIN', 'JEFE_TURNO', 'VISOR'])('rota el token de un %s y entrega su rol actual', async (rol) => {
+    const { refrescarWeb, refreshTokenRepo, sign } = crear({}, { idUsuario: 7, rol, idOperador: null });
+
+    const sesion = await refrescarWeb.execute(TOKEN, AHORA);
+
+    expect(refreshTokenRepo.revocar.mock.calls).toEqual([[1, AHORA]]);
+    expect(sesion.refreshToken).not.toBe(TOKEN);
+    expect(sesion).toMatchObject({ accessToken: 'jwt-firmado', rol });
+    expect(sign).toHaveBeenCalledWith({ sub: 7, rol });
+  });
+
+  it('un operador no puede renovar una sesión web: se cierran sus sesiones', async () => {
+    const { refrescarWeb, refreshTokenRepo } = crear({});
+
+    expect(await codigoDe(refrescarWeb.execute(TOKEN, AHORA))).toBe('SESION_INVALIDA');
+    expect(refreshTokenRepo.revocarTodosDelUsuario.mock.calls).toEqual([[7, AHORA]]);
+  });
+
+  it('comparte las reglas de la app: token desconocido, expirado, reutilizado o usuario desactivado', async () => {
+    expect(await codigoDe(crear({}, { idUsuario: 7, rol: 'ADMIN', idOperador: null }).refrescarWeb.execute('otro', AHORA))).toBe(
+      'SESION_INVALIDA',
+    );
+    expect(await codigoDe(crear({ expiraEn: AHORA }, { idUsuario: 7, rol: 'ADMIN', idOperador: null }).refrescarWeb.execute(TOKEN, AHORA))).toBe(
+      'SESION_INVALIDA',
+    );
+    expect(
+      await codigoDe(
+        crear({ revocadoEn: new Date(AHORA.getTime() - 5 * 60 * 1000) }, { idUsuario: 7, rol: 'ADMIN', idOperador: null }).refrescarWeb.execute(
+          TOKEN,
+          AHORA,
+        ),
+      ),
+    ).toBe('SESION_INVALIDA');
+    expect(await codigoDe(crear({}, null).refrescarWeb.execute(TOKEN, AHORA))).toBe('SESION_INVALIDA');
   });
 });
 

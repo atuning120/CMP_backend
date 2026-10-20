@@ -15,6 +15,7 @@ import { LoginWebCredencialesRequestDto } from '../dtos/login-web-credenciales.r
 import { RefreshTokenRequestDto } from '../dtos/refresh-token.request.dto';
 import { RefrescarSesionUseCase } from '../../../application/use-cases/refrescar-sesion.use-case';
 import { CerrarSesionUseCase } from '../../../application/use-cases/cerrar-sesion.use-case';
+import { RefrescarSesionWebUseCase } from '../../../application/use-cases/refrescar-sesion-web.use-case';
 
 // Login y registro llevan límite de intentos (ver limite-intentos.ts); refresh y logout no: el refresh token es
 // aleatorio de 48 bytes (no se puede adivinar) y la app los reintenta seguido cuando vuelve la señal
@@ -29,6 +30,7 @@ export class AuthController {
     private readonly registerAdminUseCase: RegisterAdminUseCase,
     private readonly refrescarSesionUseCase: RefrescarSesionUseCase,
     private readonly cerrarSesionUseCase: CerrarSesionUseCase,
+    private readonly refrescarSesionWebUseCase: RefrescarSesionWebUseCase,
   ) { }
 
   @Post('register/operador')
@@ -67,6 +69,14 @@ export class AuthController {
     return this.refrescarSesionUseCase.execute(body?.refreshToken);
   }
 
+  // Renueva la sesión del panel web (misma rotación; acepta los roles con acceso web y no los de la app)
+  @Post('refresh/web')
+  @HttpCode(HttpStatus.OK)
+  async refreshWeb(@Body() body: RefreshTokenRequestDto) {
+    return this.refrescarSesionWebUseCase.execute(body?.refreshToken);
+  }
+
+  // Revoca el refresh token del dispositivo o del navegador
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(@Body() body: RefreshTokenRequestDto) {
@@ -80,7 +90,7 @@ export class AuthController {
     return this.loginWebUseCase.execute(body);
   }
 
-  // Login del panel web con email y contraseña; responde { accessToken, rol }
+  // Login del panel web con email y contraseña; responde { accessToken, refreshToken, refreshTokenExpiraEn, rol }
   @Post('login/web/credenciales')
   @UseGuards(LimiteIntentosGuard)
   @HttpCode(HttpStatus.OK)

@@ -9,6 +9,14 @@ export type SesionMovilResponse =
   | { accessToken: string; refreshToken: string; refreshTokenExpiraEn: string; rol: 'OPERADOR'; idOperador: number }
   | { accessToken: string; refreshToken: string; refreshTokenExpiraEn: string; rol: 'JEFE_TURNO' };
 
+// Sesión del panel web: el rol decide qué vistas muestra el Frontend (los permisos los valida cada endpoint)
+export interface SesionWebResponse {
+  accessToken: string;
+  refreshToken: string;
+  refreshTokenExpiraEn: string;
+  rol: string;
+}
+
 export interface UsuarioSesion {
   idUsuario: number;
   rol: 'OPERADOR' | 'JEFE_TURNO';
@@ -19,7 +27,7 @@ export const hashRefreshToken = (token: string) => createHash('sha256').update(t
 
 /**
  * Emite el par access token (JWT de corta duración) + refresh token (opaco, larga duración)
- * de la app móvil. El refresh token permite renovar la sesión sin volver a pedir la contraseña.
+ * de la app móvil y del panel web. El refresh token permite renovar la sesión sin volver a pedir la contraseña.
  */
 @Injectable()
 export class EmisorSesionService {
@@ -31,17 +39,25 @@ export class EmisorSesionService {
   ) {}
 
   async emitir(usuario: UsuarioSesion, ahora: Date = new Date()): Promise<SesionMovilResponse> {
-    const refreshToken = randomBytes(48).toString('base64url');
-    const dias = Number(this.config.get<string>('REFRESH_TOKEN_TTL_DAYS', '30'));
-    const expiraEn = new Date(ahora.getTime() + dias * 24 * 60 * 60 * 1000);
-    await this.refreshTokenRepo.create({ idUsuario: usuario.idUsuario, tokenHash: hashRefreshToken(refreshToken), expiraEn });
-
-    const base = { refreshToken, refreshTokenExpiraEn: expiraEn.toISOString() };
+    const base = await this.crearRefreshToken(usuario.idUsuario, ahora);
     if (usuario.rol === 'OPERADOR' && usuario.idOperador) {
       const payload = { sub: usuario.idUsuario, rol: usuario.rol, idOperador: usuario.idOperador };
       return { ...base, accessToken: this.jwtService.sign(payload), rol: 'OPERADOR', idOperador: usuario.idOperador };
     }
     const payload = { sub: usuario.idUsuario, rol: usuario.rol };
     return { ...base, accessToken: this.jwtService.sign(payload), rol: 'JEFE_TURNO' };
+  }
+
+  async emitirWeb(usuario: { idUsuario: number; rol: string }, ahora: Date = new Date()): Promise<SesionWebResponse> {
+    const base = await this.crearRefreshToken(usuario.idUsuario, ahora);
+    return { ...base, accessToken: this.jwtService.sign({ sub: usuario.idUsuario, rol: usuario.rol }), rol: usuario.rol };
+  }
+
+  private async crearRefreshToken(idUsuario: number, ahora: Date) {
+    const refreshToken = randomBytes(48).toString('base64url');
+    const dias = Number(this.config.get<string>('REFRESH_TOKEN_TTL_DAYS', '30'));
+    const expiraEn = new Date(ahora.getTime() + dias * 24 * 60 * 60 * 1000);
+    await this.refreshTokenRepo.create({ idUsuario, tokenHash: hashRefreshToken(refreshToken), expiraEn });
+    return { refreshToken, refreshTokenExpiraEn: expiraEn.toISOString() };
   }
 }

@@ -1,7 +1,9 @@
+import type { ConfigService } from '@nestjs/config';
 import type { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import { LoginWebCredencialesUseCase } from './login-web-credenciales.use-case';
+import { EmisorSesionService } from '../services/emisor-sesion.service';
 
 const PASSWORD = 'Secreta123';
 
@@ -14,7 +16,10 @@ const crear = async (usuario: { rol: string; passwordHash?: string | null } | nu
     create: jest.fn(),
   } satisfies UsuarioRepositoryPort;
   const jwt = { sign: jest.fn(() => 'jwt-firmado') };
-  return { jwt, useCase: new LoginWebCredencialesUseCase(usuarioRepo, jwt as unknown as JwtService) };
+  const config = { get: (_clave: string, def: string) => def } as unknown as ConfigService;
+  const refreshTokenRepo = { create: jest.fn(async () => undefined), findByHash: jest.fn(), revocar: jest.fn(), revocarTodosDelUsuario: jest.fn() };
+  const emisor = new EmisorSesionService(jwt as unknown as JwtService, config, refreshTokenRepo);
+  return { jwt, refreshTokenRepo, useCase: new LoginWebCredencialesUseCase(usuarioRepo, emisor) };
 };
 
 const codigoDe = async (promise: Promise<unknown>) => {
@@ -27,12 +32,13 @@ const codigoDe = async (promise: Promise<unknown>) => {
 };
 
 describe('LoginWebCredencialesUseCase', () => {
-  it.each(['ADMIN', 'JEFE_TURNO', 'VISOR'])('entrega el token y el rol a un %s', async (rol) => {
-    const { jwt, useCase } = await crear({ rol });
+  it.each(['ADMIN', 'JEFE_TURNO', 'VISOR'])('entrega los tokens y el rol a un %s', async (rol) => {
+    const { jwt, refreshTokenRepo, useCase } = await crear({ rol });
 
     const sesion = await useCase.execute({ email: 'ana@cmp.cl', password: PASSWORD });
 
-    expect(sesion).toEqual({ accessToken: 'jwt-firmado', rol });
+    expect(sesion).toEqual({ accessToken: 'jwt-firmado', refreshToken: expect.any(String), refreshTokenExpiraEn: expect.any(String), rol });
+    expect(refreshTokenRepo.create).toHaveBeenCalledWith(expect.objectContaining({ idUsuario: 9 }));
     expect(jwt.sign).toHaveBeenCalledWith({ sub: 9, rol });
   });
 

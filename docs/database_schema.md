@@ -334,6 +334,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 - Al cerrar un turno se cierra también su `TURNO_ESTADO` vigente.
 
 - Sesión móvil: `/auth/login` entrega access token (JWT, `JWT_EXPIRES_IN`, por defecto 1 h) y refresh token (`REFRESH_TOKEN_TTL_DAYS`, por defecto 30 días). `/auth/refresh` revoca el token usado y emite uno nuevo; reutilizar un token rotado hace más de 60 s revoca todas las sesiones del usuario. `/auth/logout` revoca el token del dispositivo.
+- Sesión web: `/auth/login/web` (Microsoft) y `/auth/login/web/credenciales` entregan el mismo par de tokens; se renueva con `/auth/refresh/web` (misma rotación y reglas, pero solo para roles web: ADMIN, JEFE_TURNO, VISOR, y con el rol vigente del usuario). `/auth/logout` sirve para ambos.
 
 - Un operador y una máquina tienen como máximo un `TURNO` con `hora_termino` NULL (validado en `IniciarTurnoUseCase`).
 - Un turno abierto más de 13 h pasa a `CERRADO_AUTO` con `hora_termino` = `hora_inicio` + 13 h y `horometro_final` NULL (`CerrarTurnosExcedidosUseCase` + scheduler cada 5 min).

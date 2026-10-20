@@ -1,9 +1,9 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { passwordCorrecta } from '../password-segura';
 import { USUARIO_REPOSITORY } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import { LoginWebCredencialesRequestDto } from '../../interface/http/dtos/login-web-credenciales.request.dto';
+import { EmisorSesionService, SesionWebResponse } from '../services/emisor-sesion.service';
 
 // Roles que pueden usar el panel web; los operadores solo usan la app móvil
 export const ROLES_WEB = ['ADMIN', 'JEFE_TURNO', 'VISOR'];
@@ -32,10 +32,10 @@ export class LoginWebCredencialesUseCase {
   constructor(
     @Inject(USUARIO_REPOSITORY)
     private readonly usuarioRepo: UsuarioRepositoryPort,
-    private readonly jwtService: JwtService,
+    private readonly emisorSesion: EmisorSesionService,
   ) {}
 
-  async execute(dto: LoginWebCredencialesRequestDto): Promise<{ accessToken: string; rol: string }> {
+  async execute(dto: LoginWebCredencialesRequestDto): Promise<SesionWebResponse> {
     if (!dto?.email?.trim() || !dto.password) {
       throw loginWebError('DATOS_INCOMPLETOS');
     }
@@ -52,7 +52,6 @@ export class LoginWebCredencialesUseCase {
       throw loginWebError('SIN_ACCESO_WEB');
     }
 
-    const accessToken = this.jwtService.sign({ sub: usuario.idUsuario, rol: usuario.rol });
-    return { accessToken, rol: usuario.rol };
+    return this.emisorSesion.emitirWeb(usuario);
   }
 }

@@ -13,6 +13,7 @@ import { RegisterJefeTurnoUseCase } from '../../../application/use-cases/registe
 import { RegisterAdminUseCase } from '../../../application/use-cases/register-admin.use-case';
 import { RefrescarSesionUseCase } from '../../../application/use-cases/refrescar-sesion.use-case';
 import { CerrarSesionUseCase } from '../../../application/use-cases/cerrar-sesion.use-case';
+import { RefrescarSesionWebUseCase } from '../../../application/use-cases/refrescar-sesion-web.use-case';
 
 // Todo login falla con credenciales inválidas: lo que se prueba es cuándo empieza a responder 429
 const fallar = { execute: jest.fn(async () => Promise.reject(new UnauthorizedException())) };
@@ -32,6 +33,7 @@ describe('AuthController: límite de intentos', () => {
         RegisterJefeTurnoUseCase,
         RegisterAdminUseCase,
         RefrescarSesionUseCase,
+        RefrescarSesionWebUseCase,
         CerrarSesionUseCase,
       ].map((provide) => ({ provide, useValue: fallar })),
     }).compile();

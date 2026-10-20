@@ -18,6 +18,8 @@ import { OperadoresModule } from '../operadores/operadores.module';
 import { RefrescarSesionUseCase } from './application/use-cases/refrescar-sesion.use-case';
 import { CerrarSesionUseCase } from './application/use-cases/cerrar-sesion.use-case';
 import { EmisorSesionService } from './application/services/emisor-sesion.service';
+import { RotacionRefreshTokenService } from './application/services/rotacion-refresh-token.service';
+import { RefrescarSesionWebUseCase } from './application/use-cases/refrescar-sesion-web.use-case';
 import { VERIFICADOR_ENTRA_ID } from './application/ports/verificador-entra-id.port';
 import { VerificadorEntraIdAdapter } from './infrastructure/adapters/verificador-entra-id.adapter';
 import { RefreshTokenOrmEntity } from './infrastructure/persistence/orm-entities/refresh-token.orm-entity';
@@ -48,8 +50,10 @@ import { REFRESH_TOKEN_REPOSITORY } from './domain/repositories/refresh-token.re
     RegisterJefeTurnoUseCase,
     RegisterAdminUseCase,
     RefrescarSesionUseCase,
+    RefrescarSesionWebUseCase,
     CerrarSesionUseCase,
     EmisorSesionService,
+    RotacionRefreshTokenService,
     JwtStrategy,
     { provide: VERIFICADOR_ENTRA_ID, useClass: VerificadorEntraIdAdapter },
     {

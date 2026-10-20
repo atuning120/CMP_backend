@@ -6,6 +6,7 @@ import type {
 } from '../../../usuarios/domain/repositories/usuario.repository.port';
 import type { IdentidadMicrosoft, VerificadorEntraIdPort } from '../ports/verificador-entra-id.port';
 import { LoginWebUseCase } from './login-web.use-case';
+import { EmisorSesionService } from '../services/emisor-sesion.service';
 
 const CMP_TENANT = '11111111-1111-1111-1111-111111111111';
 const IDENTIDAD: IdentidadMicrosoft = { oid: 'oid-ana', tid: CMP_TENANT, email: 'ana.rojas@cmp.cl', nombre: 'Ana Rojas' };
@@ -53,7 +54,9 @@ const crear = (opciones: {
   };
   const jwt = { sign: jest.fn(() => 'jwt-firmado') };
   const config = { get: jest.fn((clave: string, def: string) => opciones.config?.[clave] ?? def) } as unknown as ConfigService;
-  return { repo, jwt, useCase: new LoginWebUseCase(repo, verificador, jwt as unknown as JwtService, config) };
+  const refreshTokenRepo = { create: jest.fn(async () => undefined), findByHash: jest.fn(), revocar: jest.fn(), revocarTodosDelUsuario: jest.fn() };
+  const emisor = new EmisorSesionService(jwt as unknown as JwtService, config, refreshTokenRepo);
+  return { repo, jwt, refreshTokenRepo, useCase: new LoginWebUseCase(repo, verificador, emisor, config) };
 };
 
 const codigoDe = async (promise: Promise<unknown>) => {
@@ -67,12 +70,22 @@ const codigoDe = async (promise: Promise<unknown>) => {
 
 describe('LoginWebUseCase (Microsoft)', () => {
   it('registra como VISOR a un usuario nuevo de CMP', async () => {
-    const { repo, jwt, useCase } = crear();
+    const { repo, jwt, refreshTokenRepo, useCase } = crear();
 
     const sesion = await useCase.execute({ entraIdToken: 'token' });
 
     expect(repo.crearDesdeMicrosoft).toHaveBeenCalledWith({ email: 'ana.rojas@cmp.cl', nombre: 'Ana Rojas', oid: 'oid-ana' });
-    expect(sesion).toEqual({ accessToken: 'jwt-firmado', rol: 'VISOR', email: 'ana.rojas@cmp.cl', nombre: 'Ana Rojas', nuevo: true });
+    expect(sesion).toEqual({
+      accessToken: 'jwt-firmado',
+      refreshToken: expect.any(String),
+      refreshTokenExpiraEn: expect.any(String),
+      rol: 'VISOR',
+      email: 'ana.rojas@cmp.cl',
+      nombre: 'Ana Rojas',
+      nuevo: true,
+    });
+    // El panel web también renueva su sesión con refresh token
+    expect(refreshTokenRepo.create).toHaveBeenCalledWith(expect.objectContaining({ idUsuario: 99 }));
     expect(jwt.sign).toHaveBeenCalledWith({ sub: 99, rol: 'VISOR' });
   });
 
