@@ -1,0 +1,431 @@
+import { Injectable } from '@nestjs/common';
+import { Workbook } from 'exceljs';
+import type { Border, CellValue, Fill, Worksheet } from 'exceljs';
+import type { EventoHistorial, TipoEventoHistorial, TurnoConciliacion } from '../../domain/repositories/historial.repository.port';
+import type { ContenidoExcelHistorial, DatosExcelHistorial, HistorialExcelPort } from '../../domain/ports/historial-excel.port';
+
+// Los mismos textos que muestran el panel web y la app (HistorialEvento, ESTADOS_MAQUINA)
+const TIPOS: Record<TipoEventoHistorial, { etiqueta: string; verbo: string }> = {
+  INICIO_TURNO: { etiqueta: 'Inicio de turno', verbo: 'Inició turno en' },
+  INCORPORAR: { etiqueta: 'Incorporación', verbo: 'Incorporó' },
+  EDITAR: { etiqueta: 'Edición', verbo: 'Editó' },
+  HABILITAR: { etiqueta: 'Habilitación', verbo: 'Habilitó' },
+  DESHABILITAR: { etiqueta: 'Deshabilitación', verbo: 'Deshabilitó' },
+  CAMBIAR_ESTADO: { etiqueta: 'Cambio de estado', verbo: 'Cambió el estado de' },
+  REEMPLAZAR: { etiqueta: 'Reemplazo', verbo: 'Reemplazó' },
+  DEVOLVER: { etiqueta: 'Devolución', verbo: 'Devolvió a operación' },
+};
+
+const ESTADOS_MAQUINA: Record<string, string> = {
+  ACTIVA: 'Operativa',
+  BAJO_OBSERVACION: 'Operativa bajo observación',
+  EN_MANTENIMIENTO: 'En mantenimiento',
+  EN_RESERVA: 'En reserva',
+  BAJA: 'Fuera de servicio',
+};
+
+const ESTADOS_TURNO: Record<string, string> = { EN_CURSO: 'En curso', CERRADO: 'Cerrado', CERRADO_AUTO: 'Cierre automático' };
+
+// Campos de la ficha que registra una edición (detalle.antes / detalle.despues)
+const CAMPOS_FICHA: Record<string, string> = {
+  nombre: 'Código',
+  marca: 'Marca',
+  modelo: 'Modelo',
+  anio: 'Año',
+  tipoMaquina: 'Tipo de máquina',
+  patente: 'Patente',
+  numeroChasis: 'N° de chasis',
+  esContratista: 'Contratista',
+  operador: 'Operador',
+  regresoEstimado: 'Regreso estimado',
+};
+
+interface Columna {
+  clave: string;
+  titulo: string;
+  ancho: number;
+  formato?: string;
+  ajustar?: boolean; // texto largo: varias líneas dentro de la celda
+}
+
+const HORAS = '#,##0.0';
+
+// Las primeras columnas siguen el orden del reporte mensual de la contratista (equipo, categoría, fecha, hora,
+// horómetros, diferencia, área) para compararlos lado a lado; después lo que solo registra GeoPlanta
+const COLUMNAS_TURNOS: Columna[] = [
+  { clave: 'n', titulo: 'N°', ancho: 6 },
+  { clave: 'equipo', titulo: 'Equipo', ancho: 12 },
+  { clave: 'categoria', titulo: 'Categoría', ancho: 17 },
+  { clave: 'fecha', titulo: 'Fecha', ancho: 11, formato: 'dd-mm-yyyy' },
+  { clave: 'turno', titulo: 'Turno', ancho: 8 },
+  { clave: 'horaInicio', titulo: 'Hora inicio', ancho: 9, formato: 'hh:mm' },
+  { clave: 'horometroInicial', titulo: 'Horómetro inicial', ancho: 11, formato: HORAS },
+  { clave: 'horometroFinal', titulo: 'Horómetro final', ancho: 11, formato: HORAS },
+  { clave: 'diferencia', titulo: 'Diferencia (hrs)', ancho: 11, formato: HORAS },
+  { clave: 'area', titulo: 'Área', ancho: 30, ajustar: true },
+  { clave: 'zona', titulo: 'Zona', ancho: 26, ajustar: true },
+  { clave: 'serie', titulo: 'Patente / N° serie', ancho: 18 },
+  { clave: 'contratista', titulo: 'Contratista', ancho: 11 },
+  { clave: 'operador', titulo: 'Operador', ancho: 24 },
+  { clave: 'horaTermino', titulo: 'Término', ancho: 16, formato: 'dd-mm-yyyy hh:mm' },
+  { clave: 'duracion', titulo: 'Duración turno (hrs)', ancho: 11, formato: HORAS },
+  { clave: 'estado', titulo: 'Estado', ancho: 16 },
+  { clave: 'revisar', titulo: 'Revisar', ancho: 9 },
+  { clave: 'observaciones', titulo: 'Observaciones', ancho: 44, ajustar: true },
+];
+
+const COLUMNAS_RESUMEN: Columna[] = [
+  { clave: 'equipo', titulo: 'Equipo', ancho: 12 },
+  { clave: 'categoria', titulo: 'Categoría', ancho: 17 },
+  { clave: 'serie', titulo: 'Patente / N° serie', ancho: 18 },
+  { clave: 'contratista', titulo: 'Contratista', ancho: 11 },
+  { clave: 'turnos', titulo: 'Turnos', ancho: 9 },
+  { clave: 'horas', titulo: 'Horas horómetro', ancho: 12, formato: HORAS },
+  { clave: 'duracion', titulo: 'Horas en turno', ancho: 12, formato: HORAS },
+  { clave: 'revisar', titulo: 'Turnos a revisar', ancho: 10 },
+  { clave: 'horasContratista', titulo: 'Horas según contratista', ancho: 13, formato: HORAS },
+  { clave: 'diferencia', titulo: 'Diferencia (contratista − GeoPlanta)', ancho: 16, formato: `${HORAS};[Red]-${HORAS}` },
+];
+
+const COLUMNAS_MOVIMIENTOS: Columna[] = [
+  { clave: 'fecha', titulo: 'Fecha', ancho: 11, formato: 'dd-mm-yyyy' },
+  { clave: 'hora', titulo: 'Hora', ancho: 8, formato: 'hh:mm' },
+  { clave: 'tipo', titulo: 'Tipo', ancho: 18 },
+  { clave: 'equipo', titulo: 'Equipo', ancho: 12 },
+  { clave: 'descripcion', titulo: 'Descripción', ancho: 48, ajustar: true },
+  { clave: 'estadoAnterior', titulo: 'Estado anterior', ancho: 20 },
+  { clave: 'estadoNuevo', titulo: 'Estado nuevo', ancho: 20 },
+  { clave: 'motivo', titulo: 'Motivo', ancho: 24, ajustar: true },
+  { clave: 'observacion', titulo: 'Observación', ancho: 36, ajustar: true },
+  { clave: 'actor', titulo: 'Realizado por', ancho: 24 },
+];
+
+type Fila = Record<string, CellValue>;
+
+const FILA_ENCABEZADO = 5;
+const COLOR_ENCABEZADO = 'FF1F4E79';
+const COLOR_ALTERNO = 'FFF2F6FA';
+const COLOR_REVISAR = 'FFFFF2CC';
+const COLOR_INGRESO = 'FFFFFBE6';
+const COLOR_TOTAL = 'FFDDE7F0';
+const BORDE: Partial<Border> = { style: 'thin', color: { argb: 'FFD0D7DE' } };
+
+const relleno = (argb: string): Fill => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+
+const texto = (valor: unknown): string | null => (typeof valor === 'string' && valor.trim() !== '' ? valor : null);
+
+const objeto = (valor: unknown): Record<string, unknown> =>
+  valor && typeof valor === 'object' && !Array.isArray(valor) ? (valor as Record<string, unknown>) : {};
+
+const estadoMaquina = (valor: unknown) => {
+  const estado = texto(valor);
+  return estado ? (ESTADOS_MAQUINA[estado] ?? estado) : null;
+};
+
+// Horómetros con decimales: 8381.8 - 8372.8 no debe quedar en 9.000000000001
+const redondear = (valor: number) => Math.round(valor * 100) / 100;
+
+// Elementos seguidos sin repetir: un turno que vuelve a la misma área no la lista dos veces seguidas
+const recorrido = (valores: (string | null)[]) =>
+  valores.filter((valor, i): valor is string => valor !== null && valor !== valores[i - 1]).join(' → ') || null;
+
+const serieDe = (equipo: TurnoConciliacion['equipo']) => [equipo.patente, equipo.numeroChasis].filter(Boolean).join(' / ') || null;
+
+// Lo que conviene mirar antes de comparar con la contratista
+const observacionesTurno = (turno: TurnoConciliacion, diferencia: number | null, duracion: number | null): string[] => {
+  const notas: string[] = [];
+  if (turno.estado === 'EN_CURSO') notas.push('Turno en curso');
+  else if (turno.horometroFinal === null) notas.push('Sin horómetro final');
+  if (diferencia !== null && diferencia < 0) notas.push('Horómetro final menor al inicial');
+  if (diferencia !== null && duracion !== null && diferencia > duracion + 0.5) notas.push('El horómetro avanzó más que la duración del turno');
+  if (turno.cerradoPor) notas.push(`Cerrado por ${turno.cerradoPor}${turno.motivoCierre ? `: ${turno.motivoCierre}` : ''}`);
+  else if (turno.estado === 'CERRADO_AUTO') notas.push('Cierre automático: el operador no lo finalizó');
+  if (turno.conflicto) notas.push(`Conflicto: ${turno.conflicto}`);
+  return notas;
+};
+
+// Título del reporte en las primeras filas de cada hoja
+const encabezadoHoja = (hoja: Worksheet, titulo: string, lineas: string[]) => {
+  hoja.getCell('A1').value = titulo;
+  hoja.getCell('A1').font = { bold: true, size: 14, color: { argb: COLOR_ENCABEZADO } };
+  lineas.forEach((linea, i) => {
+    const celda = hoja.getCell(`A${i + 2}`);
+    celda.value = linea;
+    if (i > 0) celda.font = { italic: true, color: { argb: 'FF6B7280' } };
+  });
+};
+
+/**
+ * Tabla con encabezado fijo y filtros desde la fila FILA_ENCABEZADO. destacar(i) da el color de fondo de una fila
+ * (null = sin color). Devuelve el número de la última fila escrita.
+ */
+const escribirTabla = (hoja: Worksheet, columnas: Columna[], filas: Fila[], destacar: (i: number) => string | null) => {
+  hoja.columns = columnas.map((c) => ({ key: c.clave, width: c.ancho }));
+  hoja.views = [{ state: 'frozen', ySplit: FILA_ENCABEZADO }];
+
+  const encabezado = hoja.getRow(FILA_ENCABEZADO);
+  encabezado.values = columnas.map((c) => c.titulo);
+  encabezado.height = 32;
+  encabezado.eachCell((celda) => {
+    celda.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    celda.fill = relleno(COLOR_ENCABEZADO);
+    celda.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    celda.border = { top: BORDE, bottom: BORDE, left: BORDE, right: BORDE };
+  });
+
+  filas.forEach((datos, i) => {
+    const fila = hoja.getRow(FILA_ENCABEZADO + 1 + i);
+    const color = destacar(i);
+    columnas.forEach((columna, j) => {
+      const celda = fila.getCell(j + 1);
+      celda.value = datos[columna.clave] ?? null;
+      if (columna.formato) celda.numFmt = columna.formato;
+      celda.alignment = { vertical: 'top', wrapText: columna.ajustar ?? false };
+      celda.border = { bottom: BORDE };
+      if (color) celda.fill = relleno(color);
+    });
+  });
+
+  const ultima = FILA_ENCABEZADO + Math.max(filas.length, 1);
+  hoja.autoFilter = { from: { row: FILA_ENCABEZADO, column: 1 }, to: { row: ultima, column: columnas.length } };
+  return ultima;
+};
+
+const letra = (hoja: Worksheet, clave: string) => hoja.getColumn(clave).letter;
+
+@Injectable()
+export class HistorialExcelExceljs implements HistorialExcelPort {
+  async generar(contenido: ContenidoExcelHistorial, datos: DatosExcelHistorial): Promise<Buffer> {
+    const { zonaHoraria } = datos;
+    const partes = new Intl.DateTimeFormat('en-US', {
+      timeZone: zonaHoraria,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    });
+    // Excel no guarda zona horaria y ExcelJS escribe las fechas en UTC: se pasa la hora local como si fuera UTC
+    const enZona = (fecha: Date): Date => {
+      const p = Object.fromEntries(partes.formatToParts(fecha).map((parte) => [parte.type, Number(parte.value)]));
+      return new Date(Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second));
+    };
+    const fechaTexto = (fecha: Date) => fecha.toLocaleDateString('es-CL', { timeZone: zonaHoraria });
+    const fechaHoraTexto = (fecha: Date) =>
+      `${fechaTexto(fecha)} ${fecha.toLocaleTimeString('es-CL', { timeZone: zonaHoraria, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}`;
+    const fechaDe = (valor: unknown): Date | null => {
+      const iso = texto(valor);
+      const fecha = iso ? new Date(iso) : null;
+      return fecha && !Number.isNaN(fecha.getTime()) ? fecha : null;
+    };
+
+    const rango = `${fechaTexto(datos.desde)} al ${fechaTexto(new Date(datos.hasta.getTime() - 1))}`;
+    const generado = `Generado el ${fechaHoraTexto(datos.generado)} (hora ${zonaHoraria}), del más antiguo al más reciente`;
+
+    const libro = new Workbook();
+    libro.creator = 'CMP';
+    libro.created = datos.generado;
+
+    if (datos.tipo !== 'FLOTA') {
+      // Hoja 1: un turno por fila, para cotejar con el reporte de la contratista
+      const turnos = contenido.turnos.map((turno, i) => {
+        const inicio = enZona(new Date(turno.horaInicio));
+        const diferencia = turno.horometroFinal === null ? null : redondear(turno.horometroFinal - turno.horometroInicial);
+        const duracion = turno.horaTermino
+          ? redondear((new Date(turno.horaTermino).getTime() - new Date(turno.horaInicio).getTime()) / 3600000)
+          : null;
+        const notas = observacionesTurno(turno, diferencia, duracion);
+        const hora = inicio.getUTCHours();
+        const fila: Fila = {
+          n: i + 1,
+          equipo: turno.equipo.codigo,
+          categoria: turno.equipo.tipo,
+          fecha: new Date(Date.UTC(inicio.getUTCFullYear(), inicio.getUTCMonth(), inicio.getUTCDate())),
+          // Los turnos de día parten cerca de las 07:00 y los de noche cerca de las 19:00
+          turno: hora >= 5 && hora < 17 ? 'Día' : 'Noche',
+          horaInicio: inicio,
+          horometroInicial: turno.horometroInicial,
+          horometroFinal: turno.horometroFinal,
+          diferencia,
+          area: recorrido(turno.ubicaciones.map((u) => u.area)),
+          zona: recorrido(turno.ubicaciones.map((u) => u.zona)),
+          serie: serieDe(turno.equipo),
+          contratista: turno.equipo.esContratista ? 'Sí' : 'No',
+          operador: turno.operador,
+          horaTermino: turno.horaTermino ? enZona(new Date(turno.horaTermino)) : null,
+          duracion,
+          estado: ESTADOS_TURNO[turno.estado] ?? turno.estado,
+          revisar: notas.length > 0 ? 'Sí' : null,
+          observaciones: notas.join(' · ') || null,
+        };
+        return { turno, fila, diferencia, duracion, revisar: notas.length > 0 };
+      });
+
+      const hoja = libro.addWorksheet('Turnos');
+      encabezadoHoja(hoja, 'Turnos por equipo', [
+        `Rango: ${rango}  ·  ${turnos.length} turnos  ·  En amarillo, los turnos con algo que revisar antes de comparar`,
+        generado,
+      ]);
+      const ultima = escribirTabla(
+        hoja,
+        COLUMNAS_TURNOS,
+        turnos.map((t) => t.fila),
+        (i) => (turnos[i].revisar ? COLOR_REVISAR : null),
+      );
+
+      // Diferencia como fórmula: si se corrige un horómetro a mano, la diferencia y los totales se recalculan
+      const [ini, fin, dif, dur] = ['horometroInicial', 'horometroFinal', 'diferencia', 'duracion'].map((clave) => letra(hoja, clave));
+      turnos.forEach((t, i) => {
+        const fila = FILA_ENCABEZADO + 1 + i;
+        if (t.diferencia !== null) hoja.getCell(`${dif}${fila}`).value = { formula: `${fin}${fila}-${ini}${fila}`, result: t.diferencia };
+      });
+
+      // Totales sobre las filas visibles (SUBTOTAL 109): al filtrar por equipo muestran sus horas del período
+      const total = (columna: string, valor: number) => {
+        const celda = hoja.getCell(`${columna}4`);
+        celda.value = { formula: `SUBTOTAL(109,${columna}${FILA_ENCABEZADO + 1}:${columna}${ultima})`, result: redondear(valor) };
+        celda.numFmt = HORAS;
+        celda.font = { bold: true };
+        celda.fill = relleno(COLOR_TOTAL);
+      };
+      const etiqueta = hoja.getCell(`${fin}4`);
+      etiqueta.value = 'Total filas visibles';
+      etiqueta.font = { bold: true };
+      etiqueta.alignment = { horizontal: 'right' };
+      total(dif, turnos.reduce((suma, t) => suma + (t.diferencia ?? 0), 0));
+      total(dur, turnos.reduce((suma, t) => suma + (t.duracion ?? 0), 0));
+
+      // Hoja 2: horas del período por equipo, con una columna para anotar las que cobra la contratista
+      const equipos = new Map<string, { turno: TurnoConciliacion; turnos: number; horas: number; duracion: number; revisar: number }>();
+      for (const t of turnos) {
+        const resumen = equipos.get(t.turno.equipo.codigo) ?? { turno: t.turno, turnos: 0, horas: 0, duracion: 0, revisar: 0 };
+        resumen.turnos += 1;
+        resumen.horas += t.diferencia ?? 0;
+        resumen.duracion += t.duracion ?? 0;
+        resumen.revisar += t.revisar ? 1 : 0;
+        equipos.set(t.turno.equipo.codigo, resumen);
+      }
+      const filasResumen = [...equipos.values()]
+        .sort((a, b) => a.turno.equipo.codigo.localeCompare(b.turno.equipo.codigo, 'es', { numeric: true }))
+        .map<Fila>((r) => ({
+          equipo: r.turno.equipo.codigo,
+          categoria: r.turno.equipo.tipo,
+          serie: serieDe(r.turno.equipo),
+          contratista: r.turno.equipo.esContratista ? 'Sí' : 'No',
+          turnos: r.turnos,
+          horas: redondear(r.horas),
+          duracion: redondear(r.duracion),
+          revisar: r.revisar || null,
+          horasContratista: null,
+        }));
+
+      const resumen = libro.addWorksheet('Resumen por equipo');
+      encabezadoHoja(resumen, 'Horas por equipo', [
+        `Rango: ${rango}  ·  Anota en «Horas según contratista» el total de su reporte del mes para ver la diferencia`,
+        generado,
+      ]);
+      const ultimaResumen = escribirTabla(resumen, COLUMNAS_RESUMEN, filasResumen, () => null);
+      const [horas, contratista, diferencia] = ['horas', 'horasContratista', 'diferencia'].map((clave) => letra(resumen, clave));
+      filasResumen.forEach((_, i) => {
+        const fila = FILA_ENCABEZADO + 1 + i;
+        resumen.getCell(`${contratista}${fila}`).fill = relleno(COLOR_INGRESO);
+        resumen.getCell(`${diferencia}${fila}`).value = { formula: `IF(${contratista}${fila}="","",${contratista}${fila}-${horas}${fila})`, result: '' };
+      });
+      if (filasResumen.length > 0) {
+        const filaTotal = resumen.getRow(ultimaResumen + 1);
+        filaTotal.getCell(1).value = 'Total';
+        COLUMNAS_RESUMEN.forEach((columna, j) => {
+          const celda = filaTotal.getCell(j + 1);
+          if (['turnos', 'horas', 'duracion', 'revisar', 'horasContratista', 'diferencia'].includes(columna.clave)) {
+            const l = letra(resumen, columna.clave);
+            celda.value = { formula: `SUM(${l}${FILA_ENCABEZADO + 1}:${l}${ultimaResumen})` };
+            if (columna.formato) celda.numFmt = columna.formato;
+          }
+          celda.font = { bold: true };
+          celda.fill = relleno(COLOR_TOTAL);
+          celda.border = { top: BORDE };
+        });
+      }
+    }
+
+    if (datos.tipo !== 'TURNOS') {
+      const valorFicha = (campo: string, valor: unknown): string => {
+        if (valor === null || valor === undefined || valor === '') return '—';
+        if (typeof valor === 'boolean') return valor ? 'Sí' : 'No';
+        if (campo === 'regresoEstimado') {
+          const fecha = fechaDe(valor);
+          return fecha ? fechaTexto(fecha) : '—';
+        }
+        return typeof valor === 'string' || typeof valor === 'number' ? String(valor) : JSON.stringify(valor);
+      };
+
+      const descripcion = (evento: EventoHistorial): string => {
+        const detalle = objeto(evento.detalle);
+        const despues = objeto(detalle.despues);
+        const antes = objeto(detalle.antes);
+        const partesTexto = [`${TIPOS[evento.tipo].verbo} ${evento.maquina.nombre}`];
+        switch (evento.tipo) {
+          case 'INCORPORAR':
+            if (texto(detalle.reemplazaA)) partesTexto[0] += ` en reemplazo de ${String(detalle.reemplazaA)}`;
+            break;
+          case 'EDITAR': {
+            const cambios = Object.keys(despues).map(
+              (campo) => `${CAMPOS_FICHA[campo] ?? campo}: ${valorFicha(campo, antes[campo])} → ${valorFicha(campo, despues[campo])}`,
+            );
+            if (cambios.length > 0) partesTexto[0] += `: ${cambios.join('; ')}`;
+            break;
+          }
+          case 'REEMPLAZAR':
+            if (texto(detalle.entrante)) partesTexto[0] += ` por ${String(detalle.entrante)}`;
+            break;
+          case 'DEVOLVER':
+            if (texto(detalle.respaldo)) partesTexto.push(`sale el respaldo ${String(detalle.respaldo)}`);
+            break;
+          case 'HABILITAR':
+          case 'DESHABILITAR':
+          case 'CAMBIAR_ESTADO':
+            if (texto(detalle.reemplazaA)) partesTexto.push(`entra en reemplazo de ${String(detalle.reemplazaA)}`);
+            if (texto(detalle.devueltaA)) partesTexto.push(`respaldo devuelto por ${String(detalle.devueltaA)}`);
+            break;
+          default:
+            break;
+        }
+        if (evento.tipo !== 'EDITAR' && texto(detalle.operador)) partesTexto.push(`operador ${String(detalle.operador)}`);
+        const regreso = evento.tipo === 'EDITAR' ? null : fechaDe(despues.regresoEstimado);
+        if (regreso) partesTexto.push(`regreso estimado ${fechaTexto(regreso)}`);
+        return partesTexto.join(' · ');
+      };
+
+      // Hoja 3: mantenciones, reemplazos y cambios de estado; explican los días en que un equipo no tuvo turnos
+      const movimientos = contenido.movimientos
+        .filter((evento) => evento.tipo !== 'INICIO_TURNO' && TIPOS[evento.tipo])
+        .map<Fila>((evento) => {
+          const detalle = objeto(evento.detalle);
+          const fecha = enZona(new Date(evento.fecha));
+          return {
+            fecha,
+            hora: fecha,
+            tipo: TIPOS[evento.tipo].etiqueta,
+            equipo: evento.maquina.nombre,
+            descripcion: descripcion(evento),
+            estadoAnterior: estadoMaquina(objeto(detalle.antes).estado),
+            estadoNuevo: estadoMaquina(objeto(detalle.despues).estado),
+            motivo: evento.motivo,
+            observacion: evento.observacion,
+            actor: evento.actor,
+          };
+        });
+
+      const hoja = libro.addWorksheet('Movimientos de flota');
+      encabezadoHoja(hoja, 'Movimientos de flota', [
+        `Rango: ${rango}  ·  ${movimientos.length} movimientos  ·  Mantenciones, reemplazos y cambios de estado de los equipos`,
+        generado,
+      ]);
+      escribirTabla(hoja, COLUMNAS_MOVIMIENTOS, movimientos, (i) => (i % 2 === 1 ? COLOR_ALTERNO : null));
+    }
+
+    return Buffer.from(await libro.xlsx.writeBuffer());
+  }
+}

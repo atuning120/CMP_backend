@@ -38,6 +38,30 @@ export interface FiltroHistorial {
   limite: number;
 }
 
+// Un turno con todo lo que se concilia contra el reporte mensual de la contratista (horómetros, equipo, áreas)
+export interface TurnoConciliacion {
+  idTurno: number;
+  horaInicio: Date;
+  horaTermino: Date | null;
+  estado: string; // EN_CURSO | CERRADO | CERRADO_AUTO
+  horometroInicial: number;
+  horometroFinal: number | null;
+  equipo: { codigo: string; patente: string | null; numeroChasis: string | null; tipo: string | null; esContratista: boolean };
+  operador: string;
+  ubicaciones: { area: string; zona: string | null }[]; // en el orden en que se recorrieron
+  conflicto: string | null; // detalle si se aceptó pese a chocar con otro turno
+  cerradoPor: string | null; // jefe de turno que lo cerró en nombre del operador
+  motivoCierre: string | null;
+}
+
+export interface FiltroTurnosConciliacion {
+  desde: Date; // inclusive, por hora de inicio
+  hasta: Date; // exclusiva
+  limite: number;
+}
+
 export interface HistorialRepositoryPort {
   listar(filtro: FiltroHistorial): Promise<EventoHistorial[]>;
+  // Del más antiguo al más reciente
+  listarTurnos(filtro: FiltroTurnosConciliacion): Promise<TurnoConciliacion[]>;
 }

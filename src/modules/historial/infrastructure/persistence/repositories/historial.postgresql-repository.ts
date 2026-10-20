@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import type { EventoHistorial, FiltroHistorial, HistorialRepositoryPort } from '../../../domain/repositories/historial.repository.port';
+import type {
+  EventoHistorial,
+  FiltroHistorial,
+  FiltroTurnosConciliacion,
+  HistorialRepositoryPort,
+  TurnoConciliacion,
+} from '../../../domain/repositories/historial.repository.port';
 
 interface FilaHistorial {
   id: string;
@@ -12,6 +18,26 @@ interface FilaHistorial {
   motivo: string | null;
   observacion: string | null;
   detalle: Record<string, unknown> | null;
+}
+
+interface FilaTurno {
+  id_turno: number;
+  hora_inicio: Date;
+  hora_termino: Date | null;
+  estado: string;
+  horometro_inicial: string; // NUMERIC llega como texto
+  horometro_final: string | null;
+  conflicto: boolean;
+  conflicto_detalle: string | null;
+  motivo_cierre: string | null;
+  cerrado_por: string | null;
+  operador: string;
+  equipo: string;
+  patente: string | null;
+  numero_chasis: string | null;
+  tipo_maquina: string | null;
+  es_contratista: boolean;
+  ubicaciones: { area: string; zona: string | null }[];
 }
 
 @Injectable()
@@ -103,6 +129,54 @@ export class HistorialPostgresqlRepository implements HistorialRepositoryPort {
       motivo: fila.motivo,
       observacion: fila.observacion,
       detalle: fila.detalle,
+    }));
+  }
+
+  async listarTurnos(filtro: FiltroTurnosConciliacion): Promise<TurnoConciliacion[]> {
+    const filas: FilaTurno[] = await this.dataSource.query(
+      `
+      SELECT t.id_turno, t.hora_inicio, t.hora_termino, t.estado, t.horometro_inicial, t.horometro_final,
+             t.conflicto, t.conflicto_detalle, t.motivo_cierre, jefe.nombre AS cerrado_por,
+             o.nombre || ' ' || o.apellido AS operador,
+             m.nombre AS equipo, m.patente, m.numero_chasis, m.tipo_maquina, m.es_contratista,
+             COALESCE(ubicacion.lista, '[]'::jsonb) AS ubicaciones
+      FROM turno t
+      JOIN operador o ON o.id_operador = t.id_operador
+      JOIN maquina m ON m.id_maquina = t.id_maquina
+      LEFT JOIN usuario jefe ON jefe.id_usuario = t.cerrado_por
+      -- Áreas y zonas por las que pasó el turno, en orden
+      LEFT JOIN LATERAL (
+        SELECT jsonb_agg(jsonb_build_object('area', a.nombre, 'zona', z.nombre) ORDER BY tu.inicio) AS lista
+        FROM turno_ubicacion tu
+        JOIN area a ON a.id_area = tu.id_area
+        LEFT JOIN zona_trabajo z ON z.id_zona = tu.id_zona
+        WHERE tu.id_turno = t.id_turno
+      ) ubicacion ON TRUE
+      WHERE t.hora_inicio >= $1::timestamptz AND t.hora_inicio < $2::timestamptz
+      ORDER BY t.hora_inicio ASC, m.nombre ASC
+      LIMIT $3
+      `,
+      [filtro.desde, filtro.hasta, filtro.limite],
+    );
+    return filas.map((fila) => ({
+      idTurno: fila.id_turno,
+      horaInicio: fila.hora_inicio,
+      horaTermino: fila.hora_termino,
+      estado: fila.estado,
+      horometroInicial: Number(fila.horometro_inicial),
+      horometroFinal: fila.horometro_final === null ? null : Number(fila.horometro_final),
+      equipo: {
+        codigo: fila.equipo,
+        patente: fila.patente,
+        numeroChasis: fila.numero_chasis,
+        tipo: fila.tipo_maquina,
+        esContratista: fila.es_contratista,
+      },
+      operador: fila.operador,
+      ubicaciones: fila.ubicaciones,
+      conflicto: fila.conflicto ? (fila.conflicto_detalle ?? 'Choca con otro turno') : null,
+      cerradoPor: fila.cerrado_por,
+      motivoCierre: fila.motivo_cierre,
     }));
   }
 }

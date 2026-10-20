@@ -15,6 +15,7 @@ const evento = (n: number): EventoHistorial => ({
 const crear = (cantidad = 0) => {
   const historialRepo = {
     listar: jest.fn(async (_filtro: FiltroHistorial) => Array.from({ length: cantidad }, (_, i) => evento(i))),
+    listarTurnos: jest.fn(async () => []),
   } satisfies HistorialRepositoryPort;
   return { historialRepo, listar: new ListarHistorialUseCase(historialRepo) };
 };
