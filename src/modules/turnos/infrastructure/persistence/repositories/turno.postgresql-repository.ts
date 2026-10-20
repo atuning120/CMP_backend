@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull, LessThan, EntityManager } from 'typeorm';
+import { Repository, IsNull, LessThan, LessThanOrEqual, Not, EntityManager } from 'typeorm';
 import type { TurnoRepositoryPort } from '../../../domain/repositories/turno.repository.port';
 import { Turno, EstadoTurno } from '../../../domain/entities/turno.entity';
-import { UbicacionTurno } from '../../../domain/entities/ubicacion-turno';
+import { UbicacionTurno, UbicacionTurnoRegistro } from '../../../domain/entities/ubicacion-turno';
 import { TurnoOrmEntity } from '../orm-entities/turno.orm-entity';
 import { TurnoUbicacionOrmEntity } from '../orm-entities/turno-ubicacion.orm-entity';
 import { TurnoEstadoOrmEntity } from '../orm-entities/turno-estado.orm-entity';
@@ -59,6 +59,59 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
       order: { inicio: 'DESC' },
     });
     return ubicacion ? { idArea: ubicacion.id_area, idZona: ubicacion.id_zona } : null;
+  }
+
+  async findUbicacionByIdCliente(idCliente: string): Promise<UbicacionTurnoRegistro | null> {
+    const ubicacion = await this.ubicacionRepository.findOne({ where: { id_cliente: idCliente } });
+    return ubicacion ? this.mapUbicacion(ubicacion) : null;
+  }
+
+  async registrarUbicacion(data: {
+    idTurno: number;
+    idArea: number;
+    idZona: number | null;
+    inicio: Date;
+    fin: Date | null;
+    idCliente: string;
+  }): Promise<UbicacionTurnoRegistro> {
+    return this.ubicacionRepository.manager.transaction(async (manager) => {
+      await manager.update(
+        TurnoUbicacionOrmEntity,
+        { id_turno: data.idTurno, fin: IsNull(), inicio: LessThanOrEqual(data.inicio) },
+        { fin: data.inicio },
+      );
+      const guardada = await manager.save(
+        manager.create(TurnoUbicacionOrmEntity, {
+          id_turno: data.idTurno,
+          id_area: data.idArea,
+          id_zona: data.idZona,
+          inicio: data.inicio,
+          fin: data.fin,
+          id_cliente: data.idCliente,
+        }),
+      );
+      return this.mapUbicacion(guardada);
+    });
+  }
+
+  async findUltimoHorometroFinal(idMaquina: number, antesDe: Date): Promise<number | null> {
+    const ormEntity = await this.ormRepository.findOne({
+      where: { id_maquina: idMaquina, horometro_final: Not(IsNull()), hora_inicio: LessThan(antesDe) },
+      order: { hora_inicio: 'DESC' },
+    });
+    return ormEntity ? Number(ormEntity.horometro_final) : null;
+  }
+
+  private mapUbicacion(ubicacion: TurnoUbicacionOrmEntity): UbicacionTurnoRegistro {
+    return {
+      idTurnoUbicacion: ubicacion.id_turno_ubicacion,
+      idTurno: ubicacion.id_turno,
+      idArea: ubicacion.id_area,
+      idZona: ubicacion.id_zona,
+      inicio: ubicacion.inicio,
+      fin: ubicacion.fin,
+      idCliente: ubicacion.id_cliente,
+    };
   }
 
   private async saveWith(manager: EntityManager, turno: Turno): Promise<TurnoOrmEntity> {

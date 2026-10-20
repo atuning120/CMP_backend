@@ -1,5 +1,6 @@
 import type { Turno } from '../../../domain/entities/turno.entity';
 import type { TurnoEstadoRegistro } from '../../../domain/repositories/turno-estado.repository.port';
+import type { UbicacionTurnoRegistro } from '../../../domain/entities/ubicacion-turno';
 import type { TurnoActualResult } from '../../../application/use-cases/obtener-turno-actual.use-case';
 
 const presentTurno = (turno: Turno) => ({
@@ -26,6 +27,16 @@ export const presentTurnoEstado = (registro: TurnoEstadoRegistro) => ({
   inicio: registro.inicio.toISOString(),
   fin: registro.fin?.toISOString() ?? null,
   comentario: registro.comentario,
+});
+
+export const presentTurnoUbicacion = (registro: UbicacionTurnoRegistro) => ({
+  id: registro.idTurnoUbicacion,
+  idCliente: registro.idCliente,
+  idTurno: registro.idTurno,
+  idArea: registro.idArea,
+  idZona: registro.idZona,
+  inicio: registro.inicio.toISOString(),
+  fin: registro.fin?.toISOString() ?? null,
 });
 
 export const presentTurnoActual = ({

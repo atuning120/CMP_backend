@@ -20,4 +20,7 @@ export class TurnoUbicacionOrmEntity {
   @Column('timestamp with time zone', { name: 'fin', nullable: true })
   fin: Date | null;
 
+  @Column('uuid', { name: 'id_cliente', nullable: true })
+  id_cliente: string | null;
+
 }

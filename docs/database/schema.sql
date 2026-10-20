@@ -209,6 +209,7 @@ CREATE TABLE TURNO_UBICACION (
     id_zona            INT NULL, -- nullable
     inicio             TIMESTAMPTZ NOT NULL,
     fin                TIMESTAMPTZ NULL, -- null si vigente
+    id_cliente         UUID UNIQUE, -- cambio registrado desde la app; NULL en la ubicación inicial del turno
     CONSTRAINT fk_tubicacion_turno FOREIGN KEY (id_turno) REFERENCES TURNO(id_turno) ON DELETE CASCADE,
     CONSTRAINT fk_tubicacion_area FOREIGN KEY (id_area) REFERENCES AREA(id_area),
     CONSTRAINT fk_tubicacion_zona FOREIGN KEY (id_zona) REFERENCES ZONA_TRABAJO(id_zona) ON DELETE SET NULL

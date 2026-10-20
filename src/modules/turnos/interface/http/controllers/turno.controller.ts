@@ -6,10 +6,12 @@ import { IniciarTurnoUseCase } from '../../../application/use-cases/iniciar-turn
 import { FinalizarTurnoUseCase } from '../../../application/use-cases/finalizar-turno.use-case';
 import { ObtenerTurnoActualUseCase } from '../../../application/use-cases/obtener-turno-actual.use-case';
 import { RegistrarEstadoUseCase } from '../../../application/use-cases/registrar-estado.use-case';
+import { CambiarUbicacionUseCase } from '../../../application/use-cases/cambiar-ubicacion.use-case';
 import { IniciarTurnoRequestDto } from '../dtos/iniciar-turno.request.dto';
 import { FinalizarTurnoRequestDto } from '../dtos/finalizar-turno.request.dto';
 import { RegistrarEstadoRequestDto } from '../dtos/registrar-estado.request.dto';
-import { presentTurnoActual, presentTurnoCerrado, presentTurnoEstado } from '../presenters/turno.presenter';
+import { CambiarUbicacionRequestDto } from '../dtos/cambiar-ubicacion.request.dto';
+import { presentTurnoActual, presentTurnoCerrado, presentTurnoEstado, presentTurnoUbicacion } from '../presenters/turno.presenter';
 import { idOperadorDe, numeroOpcional } from './usuario-autenticado';
 import type { UsuarioAutenticado } from './usuario-autenticado';
 
@@ -22,6 +24,7 @@ export class TurnoController {
     private readonly obtenerTurnoActualUseCase: ObtenerTurnoActualUseCase,
     private readonly registrarEstadoUseCase: RegistrarEstadoUseCase,
     private readonly cerrarTurnoPorJefeUseCase: CerrarTurnoPorJefeUseCase,
+    private readonly cambiarUbicacionUseCase: CambiarUbicacionUseCase,
   ) { }
 
   @Get('actual')
@@ -98,5 +101,24 @@ export class TurnoController {
       comentario: body.comentario,
     });
     return presentTurnoEstado(registro);
+  }
+
+  // El operador pasa a trabajar en otra área o zona con la misma máquina
+  @Post('ubicacion')
+  @HttpCode(HttpStatus.CREATED)
+  async cambiarUbicacion(
+    @Body() body: CambiarUbicacionRequestDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    const registro = await this.cambiarUbicacionUseCase.execute({
+      idOperador: idOperadorDe(user),
+      idTurno: numeroOpcional(body.idTurno),
+      idClienteTurno: body.idClienteTurno,
+      idCliente: body.idCliente,
+      idArea: Number(body.idArea),
+      idZona: numeroOpcional(body.idZona),
+      inicio: body.inicio,
+    });
+    return presentTurnoUbicacion(registro);
   }
 }

@@ -176,6 +176,7 @@ erDiagram
         int id_zona FK "nullable"
         timestamptz inicio
         timestamptz fin "null si vigente"
+        uuid id_cliente "cambio desde la app; null en la inicial"
     }
     ESTADO_OPERACIONAL {
         int id_estado PK
@@ -274,7 +275,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | Tabla | Propósito | Restricciones |
 |---|---|---|
 | `TURNO` | Jornada de un operador en una máquina | `estado` ∈ `EN_CURSO`, `CERRADO`, `CERRADO_AUTO`; `hora_termino` y `horometro_final` NULL mientras está en curso; `id_cliente` UNIQUE; `conflicto` default `FALSE` |
-| `TURNO_UBICACION` | Área/zona donde se desarrolla el turno (historial) | `id_zona` opcional; `fin` NULL = ubicación vigente |
+| `TURNO_UBICACION` | Área/zona donde se desarrolla el turno (historial; el operador puede cambiarla durante el turno) | `id_zona` opcional; `fin` NULL = ubicación vigente; `id_cliente` UUID del cambio hecho en la app |
 | `TURNO_ESTADO` | Historial de estados operacionales del turno | `fin` NULL = estado vigente; `id_cliente` UNIQUE |
 | `REPORTE_TURNO` | Reporte del turno: instrucciones al iniciar, novedades al cerrar o novedad durante el turno | `tipo` ∈ `INICIO`, `FIN`, `NOVEDAD`; `estado_sincronizacion` (`SINCRONIZADO`, `PENDIENTE`, `ERROR_SINCRONIZACION`); `id_cliente` UNIQUE |
 | `EVIDENCIA` | Foto adjunta a un reporte | `url_blob` NOT NULL (clave en el almacenamiento, p. ej. `turno-25/<uuid>.jpg`); `id_cliente` UNIQUE |

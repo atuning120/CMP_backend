@@ -18,6 +18,15 @@ export interface PaginaHistorial {
 
 const ROLES_PERMITIDOS = ['JEFE_TURNO', 'ADMIN'];
 
+// Lo comparte la exportación a Excel: mismos roles y mismo filtro de tipo
+export const exigirRolHistorial = (rol: string, accion = 'ver el historial') => {
+  if (!ROLES_PERMITIDOS.includes(rol)) {
+    throw new ForbiddenException({ statusCode: 403, code: 'SIN_PERMISO', message: `Solo un jefe de turno o administrador puede ${accion}` });
+  }
+};
+
+export const leerTipoHistorial = (tipo: unknown): FiltroTipoHistorial => (tipo === 'TURNOS' || tipo === 'FLOTA' ? tipo : 'TODO');
+
 @Injectable()
 export class ListarHistorialUseCase {
   constructor(
@@ -26,11 +35,9 @@ export class ListarHistorialUseCase {
   ) {}
 
   async execute(dto: ListarHistorialDto): Promise<PaginaHistorial> {
-    if (!ROLES_PERMITIDOS.includes(dto.rol)) {
-      throw new ForbiddenException({ statusCode: 403, code: 'SIN_PERMISO', message: 'Solo un jefe de turno o administrador puede ver el historial' });
-    }
+    exigirRolHistorial(dto.rol);
 
-    const tipo: FiltroTipoHistorial = dto.tipo === 'TURNOS' || dto.tipo === 'FLOTA' ? dto.tipo : 'TODO';
+    const tipo = leerTipoHistorial(dto.tipo);
     const { limite, ...rango } = leerRangoPaginado(dto);
 
     // Se pide uno más para saber si hay otra página sin hacer un COUNT
