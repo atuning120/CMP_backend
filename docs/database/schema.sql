@@ -152,8 +152,11 @@ CREATE TABLE ASIGNACION_OPERADOR (
 CREATE UNIQUE INDEX ux_asig_op_maquina_vigente ON ASIGNACION_OPERADOR (id_maquina) WHERE vigente_hasta IS NULL;
 CREATE UNIQUE INDEX ux_asig_op_operador_vigente ON ASIGNACION_OPERADOR (id_operador) WHERE vigente_hasta IS NULL;
 
+CREATE SEQUENCE tracking_history_id_history_seq;
+
+-- Posiciones GPS que envía el adaptador (POST /tracking/posiciones)
 CREATE TABLE TRACKING_HISTORY (
-    id_history      BIGINT NOT NULL,
+    id_history      BIGINT NOT NULL DEFAULT nextval('tracking_history_id_history_seq'),
     timestamp       TIMESTAMPTZ NOT NULL,
     id_gps          INT NOT NULL,
     id_maquina      INT NOT NULL, -- copiado al ingerir
@@ -166,6 +169,13 @@ CREATE TABLE TRACKING_HISTORY (
     CONSTRAINT fk_tracking_gps FOREIGN KEY (id_gps) REFERENCES DISPOSITIVO_GPS(id_gps),
     CONSTRAINT fk_tracking_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina)
 );
+
+ALTER SEQUENCE tracking_history_id_history_seq OWNED BY TRACKING_HISTORY.id_history;
+-- Una posición reenviada (mismo dispositivo y fecha) no se duplica
+CREATE UNIQUE INDEX ux_tracking_history_gps_timestamp ON TRACKING_HISTORY (id_gps, timestamp);
+-- Última posición de cada máquina
+CREATE INDEX ix_tracking_history_maquina_timestamp ON TRACKING_HISTORY (id_maquina, timestamp DESC);
+CREATE INDEX ix_asignacion_gps_gps ON ASIGNACION_GPS (id_gps);
 
 CREATE TABLE ALERTA (
     id_alerta       SERIAL PRIMARY KEY,
