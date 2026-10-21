@@ -305,6 +305,18 @@ INSERT INTO tracking_history (
 (1019, CURRENT_TIMESTAMP - INTERVAL '12 minutes',  14, 14, ST_GeomFromText('POINT(-70.7945 28.5240)', 4326), 21.30, 190.00, 97.40, '{"satellites": 13, "engine_on": true, "voltage": 24.2}'),
 (1020, CURRENT_TIMESTAMP - INTERVAL '6 minutes',   15, 15, ST_GeomFromText('POINT(-70.7955 28.5250)', 4326), 17.90, 195.00, 96.80, '{"satellites": 12, "engine_on": true, "voltage": 24.1}');
 
+-- Los id_history del seed son fijos: la secuencia sigue después del mayor
+SELECT setval('tracking_history_id_history_seq', (SELECT MAX(id_history) FROM tracking_history));
+
+-- GPS virtual de la app móvil para cada máquina (mientras llegan los LL301): IMEI '9' + id_maquina en 14 dígitos
+INSERT INTO dispositivo_gps (imei, modelo, estado)
+SELECT '9' || LPAD(id_maquina::text, 14, '0'), 'APP_MOVIL', 'ACTIVO' FROM maquina;
+
+INSERT INTO asignacion_gps (id_gps, id_maquina, vigente_desde)
+SELECT d.id_gps, m.id_maquina, TIMESTAMPTZ '2026-01-01 00:00:00+00'
+FROM maquina m
+JOIN dispositivo_gps d ON d.imei = '9' || LPAD(m.id_maquina::text, 14, '0');
+
 -- Inserción de 20 registros sintéticos para la tabla ALERTA
 INSERT INTO alerta (
     id_gps, 
