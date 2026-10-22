@@ -4,13 +4,16 @@ import type { TurnoRepositoryPort } from '../../domain/repositories/turno.reposi
 import { TURNO_ESTADO_REPOSITORY } from '../../domain/repositories/turno-estado.repository.port';
 import type { TurnoEstadoRegistro, TurnoEstadoRepositoryPort } from '../../domain/repositories/turno-estado.repository.port';
 import { RegistrarEstadoDto } from '../dtos/registrar-estado.dto';
+import { PUBLICADOR_ESTADOS } from '../ports/publicador-estados.port';
+import type { PublicadorEstadosPort } from '../ports/publicador-estados.port';
 import { turnoError } from '../turno.errors';
 import { fechaDelEvento, validarIdCliente } from '../datos-cliente';
 import { buscarTurnoDelOperador } from './finalizar-turno.use-case';
 
 /**
  * Registra un cambio de estado operacional (producción, colación, falla...). El estado anterior
- * vigente se cierra en el momento en que empieza el nuevo.
+ * vigente se cierra en el momento en que empieza el nuevo. Si el turno sigue en curso y el cambio
+ * pasa a ser su estado vigente, se avisa al panel web (el mapa pinta la máquina con su categoría).
  */
 @Injectable()
 export class RegistrarEstadoUseCase {
@@ -19,6 +22,8 @@ export class RegistrarEstadoUseCase {
     private readonly turnoRepo: TurnoRepositoryPort,
     @Inject(TURNO_ESTADO_REPOSITORY)
     private readonly turnoEstadoRepo: TurnoEstadoRepositoryPort,
+    @Inject(PUBLICADOR_ESTADOS)
+    private readonly publicador: PublicadorEstadosPort,
   ) {}
 
   async execute(dto: RegistrarEstadoDto, ahora: Date = new Date()): Promise<TurnoEstadoRegistro> {
@@ -41,7 +46,7 @@ export class RegistrarEstadoUseCase {
     // Un cambio registrado offline puede llegar después del cierre: se acepta si ocurrió durante el turno
     if (turno.fechaFin && inicio.getTime() >= turno.fechaFin.getTime()) throw turnoError('TURNO_NO_ACTIVO');
 
-    return this.turnoEstadoRepo.registrarCambio({
+    const registro = await this.turnoEstadoRepo.registrarCambio({
       idTurno: turno.id!,
       idEstado: estado.idEstado,
       inicio,
@@ -49,5 +54,18 @@ export class RegistrarEstadoUseCase {
       comentario: dto.comentario?.trim() || null,
       idCliente,
     });
+
+    if (turno.enCurso) {
+      // Un cambio registrado offline puede llegar después de otro más nuevo: solo se avisa si quedó como el vigente
+      const historial = await this.turnoEstadoRepo.findHistorial(turno.id!);
+      if (historial.at(-1)?.idTurnoEstado === registro.idTurnoEstado) {
+        this.publicador.publicar({
+          idMaquina: turno.idMaquina,
+          idTurno: turno.id!,
+          estadoOperacional: { idEstado: estado.idEstado, nombre: estado.nombre, categoria: estado.categoria, desde: inicio },
+        });
+      }
+    }
+    return registro;
   }
 }
