@@ -2,7 +2,8 @@ import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import type { OnGatewayInit } from '@nestjs/websockets';
-import type { Namespace, Socket } from 'socket.io';
+import type { Namespace } from 'socket.io';
+import { autenticarSocket } from '../../../../shared/infrastructure/websocket/autenticar-socket';
 import type { PosicionMaquina } from '../../domain/entities/posicion-gps';
 import type { PublicadorPosicionesPort } from '../../application/ports/publicador-posiciones.port';
 
@@ -21,20 +22,7 @@ export class TrackingGateway implements OnGatewayInit, PublicadorPosicionesPort 
   constructor(private readonly jwtService: JwtService) {}
 
   afterInit(servidor: Namespace) {
-    servidor.use((cliente: Socket, next) => {
-      try {
-        const token: unknown = cliente.handshake.auth?.token;
-        if (typeof token !== 'string') throw new Error('Sin token');
-        const { exp } = this.jwtService.verify<{ exp?: number }>(token);
-        if (exp) {
-          const vence = setTimeout(() => cliente.disconnect(true), exp * 1000 - Date.now());
-          cliente.once('disconnect', () => clearTimeout(vence));
-        }
-        next();
-      } catch {
-        next(new Error('NO_AUTORIZADO'));
-      }
-    });
+    servidor.use(autenticarSocket(this.jwtService));
   }
 
   publicar(posiciones: PosicionMaquina[]) {

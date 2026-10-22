@@ -18,7 +18,8 @@ export interface PaginaAlertas {
   activas: number;
 }
 
-const ROLES_PERMITIDOS = ['JEFE_TURNO', 'ADMIN'];
+// También los únicos que reciben las alertas en tiempo real (AlertasGateway)
+export const ROLES_ALERTAS = ['JEFE_TURNO', 'ADMIN'];
 
 @Injectable()
 export class ListarAlertasUseCase {
@@ -28,7 +29,7 @@ export class ListarAlertasUseCase {
   ) {}
 
   async execute(dto: ListarAlertasDto): Promise<PaginaAlertas> {
-    if (!ROLES_PERMITIDOS.includes(dto.rol)) {
+    if (!ROLES_ALERTAS.includes(dto.rol)) {
       throw new ForbiddenException({ statusCode: 403, code: 'SIN_PERMISO', message: 'Solo un jefe de turno o administrador puede ver las alertas' });
     }
 
