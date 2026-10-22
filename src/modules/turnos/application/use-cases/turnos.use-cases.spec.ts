@@ -101,6 +101,9 @@ const iniciar = (repos: ReturnType<typeof crearRepos>) =>
 const obtener = (repos: ReturnType<typeof crearRepos>) =>
   new ObtenerTurnoActualUseCase(repos.turnoRepo, repos.maquinaRepo, repos.geocercaRepo, repos.turnoEstadoRepo);
 
+const registrarEstado = (repos: ReturnType<typeof crearRepos>, publicador = { publicar: jest.fn() }) =>
+  new RegistrarEstadoUseCase(repos.turnoRepo, repos.turnoEstadoRepo, publicador);
+
 const codigoDe = async (promise: Promise<unknown>) => {
   try {
     await promise;
@@ -341,7 +344,7 @@ describe('RegistrarEstadoUseCase', () => {
     const turno = turnoIniciadoHace(3);
     repos.turnoRepo.findByIdCliente.mockResolvedValue(turno);
     const inicio = new Date(Date.now() - HORA);
-    const useCase = new RegistrarEstadoUseCase(repos.turnoRepo, repos.turnoEstadoRepo);
+    const useCase = registrarEstado(repos);
     const dto = { idOperador: ID_OPERADOR, idClienteTurno: UUID_TURNO, idCliente: UUID_ESTADO, idEstado: 1, inicio: inicio.toISOString() };
 
     const registro = await useCase.execute(dto);
@@ -352,12 +355,48 @@ describe('RegistrarEstadoUseCase', () => {
     expect(repos.turnoEstadoRepo.registrarCambio.mock.calls).toHaveLength(1);
   });
 
+  it('avisa al panel web el estado vigente de la máquina', async () => {
+    const repos = crearRepos();
+    repos.turnoRepo.findByIdCliente.mockResolvedValue(turnoIniciadoHace(3));
+    repos.turnoEstadoRepo.findHistorial.mockImplementation(async () => [
+      await repos.turnoEstadoRepo.registrarCambio.mock.results[0].value,
+    ]);
+    const publicador = { publicar: jest.fn() };
+    const inicio = new Date(Date.now() - HORA);
+
+    await registrarEstado(repos, publicador).execute({
+      idOperador: ID_OPERADOR, idClienteTurno: UUID_TURNO, idCliente: UUID_ESTADO, idEstado: 1, inicio: inicio.toISOString(),
+    });
+    expect(publicador.publicar).toHaveBeenCalledWith({
+      idMaquina: maquina.idMaquina,
+      idTurno: 1,
+      estadoOperacional: { idEstado: 1, nombre: 'Producción', categoria: 'PRODUCTIVO', desde: inicio },
+    });
+  });
+
+  it('no avisa un cambio offline más antiguo que el estado vigente', async () => {
+    const repos = crearRepos();
+    repos.turnoRepo.findByIdCliente.mockResolvedValue(turnoIniciadoHace(3));
+    const posterior = { idTurnoEstado: 8, idTurno: 1, idEstado: 1, inicio: new Date(), fin: null, comentario: null, idCliente: UUID_UBICACION };
+    repos.turnoEstadoRepo.findHistorial.mockImplementation(async () => [
+      await repos.turnoEstadoRepo.registrarCambio.mock.results[0].value,
+      posterior,
+    ]);
+    const publicador = { publicar: jest.fn() };
+
+    await registrarEstado(repos, publicador).execute({
+      idOperador: ID_OPERADOR, idClienteTurno: UUID_TURNO, idCliente: UUID_ESTADO, idEstado: 1,
+      inicio: new Date(Date.now() - 2 * HORA).toISOString(),
+    });
+    expect(publicador.publicar).not.toHaveBeenCalled();
+  });
+
   it('acepta un cambio offline que llega después del cierre si ocurrió durante el turno', async () => {
     const repos = crearRepos();
     const turno = turnoIniciadoHace(8);
     turno.finalizar(new Date(Date.now() - HORA), 1008);
     repos.turnoRepo.findByIdCliente.mockResolvedValue(turno);
-    const useCase = new RegistrarEstadoUseCase(repos.turnoRepo, repos.turnoEstadoRepo);
+    const useCase = registrarEstado(repos);
 
     const registro = await useCase.execute({
       idOperador: ID_OPERADOR, idClienteTurno: UUID_TURNO, idCliente: UUID_ESTADO, idEstado: 1, inicio: new Date(Date.now() - 2 * HORA).toISOString(),
@@ -374,7 +413,7 @@ describe('RegistrarEstadoUseCase', () => {
     const repos = crearRepos();
     repos.turnoRepo.findByIdCliente.mockResolvedValue(turnoIniciadoHace(1));
     const code = await codigoDe(
-      new RegistrarEstadoUseCase(repos.turnoRepo, repos.turnoEstadoRepo).execute({
+      registrarEstado(repos).execute({
         idOperador: ID_OPERADOR, idClienteTurno: UUID_TURNO, idCliente: UUID_ESTADO, idEstado: 999,
       }),
     );

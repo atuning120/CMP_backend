@@ -23,12 +23,15 @@ import { TurnoPostgresqlRepository } from './infrastructure/persistence/reposito
 import { TurnoEstadoPostgresqlRepository } from './infrastructure/persistence/repositories/turno-estado.postgresql-repository';
 import { EstadoOperacionalOrmEntity } from './infrastructure/persistence/orm-entities/estado-operacional.orm-entity';
 import { CierreAutomaticoTurnosScheduler } from './infrastructure/schedulers/cierre-automatico-turnos.scheduler';
+import { EstadosGateway } from './infrastructure/websocket/estados.gateway';
 
 // DI Tokens
 import { TURNO_REPOSITORY } from './domain/repositories/turno.repository.port';
 import { TURNO_ESTADO_REPOSITORY } from './domain/repositories/turno-estado.repository.port';
+import { PUBLICADOR_ESTADOS } from './application/ports/publicador-estados.port';
 
 // Other modules
+import { AuthModule } from '../auth/auth.module';
 import { MaquinasModule } from '../maquinas/maquinas.module';
 import { GeocercasModule } from '../geocercas/geocercas.module';
 
@@ -40,6 +43,7 @@ import { GeocercasModule } from '../geocercas/geocercas.module';
       TurnoUbicacionOrmEntity,
       EstadoOperacionalOrmEntity,
     ]),
+    AuthModule,
     MaquinasModule,
     GeocercasModule,
   ],
@@ -53,6 +57,9 @@ import { GeocercasModule } from '../geocercas/geocercas.module';
       provide: TURNO_ESTADO_REPOSITORY,
       useClass: TurnoEstadoPostgresqlRepository,
     },
+    // Cambios de estado operacional en tiempo real para el mapa del panel web
+    EstadosGateway,
+    { provide: PUBLICADOR_ESTADOS, useExisting: EstadosGateway },
     IniciarTurnoUseCase,
     FinalizarTurnoUseCase,
     ObtenerTurnoActualUseCase,

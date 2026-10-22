@@ -37,6 +37,8 @@ export interface MaquinaFlota extends MaquinaResumen {
   // Solo si no está ACTIVA: el último cambio de estado (o reemplazo) de la bitácora, con su motivo
   motivoEstado: { motivo: string; observacion: string | null; fecha: Date; reemplazadaPor: string | null } | null;
   operadorActual: string | null; // operador con turno EN_CURSO en la máquina
+  // Estado operacional vigente de ese turno (PRODUCTIVO, DEMORA, MANTENCION); null si aún no registra ninguno
+  estadoOperacional: { idEstado: number; nombre: string; categoria: string | null; desde: Date } | null;
   ubicacionActual: string | null; // zona (o área) vigente de ese turno
   // Ids de esa ubicación, para situar la máquina en el mapa de geocercas (no hay GPS en línea)
   idAreaActual: number | null;

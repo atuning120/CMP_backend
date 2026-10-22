@@ -78,6 +78,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
              baja.motivo AS motivo_baja, baja.observacion AS observacion_baja, baja.fecha AS fecha_baja,
              baja.reemplazada_por,
              actual.operador, actual.ubicacion, actual.id_area, actual.id_zona,
+             actual.id_estado, actual.estado_operacional, actual.categoria_estado, actual.estado_desde,
              COALESCE(ultimo.horometro, m.horometro_inicial) AS horometro,
              m.regreso_estimado, m.id_maquina_respaldo, r.nombre AS respaldo, m.estado_previo_respaldo,
              cubierta.id_maquina AS id_cubre_a, cubierta.nombre AS cubre_a
@@ -96,12 +97,23 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       ) baja ON m.estado <> 'ACTIVA'
       LEFT JOIN LATERAL (
         SELECT o.nombre || ' ' || o.apellido AS operador,
-               COALESCE(z.nombre, a.nombre) AS ubicacion, tu.id_area, tu.id_zona
+               COALESCE(z.nombre, a.nombre) AS ubicacion, tu.id_area, tu.id_zona,
+               vigente.id_estado, vigente.nombre AS estado_operacional, vigente.categoria AS categoria_estado,
+               vigente.inicio AS estado_desde
         FROM turno t
         JOIN operador o ON o.id_operador = t.id_operador
         LEFT JOIN turno_ubicacion tu ON tu.id_turno = t.id_turno AND tu.fin IS NULL
         LEFT JOIN area a ON a.id_area = tu.id_area
         LEFT JOIN zona_trabajo z ON z.id_zona = tu.id_zona
+        -- Estado operacional vigente del turno: el último que empezó (un cambio offline puede llegar desordenado)
+        LEFT JOIN LATERAL (
+          SELECT te.id_estado, eo.nombre, eo.categoria, te.inicio
+          FROM turno_estado te
+          JOIN estado_operacional eo ON eo.id_estado = te.id_estado
+          WHERE te.id_turno = t.id_turno
+          ORDER BY te.inicio DESC
+          LIMIT 1
+        ) vigente ON TRUE
         WHERE t.id_maquina = m.id_maquina AND t.estado = 'EN_CURSO'
         ORDER BY t.hora_inicio DESC, tu.inicio DESC
         LIMIT 1
@@ -139,6 +151,10 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
           ? null
           : { motivo: fila.motivo_baja, observacion: fila.observacion_baja, fecha: fila.fecha_baja, reemplazadaPor: fila.reemplazada_por },
       operadorActual: fila.operador,
+      estadoOperacional:
+        fila.id_estado === null || fila.estado_desde === null
+          ? null
+          : { idEstado: fila.id_estado, nombre: fila.estado_operacional ?? '', categoria: fila.categoria_estado, desde: fila.estado_desde },
       ubicacionActual: fila.ubicacion,
       idAreaActual: fila.id_area,
       idZonaActual: fila.id_zona,
@@ -406,6 +422,10 @@ interface FilaFlota {
   fecha_baja: Date | null;
   reemplazada_por: string | null;
   operador: string | null;
+  id_estado: number | null;
+  estado_operacional: string | null;
+  categoria_estado: string | null;
+  estado_desde: Date | null;
   ubicacion: string | null;
   id_area: number | null;
   id_zona: number | null;
