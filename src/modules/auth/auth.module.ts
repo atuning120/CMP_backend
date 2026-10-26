@@ -9,8 +9,6 @@ import { AuthController } from './interface/http/controllers/auth.controller';
 import { LoginUseCase } from './application/use-cases/login.use-case';
 import { LoginWebUseCase } from './application/use-cases/login-web.use-case';
 import { LoginWebCredencialesUseCase } from './application/use-cases/login-web-credenciales.use-case';
-import { RegisterOperadorUseCase } from './application/use-cases/register-operador.use-case';
-import { RegisterJefeTurnoUseCase } from './application/use-cases/register-jefe-turno.use-case';
 import { RegisterAdminUseCase } from './application/use-cases/register-admin.use-case';
 import { JwtStrategy } from './infrastructure/strategies/jwt.strategy';
 import { UsuariosModule } from '../usuarios/usuarios.module';
@@ -46,8 +44,6 @@ import { REFRESH_TOKEN_REPOSITORY } from './domain/repositories/refresh-token.re
     LoginUseCase,
     LoginWebUseCase,
     LoginWebCredencialesUseCase,
-    RegisterOperadorUseCase,
-    RegisterJefeTurnoUseCase,
     RegisterAdminUseCase,
     RefrescarSesionUseCase,
     RefrescarSesionWebUseCase,

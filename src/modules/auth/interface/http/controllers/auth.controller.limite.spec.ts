@@ -8,8 +8,6 @@ import { LIMITE_INTENTOS } from '../../../infrastructure/limite-intentos';
 import { LoginUseCase } from '../../../application/use-cases/login.use-case';
 import { LoginWebUseCase } from '../../../application/use-cases/login-web.use-case';
 import { LoginWebCredencialesUseCase } from '../../../application/use-cases/login-web-credenciales.use-case';
-import { RegisterOperadorUseCase } from '../../../application/use-cases/register-operador.use-case';
-import { RegisterJefeTurnoUseCase } from '../../../application/use-cases/register-jefe-turno.use-case';
 import { RegisterAdminUseCase } from '../../../application/use-cases/register-admin.use-case';
 import { RefrescarSesionUseCase } from '../../../application/use-cases/refrescar-sesion.use-case';
 import { CerrarSesionUseCase } from '../../../application/use-cases/cerrar-sesion.use-case';
@@ -29,8 +27,6 @@ describe('AuthController: límite de intentos', () => {
         LoginUseCase,
         LoginWebUseCase,
         LoginWebCredencialesUseCase,
-        RegisterOperadorUseCase,
-        RegisterJefeTurnoUseCase,
         RegisterAdminUseCase,
         RefrescarSesionUseCase,
         RefrescarSesionWebUseCase,
