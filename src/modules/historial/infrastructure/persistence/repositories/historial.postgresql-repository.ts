@@ -43,6 +43,25 @@ interface FilaTurno {
   estados: { nombre: string; categoria: CategoriaEstadoTurno | null; es_productivo: boolean; inicio: string; fin: string | null }[];
 }
 
+// Fotos de un reporte (alias r) como arreglo JSON [{ id, fecha }], de la primera a la última. Las que no traen
+// id_cliente no se pueden pedir por GET /evidencias/:id/archivo, así que no se listan
+const EVIDENCIAS_DEL_REPORTE = `
+  COALESCE((
+    SELECT jsonb_agg(jsonb_build_object('id', e.id_cliente, 'fecha', e.fecha_hora) ORDER BY e.fecha_hora, e.id_evidencia)
+    FROM evidencia e
+    WHERE e.id_reporte = r.id_reporte AND e.id_cliente IS NOT NULL
+  ), '[]'::jsonb)`;
+
+// Reporte de inicio o cierre (tipo) del turno t: { descripcion, evidencias } o null si el operador no dejó ninguno
+const reporteDelTurno = (tipo: 'INICIO' | 'FIN') => `
+  LEFT JOIN LATERAL (
+    SELECT jsonb_build_object('descripcion', r.descripcion, 'evidencias', ${EVIDENCIAS_DEL_REPORTE}) AS reporte
+    FROM reporte_turno r
+    WHERE r.id_turno = t.id_turno AND r.tipo = '${tipo}'
+    ORDER BY r.fecha_hora DESC, r.id_reporte DESC
+    LIMIT 1
+  ) reporte ON TRUE`;
+
 @Injectable()
 export class HistorialPostgresqlRepository implements HistorialRepositoryPort {
   constructor(private readonly dataSource: DataSource) {}
@@ -81,7 +100,9 @@ export class HistorialPostgresqlRepository implements HistorialRepositoryPort {
                  'horaTermino', t.hora_termino,
                  -- Si lo cerró un jefe de turno en nombre del operador (falla de la máquina, mantención)
                  'cerradoPor', jefe.nombre,
-                 'motivoCierre', t.motivo_cierre
+                 'motivoCierre', t.motivo_cierre,
+                 -- Instrucciones y fotos con que el operador inició el turno
+                 'reporte', reporte.reporte
                )
         -- Primero se eligen los turnos de la página y recién después se buscan sus datos
         FROM (
@@ -108,6 +129,7 @@ export class HistorialPostgresqlRepository implements HistorialRepositoryPort {
           ORDER BY tu.inicio ASC
           LIMIT 1
         ) ubicacion ON TRUE
+        ${reporteDelTurno('INICIO')}
       )
 
       UNION ALL
@@ -126,7 +148,9 @@ export class HistorialPostgresqlRepository implements HistorialRepositoryPort {
                  'estadoTurno', t.estado,
                  -- Si lo cerró un jefe de turno en nombre del operador (falla de la máquina, mantención)
                  'cerradoPor', jefe.nombre,
-                 'motivoCierre', t.motivo_cierre
+                 'motivoCierre', t.motivo_cierre,
+                 -- Novedades y fotos con que el operador cerró el turno
+                 'reporte', reporte.reporte
                )
         FROM (
           SELECT 'F-' || id_turno AS id, id_turno, date_trunc('milliseconds', hora_termino) AS fecha, hora_inicio,
@@ -152,6 +176,7 @@ export class HistorialPostgresqlRepository implements HistorialRepositoryPort {
           ORDER BY tu.inicio DESC, tu.id_turno_ubicacion DESC
           LIMIT 1
         ) ubicacion ON TRUE
+        ${reporteDelTurno('FIN')}
       )
 
       UNION ALL
@@ -195,6 +220,29 @@ export class HistorialPostgresqlRepository implements HistorialRepositoryPort {
           ORDER BY p.inicio DESC, p.id_turno_ubicacion DESC
           LIMIT 1
         ) anterior ON TRUE
+      )
+
+      UNION ALL
+
+      (
+        -- Novedades que el operador reportó durante el turno (p. ej. la foto de una falla), con sus fotos
+        SELECT r.id, 'NOVEDAD', r.fecha, o.nombre || ' ' || o.apellido,
+               m.id_maquina, m.nombre, NULL, r.descripcion,
+               jsonb_build_object('idTurno', r.id_turno, 'evidencias', ${EVIDENCIAS_DEL_REPORTE})
+        FROM (
+          SELECT 'R-' || id_reporte AS id, id_reporte, id_turno, descripcion, date_trunc('milliseconds', fecha_hora) AS fecha
+          FROM reporte_turno
+          WHERE $1
+            AND tipo = 'NOVEDAD'
+            AND fecha_hora >= $3::timestamptz
+            AND ($4::timestamptz IS NULL OR fecha_hora < $4::timestamptz)
+            AND ($5::timestamptz IS NULL OR (date_trunc('milliseconds', fecha_hora), 'R-' || id_reporte) < ($5::timestamptz, $6::text))
+          ORDER BY fecha DESC, id DESC
+          LIMIT $7
+        ) r
+        JOIN turno t ON t.id_turno = r.id_turno
+        JOIN operador o ON o.id_operador = t.id_operador
+        JOIN maquina m ON m.id_maquina = t.id_maquina
       )
 
       ORDER BY fecha DESC, id DESC

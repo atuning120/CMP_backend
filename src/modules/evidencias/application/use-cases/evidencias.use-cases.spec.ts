@@ -134,6 +134,8 @@ describe('ObtenerArchivoEvidenciaUseCase', () => {
 
     await expect(obtener.execute(UUID_EVIDENCIA, { rol: 'OPERADOR', idOperador: 10 })).resolves.toMatchObject({ mimeType: 'image/jpeg' });
     await expect(obtener.execute(UUID_EVIDENCIA, { rol: 'JEFE_TURNO' })).resolves.toBeTruthy();
+    await expect(obtener.execute(UUID_EVIDENCIA, { rol: 'ADMIN' })).resolves.toBeTruthy();
+    expect(await codigoDe(obtener.execute(UUID_EVIDENCIA, { rol: 'VISOR' }))).toBe('EVIDENCIA_NO_ENCONTRADA');
     expect(await codigoDe(obtener.execute(UUID_EVIDENCIA, { rol: 'OPERADOR', idOperador: 99 }))).toBe('EVIDENCIA_NO_ENCONTRADA');
   });
 });

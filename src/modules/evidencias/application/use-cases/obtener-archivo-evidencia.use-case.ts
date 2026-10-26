@@ -13,6 +13,9 @@ import { EXTENSIONES_IMAGEN } from './subir-evidencia.use-case';
 
 const MIME_POR_EXTENSION = Object.fromEntries(Object.entries(EXTENSIONES_IMAGEN).map(([mime, ext]) => [ext, mime]));
 
+// Ven las fotos de cualquier turno (las abren desde el historial); un operador, solo las suyas
+const ROLES_SUPERVISION = ['JEFE_TURNO', 'ADMIN'];
+
 @Injectable()
 export class ObtenerArchivoEvidenciaUseCase {
   constructor(
@@ -26,13 +29,13 @@ export class ObtenerArchivoEvidenciaUseCase {
     private readonly almacenamiento: AlmacenamientoArchivosPort,
   ) {}
 
-  // Jefe de turno ve cualquier evidencia; un operador solo las de sus turnos
+  // Jefe de turno y administrador ven cualquier evidencia; un operador solo las de sus turnos
   async execute(idClienteEvidencia: string, usuario: { rol: string; idOperador?: number }): Promise<{ contenido: Buffer; mimeType: string }> {
     const idCliente = validarIdCliente(idClienteEvidencia);
     const evidencia = idCliente ? await this.evidenciaRepo.findByIdCliente(idCliente) : null;
     if (!evidencia) throw evidenciaError('EVIDENCIA_NO_ENCONTRADA');
 
-    if (usuario.rol !== 'JEFE_TURNO') {
+    if (!ROLES_SUPERVISION.includes(usuario.rol)) {
       const reporte = await this.reporteRepo.findById(evidencia.idReporte);
       const turno = reporte ? await this.turnoRepo.findById(reporte.idTurno) : null;
       if (!turno || turno.idOperador !== usuario.idOperador) {

@@ -2,12 +2,8 @@ import { Controller, Post, Body, Headers, HttpCode, HttpStatus, UseGuards } from
 import { LimiteIntentosGuard } from '../../../infrastructure/limite-intentos';
 import { LoginUseCase } from '../../../application/use-cases/login.use-case';
 import { LoginRequestDto } from '../dtos/login.request.dto';
-import { RegisterOperadorRequestDto } from '../dtos/register-operador.request.dto';
 import { LoginWebRequestDto } from '../dtos/login-web.request.dto';
 import { LoginWebUseCase } from '../../../application/use-cases/login-web.use-case';
-import { RegisterOperadorUseCase } from '../../../application/use-cases/register-operador.use-case';
-import { RegisterJefeTurnoUseCase } from '../../../application/use-cases/register-jefe-turno.use-case';
-import { RegisterJefeTurnoRequestDto } from '../dtos/register-jefe-turno.request.dto';
 import { RegisterAdminUseCase } from '../../../application/use-cases/register-admin.use-case';
 import { RegisterAdminRequestDto } from '../dtos/register-admin.request.dto';
 import { LoginWebCredencialesUseCase } from '../../../application/use-cases/login-web-credenciales.use-case';
@@ -25,25 +21,11 @@ export class AuthController {
     private readonly loginUseCase: LoginUseCase,
     private readonly loginWebUseCase: LoginWebUseCase,
     private readonly loginWebCredencialesUseCase: LoginWebCredencialesUseCase,
-    private readonly registerOperadorUseCase: RegisterOperadorUseCase,
-    private readonly registerJefeTurnoUseCase: RegisterJefeTurnoUseCase,
     private readonly registerAdminUseCase: RegisterAdminUseCase,
     private readonly refrescarSesionUseCase: RefrescarSesionUseCase,
     private readonly cerrarSesionUseCase: CerrarSesionUseCase,
     private readonly refrescarSesionWebUseCase: RefrescarSesionWebUseCase,
   ) { }
-
-  @Post('register/operador')
-  @UseGuards(LimiteIntentosGuard)
-  async registerOperador(@Body() body: RegisterOperadorRequestDto) {
-    return this.registerOperadorUseCase.execute(body);
-  }
-
-  @Post('register/jefe-turno')
-  @UseGuards(LimiteIntentosGuard)
-  async registerJefeTurno(@Body() body: RegisterJefeTurnoRequestDto) {
-    return this.registerJefeTurnoUseCase.execute(body);
-  }
 
   // Protegido con la clave ADMIN_SETUP_KEY (header x-admin-setup-key)
   @Post('register/admin')

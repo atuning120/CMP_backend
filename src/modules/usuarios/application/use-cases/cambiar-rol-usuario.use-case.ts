@@ -10,7 +10,7 @@ export const ROLES_ASIGNABLES = ['VISOR', 'JEFE_TURNO', 'ADMIN'];
 /**
  * Cambia el rol de un usuario (solo ADMIN). Quien entra por primera vez con Microsoft queda como VISOR
  * hasta que un administrador lo cambia aquí. Reglas: no se cambia el propio rol, no se tocan usuarios con rol OPERADOR
- * y siempre debe quedar al menos un administrador activo. El nuevo rol rige desde su próximo login.
+ * ni el del administrador principal (.env), y siempre debe quedar al menos un administrador activo. El nuevo rol rige desde su próximo login.
  */
 @Injectable()
 export class CambiarRolUsuarioUseCase {
@@ -30,6 +30,7 @@ export class CambiarRolUsuarioUseCase {
     // Un OPERADOR usa la app móvil y su rol va ligado a su ficha: no se cambia desde aquí.
     // Un usuario con rol web sí, aunque tenga una ficha de operador asociada
     if (usuario.rol === 'OPERADOR') throw usuarioError('ROL_NO_EDITABLE');
+    if (usuario.esPrincipal) throw usuarioError('ADMIN_PRINCIPAL');
     if (usuario.idUsuario === autor.idUsuario) throw usuarioError('PROPIO_ROL');
     if (usuario.rol === rol) return usuario;
 
