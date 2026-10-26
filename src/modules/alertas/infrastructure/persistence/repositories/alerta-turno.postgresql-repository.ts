@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { HORAS_AVISO_TURNO_EXTENDIDO, HORAS_DESCANSO_ENTRE_JORNADAS } from '../../../domain/repositories/alerta-turno.repository.port';
-import type { AlertaTurno, AlertaTurnoRepositoryPort, FiltroAlertas } from '../../../domain/repositories/alerta-turno.repository.port';
+import type {
+  AlertaTurno,
+  AlertaTurnoRepositoryPort,
+  FiltroAlertas,
+  TipoAlertaTurno,
+} from '../../../domain/repositories/alerta-turno.repository.port';
 
 interface FilaAlerta {
   id: string;
@@ -21,7 +26,14 @@ interface FilaAlerta {
   inicio_jornada: Date | null;
   turnos_jornada: number | null;
   segundos_jornada: number | null;
+  // jsonb: las fechas llegan como texto ISO
+  atenciones: { usuario: string; fecha: string; comentario: string | null }[];
 }
+
+// Filtro por atención ($10) sobre el id de la alerta: 'TODAS' no filtra; si no, se compara si tiene alguna atención.
+// El id debe ir calificado con su tabla: ATENCION_ALERTA también tiene id_turno y lo tomaría el subquery
+const POR_ATENCION = (idAlerta: string) =>
+  `($10::text = 'TODAS' OR EXISTS (SELECT 1 FROM atencion_alerta x WHERE x.id_alerta = ${idAlerta}) = ($10::text = 'ATENDIDAS'))`;
 
 /**
  * Jornadas de los operadores: sus turnos encadenados mientras el descanso entre uno y otro sea menor a $9 horas.
@@ -82,6 +94,7 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
             AND ($4::timestamptz IS NULL OR hora_inicio < $4::timestamptz - make_interval(hours => $8))
             AND ($5::timestamptz IS NULL
                  OR (date_trunc('milliseconds', hora_inicio + make_interval(hours => $8)), 'E-' || id_turno) < ($5::timestamptz, $6::text))
+            AND ${POR_ATENCION("'E-' || turno.id_turno")}
           ORDER BY fecha DESC, id DESC
           LIMIT $7
         )
@@ -97,6 +110,7 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
             AND hora_termino >= $3::timestamptz
             AND ($4::timestamptz IS NULL OR hora_termino < $4::timestamptz)
             AND ($5::timestamptz IS NULL OR (date_trunc('milliseconds', hora_termino), 'A-' || id_turno) < ($5::timestamptz, $6::text))
+            AND ${POR_ATENCION("'A-' || turno.id_turno")}
           ORDER BY 3 DESC, 1 DESC
           LIMIT $7
         )
@@ -119,6 +133,7 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
           WHERE fecha >= $3::timestamptz
             AND ($4::timestamptz IS NULL OR fecha < $4::timestamptz)
             AND ($5::timestamptz IS NULL OR (fecha, id) < ($5::timestamptz, $6::text))
+            AND ${POR_ATENCION('j.id')}
           ORDER BY fecha DESC, id DESC
           LIMIT $7
         )
@@ -127,7 +142,8 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
              t.horometro_inicial, t.horometro_final,
              o.nombre || ' ' || o.apellido AS operador, m.id_maquina, m.nombre AS maquina,
              ubicacion.area, ubicacion.zona,
-             a.inicio_jornada, a.turnos_jornada::int AS turnos_jornada, a.segundos_jornada
+             a.inicio_jornada, a.turnos_jornada::int AS turnos_jornada, a.segundos_jornada,
+             COALESCE(atendida.atenciones, '[]'::jsonb) AS atenciones
       FROM alertas a
       JOIN turno t ON t.id_turno = a.id_turno
       JOIN operador o ON o.id_operador = t.id_operador
@@ -141,6 +157,14 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
         ORDER BY tu.inicio DESC
         LIMIT 1
       ) ubicacion ON TRUE
+      -- Quién la atendió y las notas posteriores, de la primera a la última
+      LEFT JOIN LATERAL (
+        SELECT jsonb_agg(jsonb_build_object('usuario', u.nombre, 'fecha', x.fecha, 'comentario', x.comentario)
+                         ORDER BY x.fecha, x.id_atencion) AS atenciones
+        FROM atencion_alerta x
+        JOIN usuario u ON u.id_usuario = x.id_usuario
+        WHERE x.id_alerta = a.id
+      ) atendida ON TRUE
       ORDER BY a.fecha DESC, a.id DESC
       LIMIT $7
       `,
@@ -154,6 +178,7 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
         filtro.limite,
         HORAS_AVISO_TURNO_EXTENDIDO,
         HORAS_DESCANSO_ENTRE_JORNADAS,
+        filtro.estado,
       ],
     );
     return filas.map((fila) => ({
@@ -180,7 +205,30 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
               horas: Math.round((Number(fila.segundos_jornada) / 3600) * 10) / 10,
             }
           : null,
+      atenciones: fila.atenciones.map((a) => ({ usuario: a.usuario, fecha: new Date(a.fecha), comentario: a.comentario })),
     }));
+  }
+
+  async existe(tipo: TipoAlertaTurno, idTurno: number): Promise<boolean> {
+    const consultas: Record<TipoAlertaTurno, string> = {
+      TURNO_EXTENDIDO: `
+        SELECT 1 FROM turno
+        WHERE id_turno = $1 AND COALESCE(hora_termino, CURRENT_TIMESTAMP) >= hora_inicio + make_interval(hours => $2)`,
+      CIERRE_AUTOMATICO: `SELECT 1 FROM turno WHERE id_turno = $1 AND estado = 'CERRADO_AUTO'`,
+      // La jornada se arma desde el inicio del turno (JORNADAS mira 72 h hacia atrás)
+      JORNADA_EXTENDIDA: `
+        WITH ${JORNADAS('(SELECT hora_inicio FROM turno WHERE id_turno = $1)', 'NULL::timestamptz', '$3')}
+        SELECT 1 FROM jornadas
+        WHERE id_turno = $1 AND orden > 1
+          AND antes < make_interval(hours => $2) AND antes + (fin - hora_inicio) >= make_interval(hours => $2)`,
+    };
+    const parametros: Record<TipoAlertaTurno, unknown[]> = {
+      TURNO_EXTENDIDO: [idTurno, HORAS_AVISO_TURNO_EXTENDIDO],
+      CIERRE_AUTOMATICO: [idTurno],
+      JORNADA_EXTENDIDA: [idTurno, HORAS_AVISO_TURNO_EXTENDIDO, HORAS_DESCANSO_ENTRE_JORNADAS],
+    };
+    const filas: unknown[] = await this.dataSource.query(consultas[tipo], parametros[tipo]);
+    return filas.length > 0;
   }
 
   // Un operador cuenta una vez, ya sea porque su turno pasó las horas de aviso o porque las pasó sumando su jornada

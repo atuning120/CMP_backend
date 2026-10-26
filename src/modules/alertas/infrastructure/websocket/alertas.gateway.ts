@@ -5,11 +5,12 @@ import type { OnGatewayInit } from '@nestjs/websockets';
 import type { Namespace } from 'socket.io';
 import { autenticarSocket } from '../../../../shared/infrastructure/websocket/autenticar-socket';
 import { ROLES_ALERTAS } from '../../application/use-cases/listar-alertas.use-case';
-import type { NovedadAlertas, PublicadorAlertasPort } from '../../application/ports/publicador-alertas.port';
+import type { AtencionPublicada, NovedadAlertas, PublicadorAlertasPort } from '../../application/ports/publicador-alertas.port';
 
 /**
  * Alertas de turno en tiempo real para el panel web (Socket.IO, namespace /alertas), solo jefes de turno y
- * administradores (los mismos de GET /alertas). JWT en `auth.token`. Evento: `alertas` con NovedadAlertas.
+ * administradores (los mismos de GET /alertas). JWT en `auth.token`. Eventos: `alertas` con NovedadAlertas y
+ * `atenciones` con AtencionPublicada (alguien atendió una alerta o le agregó una nota).
  */
 @WebSocketGateway({ namespace: '/alertas', cors: { origin: true } })
 export class AlertasGateway implements OnGatewayInit, PublicadorAlertasPort {
@@ -27,5 +28,9 @@ export class AlertasGateway implements OnGatewayInit, PublicadorAlertasPort {
   publicar(novedad: NovedadAlertas) {
     this.servidor.emit('alertas', novedad);
     this.logger.debug(`Publicadas ${novedad.nuevas.length} alertas nuevas (${novedad.activas} activas)`);
+  }
+
+  publicarAtencion(atencion: AtencionPublicada) {
+    this.servidor.emit('atenciones', atencion);
   }
 }

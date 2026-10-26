@@ -274,6 +274,22 @@ CREATE TABLE BITACORA_JEFE_TURNO (
 );
 
 CREATE INDEX idx_bitacora_fecha ON BITACORA_JEFE_TURNO (fecha DESC);
+
+-- Atención de las alertas de turno (que se calculan desde TURNO, no se guardan). La primera fila de una alerta es su
+-- atención; las siguientes, notas posteriores. No se borran ni se editan (auditoría)
+CREATE TABLE ATENCION_ALERTA (
+    id_atencion     SERIAL PRIMARY KEY,
+    id_alerta       VARCHAR(20) NOT NULL, -- 'E-<id_turno>', 'J-<id_turno>' o 'A-<id_turno>'
+    id_turno        INT NOT NULL,
+    id_usuario      INT NOT NULL, -- jefe de turno o administrador que la atendió
+    comentario      TEXT,         -- opcional al atender; obligatorio en las notas posteriores
+    fecha           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ck_atencion_alerta_id CHECK (id_alerta ~ '^[EJA]-[0-9]+$'),
+    CONSTRAINT fk_atencion_turno FOREIGN KEY (id_turno) REFERENCES TURNO(id_turno) ON DELETE CASCADE,
+    CONSTRAINT fk_atencion_usuario FOREIGN KEY (id_usuario) REFERENCES USUARIO(id_usuario)
+);
+
+CREATE INDEX idx_atencion_alerta_alerta ON ATENCION_ALERTA (id_alerta, fecha);
 CREATE INDEX idx_turno_hora_inicio ON TURNO (hora_inicio DESC);
 
 CREATE TABLE REFRESH_TOKEN (
