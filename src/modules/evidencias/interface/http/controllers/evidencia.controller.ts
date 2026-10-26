@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -89,7 +90,10 @@ export class EvidenciaController {
     return presentEvidencia(evidencia);
   }
 
+  // Una foto nunca cambia (su id es un UUID nuevo): el navegador la guarda y no la vuelve a pedir al reabrir el historial.
+  // private: solo en el navegador de quien la pidió, nunca en un caché compartido
   @Get('evidencias/:idCliente/archivo')
+  @Header('Cache-Control', 'private, max-age=31536000, immutable')
   async archivo(@Param('idCliente') idCliente: string, @CurrentUser() user: UsuarioAutenticado) {
     const { contenido, mimeType } = await this.obtenerArchivoEvidenciaUseCase.execute(idCliente, user);
     return new StreamableFile(contenido, { type: mimeType });

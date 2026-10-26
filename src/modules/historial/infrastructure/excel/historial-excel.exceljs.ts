@@ -11,6 +11,7 @@ const TIPOS: Record<TipoEventoHistorial, { etiqueta: string; verbo: string }> = 
   INICIO_TURNO: { etiqueta: 'Inicio de turno', verbo: 'Inició turno en' },
   FIN_TURNO: { etiqueta: 'Cierre de turno', verbo: 'Cerró turno en' },
   CAMBIO_UBICACION: { etiqueta: 'Cambio de área/zona', verbo: 'Trasladó' },
+  NOVEDAD: { etiqueta: 'Novedad', verbo: 'Reportó una novedad en' },
   INCORPORAR: { etiqueta: 'Incorporación', verbo: 'Incorporó' },
   EDITAR: { etiqueta: 'Edición', verbo: 'Editó' },
   HABILITAR: { etiqueta: 'Habilitación', verbo: 'Habilitó' },
@@ -20,7 +21,7 @@ const TIPOS: Record<TipoEventoHistorial, { etiqueta: string; verbo: string }> = 
   DEVOLVER: { etiqueta: 'Devolución', verbo: 'Devolvió a operación' },
 };
 
-const EVENTOS_DE_TURNO: TipoEventoHistorial[] = ['INICIO_TURNO', 'FIN_TURNO', 'CAMBIO_UBICACION'];
+const EVENTOS_DE_TURNO: TipoEventoHistorial[] = ['INICIO_TURNO', 'FIN_TURNO', 'CAMBIO_UBICACION', 'NOVEDAD'];
 
 const ESTADOS_MAQUINA: Record<string, string> = {
   ACTIVA: 'Operativa',

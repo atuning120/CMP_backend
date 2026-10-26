@@ -4,6 +4,7 @@ export type TipoEventoHistorial =
   | 'INICIO_TURNO'
   | 'FIN_TURNO'
   | 'CAMBIO_UBICACION'
+  | 'NOVEDAD'
   | 'INCORPORAR'
   | 'EDITAR'
   | 'HABILITAR'
@@ -12,11 +13,24 @@ export type TipoEventoHistorial =
   | 'REEMPLAZAR'
   | 'DEVOLVER';
 
+// Foto subida desde la app; el archivo se pide a GET /evidencias/:id/archivo
+export interface EvidenciaHistorial {
+  id: string; // id_cliente (UUID) de la evidencia
+  fecha: string; // ISO
+}
+
+// Reporte del operador al iniciar o cerrar el turno: instrucciones o novedades, con sus fotos
+export interface ReporteHistorial {
+  descripcion: string | null;
+  evidencias: EvidenciaHistorial[];
+}
+
 // Un evento del historial del jefe de turno: una acción de la bitácora, el inicio o el cierre de un turno de un
-// operador, o un cambio de área/zona que el operador hizo durante su turno
+// operador (con su reporte en detalle.reporte), un cambio de área/zona que el operador hizo durante su turno, o una
+// novedad que reportó (descripción en observacion y fotos en detalle.evidencias)
 export interface EventoHistorial {
-  // 'B-<id_bitacora>', 'T-<id_turno>' (inicio), 'F-<id_turno>' (cierre) o 'U-<id_turno_ubicacion>': únicos aunque
-  // vengan de tablas distintas
+  // 'B-<id_bitacora>', 'T-<id_turno>' (inicio), 'F-<id_turno>' (cierre), 'U-<id_turno_ubicacion>' o 'R-<id_reporte>'
+  // (novedad): únicos aunque vengan de tablas distintas
   id: string;
   tipo: TipoEventoHistorial;
   fecha: Date;

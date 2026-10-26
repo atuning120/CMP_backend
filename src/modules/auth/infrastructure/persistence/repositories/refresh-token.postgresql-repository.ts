@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, MoreThan, Repository } from 'typeorm';
 import type {
   RefreshTokenRegistro,
   RefreshTokenRepositoryPort,
@@ -39,7 +39,11 @@ export class RefreshTokenPostgresqlRepository implements RefreshTokenRepositoryP
     await this.ormRepo.update({ id_refresh_token: idRefreshToken, revocado_en: IsNull() }, { revocado_en: fecha });
   }
 
+  // Además de revocarlos, los vence: un token revocado hace menos de GRACIA_ROTACION_MS todavía se acepta (por si la
+  // respuesta de una rotación se perdió), y al cerrar todas las sesiones (robo, cambio de contraseña) no debe servir
+  // ni un segundo más
   async revocarTodosDelUsuario(idUsuario: number, fecha: Date): Promise<void> {
     await this.ormRepo.update({ id_usuario: idUsuario, revocado_en: IsNull() }, { revocado_en: fecha });
+    await this.ormRepo.update({ id_usuario: idUsuario, expira_en: MoreThan(fecha) }, { expira_en: fecha });
   }
 }

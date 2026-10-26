@@ -214,7 +214,12 @@ export class UsuarioPostgresqlRepository
         ]);
       }
       if (acceso) {
-        await manager.query(`UPDATE refresh_token SET revocado_en = NOW() WHERE id_usuario = $1 AND revocado_en IS NULL`, [idUsuario]);
+        // Revocados y además vencidos: la gracia de la rotación acepta un token revocado hace menos de un minuto,
+        // pero uno vencido se rechaza siempre (ver RefreshTokenPostgresqlRepository.revocarTodosDelUsuario)
+        await manager.query(
+          `UPDATE refresh_token SET revocado_en = COALESCE(revocado_en, NOW()), expira_en = LEAST(expira_en, NOW()) WHERE id_usuario = $1`,
+          [idUsuario],
+        );
       }
     });
   }
