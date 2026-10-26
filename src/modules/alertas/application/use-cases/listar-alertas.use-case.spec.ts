@@ -11,12 +11,14 @@ const alerta = (n: number): AlertaTurno => ({
   area: 'Área 15',
   zona: null,
   jornada: null,
+  atenciones: [],
 });
 
 const crear = (cantidad = 0, activas = 0) => {
   const alertaRepo = {
     listar: jest.fn(async (_filtro: FiltroAlertas) => Array.from({ length: cantidad }, (_, i) => alerta(i))),
     contarExtendidosEnCurso: jest.fn(async () => activas),
+    existe: jest.fn(async () => true),
   } satisfies AlertaTurnoRepositoryPort;
   return { alertaRepo, listar: new ListarAlertasUseCase(alertaRepo) };
 };
@@ -35,6 +37,7 @@ describe('ListarAlertasUseCase', () => {
     expect(alertaRepo.listar).toHaveBeenLastCalledWith({
       incluirExtendidos: false,
       incluirCierresAutomaticos: true,
+      estado: 'TODAS',
       desde: new Date(desde),
       hasta: null,
       despuesDe: { fecha: new Date('2026-10-07T12:00:00.000Z'), id: 'A-4' },
@@ -55,5 +58,18 @@ describe('ListarAlertasUseCase', () => {
     expect(pagina.alertas).toHaveLength(3);
     expect(pagina.hayMas).toBe(true);
     expect(pagina.activas).toBe(2);
+  });
+});
+
+describe('ListarAlertasUseCase: filtro por atención', () => {
+  it.each([
+    ['PENDIENTES', 'PENDIENTES'],
+    ['ATENDIDAS', 'ATENDIDAS'],
+    ['otra cosa', 'TODAS'],
+    [undefined, 'TODAS'],
+  ])('estado %p -> %p', async (estado, esperado) => {
+    const { alertaRepo, listar } = crear();
+    await listar.execute({ rol: 'JEFE_TURNO', estado });
+    expect(alertaRepo.listar).toHaveBeenLastCalledWith(expect.objectContaining({ estado: esperado }));
   });
 });

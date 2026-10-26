@@ -101,6 +101,14 @@ erDiagram
         jsonb detalle
         timestamptz fecha
     }
+    ATENCION_ALERTA {
+        int id_atencion PK
+        string id_alerta "E-, J- o A- + id_turno (la alerta se calcula, no se guarda)"
+        int id_turno FK
+        int id_usuario FK
+        text comentario "opcional al atender; obligatorio en notas"
+        timestamptz fecha
+    }
     MODELO_MAQUINA {
         int id_modelo PK
         string nombre
@@ -239,6 +247,8 @@ erDiagram
     MAQUINA ||--o{ ALERTA : "afecta a"
     MAQUINA ||--o{ BITACORA_JEFE_TURNO : "acciones sobre"
     USUARIO ||--o{ BITACORA_JEFE_TURNO : "realiza"
+    TURNO ||--o{ ATENCION_ALERTA : "alertas atendidas"
+    USUARIO ||--o{ ATENCION_ALERTA : "atiende"
 ```
 
 ## Tablas
@@ -268,7 +278,8 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `ASIGNACION_GPS` | Qué GPS está instalado en qué máquina y desde cuándo | `vigente_hasta` NULL = asignación vigente |
 | `ASIGNACION_OPERADOR` | Operador a cargo de cada máquina (preseleccionada al iniciar turno), con historial | `vigente_hasta` NULL = vigente; índices únicos parciales: un vigente por máquina y por operador |
 | `TRACKING_HISTORY` | Posiciones GPS recibidas | PK (`id_history`, `timestamp`); `id_maquina` se copia al ingerir; `payload_crudo` JSONB |
-| `ALERTA` | Eventos detectados (p. ej. `RALENTI_EXCESIVO`) | `atendida` default `FALSE`; `atendida_por`/`atendida_en` NULL hasta atenderla |
+| `ALERTA` | Reservada para alertas del GPS (p. ej. `RALENTI_EXCESIVO`); hoy sin uso | `atendida` default `FALSE`; `atendida_por`/`atendida_en` NULL hasta atenderla |
+| `ATENCION_ALERTA` | Quién atendió cada alerta de turno, cuándo y con qué comentario (las alertas se calculan desde `TURNO`). La primera fila de una alerta es su atención; las siguientes, notas | `id_alerta` ~ `^[EJA]-[0-9]+$`; filas inmutables (sin UPDATE ni DELETE desde la app) |
 
 ### Gestión de turnos
 
@@ -303,6 +314,8 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `fk_turno_maquina` | `TURNO.id_maquina` | `MAQUINA.id_maquina` | NO ACTION |
 | `fk_bitacora_maquina` | `BITACORA_JEFE_TURNO.id_maquina` | `MAQUINA.id_maquina` | NO ACTION |
 | `fk_bitacora_usuario` | `BITACORA_JEFE_TURNO.id_usuario` | `USUARIO.id_usuario` | NO ACTION |
+| `fk_atencion_turno` | `ATENCION_ALERTA.id_turno` | `TURNO.id_turno` | CASCADE |
+| `fk_atencion_usuario` | `ATENCION_ALERTA.id_usuario` | `USUARIO.id_usuario` | NO ACTION |
 | `fk_tubicacion_turno` | `TURNO_UBICACION.id_turno` | `TURNO.id_turno` | CASCADE |
 | `fk_tubicacion_area` | `TURNO_UBICACION.id_area` | `AREA.id_area` | NO ACTION |
 | `fk_tubicacion_zona` | `TURNO_UBICACION.id_zona` | `ZONA_TRABAJO.id_zona` | SET NULL |
@@ -322,7 +335,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `MAQUINA`, `MODELO_MAQUINA`, `DISPOSITIVO_GPS`, `ASIGNACION_GPS`, `ASIGNACION_OPERADOR` | `maquinas` |
 | `BITACORA_JEFE_TURNO` (escritura desde `maquinas`) | `historial` |
 | `TRACKING_HISTORY` | `tracking` |
-| `ALERTA` | `alertas` |
+| `ALERTA`, `ATENCION_ALERTA` | `alertas` |
 | `TURNO`, `TURNO_UBICACION`, `TURNO_ESTADO`, `ESTADO_OPERACIONAL` | `turnos` |
 | `REPORTE_TURNO`, `EVIDENCIA` | `evidencias` |
 

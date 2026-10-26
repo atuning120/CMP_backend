@@ -11,6 +11,7 @@ const alerta = (id: string): AlertaTurno => ({
   area: 'Área 15',
   zona: null,
   jornada: null,
+  atenciones: [],
 });
 
 const crear = () => {
@@ -18,6 +19,7 @@ const crear = () => {
   const alertaRepo = {
     listar: jest.fn(async (_filtro: FiltroAlertas) => estado.ids.map(alerta)),
     contarExtendidosEnCurso: jest.fn(async () => estado.activas),
+    existe: jest.fn(async () => true),
   } satisfies AlertaTurnoRepositoryPort;
   return { estado, alertaRepo, detectar: new DetectarAlertasNuevasUseCase(alertaRepo) };
 };

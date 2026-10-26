@@ -29,6 +29,7 @@ export class DetectarAlertasNuevasUseCase {
       this.alertaRepo.listar({
         incluirExtendidos: true,
         incluirCierresAutomaticos: true,
+        estado: 'TODAS',
         desde: new Date(ahora.getTime() - VENTANA_MS),
         hasta: null,
         despuesDe: null,

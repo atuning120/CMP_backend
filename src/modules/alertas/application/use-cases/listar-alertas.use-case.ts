@@ -1,6 +1,6 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { ALERTA_TURNO_REPOSITORY } from '../../domain/repositories/alerta-turno.repository.port';
-import type { AlertaTurno, AlertaTurnoRepositoryPort } from '../../domain/repositories/alerta-turno.repository.port';
+import type { AlertaTurno, AlertaTurnoRepositoryPort, EstadoAtencionAlerta } from '../../domain/repositories/alerta-turno.repository.port';
 import { leerRangoPaginado } from '../../../../shared/application/rango-paginado';
 import type { RangoPaginadoDto } from '../../../../shared/application/rango-paginado';
 
@@ -9,6 +9,7 @@ export type FiltroTipoAlerta = 'TODO' | 'EXTENDIDOS' | 'CIERRES_AUTOMATICOS';
 export interface ListarAlertasDto extends RangoPaginadoDto {
   rol: string;
   tipo?: unknown;
+  estado?: unknown; // TODAS | PENDIENTES | ATENDIDAS
 }
 
 export interface PaginaAlertas {
@@ -34,6 +35,7 @@ export class ListarAlertasUseCase {
     }
 
     const tipo: FiltroTipoAlerta = dto.tipo === 'EXTENDIDOS' || dto.tipo === 'CIERRES_AUTOMATICOS' ? dto.tipo : 'TODO';
+    const estado: EstadoAtencionAlerta = dto.estado === 'PENDIENTES' || dto.estado === 'ATENDIDAS' ? dto.estado : 'TODAS';
     const { limite, ...rango } = leerRangoPaginado(dto);
 
     // Se pide una más para saber si hay otra página sin hacer un COUNT
@@ -41,6 +43,7 @@ export class ListarAlertasUseCase {
       this.alertaRepo.listar({
         incluirExtendidos: tipo !== 'CIERRES_AUTOMATICOS',
         incluirCierresAutomaticos: tipo !== 'EXTENDIDOS',
+        estado,
         ...rango,
         limite: limite + 1,
       }),

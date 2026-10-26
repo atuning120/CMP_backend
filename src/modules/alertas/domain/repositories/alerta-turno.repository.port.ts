@@ -13,6 +13,19 @@ export const HORAS_DESCANSO_ENTRE_JORNADAS = 8;
 //   las cruzó, dentro del turno en que pasó). Un turno solo que llega a 10 h ya es TURNO_EXTENDIDO
 export type TipoAlertaTurno = 'TURNO_EXTENDIDO' | 'CIERRE_AUTOMATICO' | 'JORNADA_EXTENDIDA';
 
+// Prefijo del id de cada tipo de alerta: '<prefijo>-<id_turno>'
+export const PREFIJO_ALERTA: Record<TipoAlertaTurno, string> = { TURNO_EXTENDIDO: 'E', JORNADA_EXTENDIDA: 'J', CIERRE_AUTOMATICO: 'A' };
+
+// Registro de quién atendió la alerta (ATENCION_ALERTA). La primera es la atención; las siguientes, notas posteriores
+export interface AtencionAlerta {
+  usuario: string; // nombre de quien la registró
+  fecha: Date;
+  comentario: string | null;
+}
+
+// Filtro por atención: las que nadie ha atendido o las que ya tienen al menos una atención
+export type EstadoAtencionAlerta = 'TODAS' | 'PENDIENTES' | 'ATENDIDAS';
+
 export interface AlertaTurno {
   id: string; // 'E-<id_turno>', 'A-<id_turno>' o 'J-<id_turno>': un turno puede tener varias
   tipo: TipoAlertaTurno;
@@ -33,6 +46,7 @@ export interface AlertaTurno {
   // Solo JORNADA_EXTENDIDA: desde cuándo trabaja, en cuántos turnos y cuántas horas lleva (hasta el fin del turno
   // de la alerta, o hasta ahora si sigue en curso)
   jornada: { inicio: Date; turnos: number; horas: number } | null;
+  atenciones: AtencionAlerta[]; // vacío = pendiente
 }
 
 export interface CursorAlerta {
@@ -43,6 +57,7 @@ export interface CursorAlerta {
 export interface FiltroAlertas {
   incluirExtendidos: boolean;
   incluirCierresAutomaticos: boolean;
+  estado: EstadoAtencionAlerta;
   desde: Date; // inclusive
   hasta: Date | null; // exclusiva; null = hasta ahora
   despuesDe: CursorAlerta | null; // paginación: alertas que van después de esta en el orden descendente
@@ -53,4 +68,6 @@ export interface AlertaTurnoRepositoryPort {
   listar(filtro: FiltroAlertas): Promise<AlertaTurno[]>;
   // Operadores trabajando ahora que ya pasaron las horas de aviso, en su turno o sumando su jornada (contador)
   contarExtendidosEnCurso(): Promise<number>;
+  // Si la alerta de ese tipo existe hoy para el turno (las alertas se calculan: se valida antes de atenderla)
+  existe(tipo: TipoAlertaTurno, idTurno: number): Promise<boolean>;
 }
