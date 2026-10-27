@@ -36,6 +36,8 @@ const crear = (opciones: { nombres?: string[]; patentes?: string[]; enUso?: bool
     findActivas: jest.fn(),
     findFlota: jest.fn(),
     findFlotaById: jest.fn(async (id: number) => (id === maquina.idMaquina ? maquina : null)),
+    findIdPorIdCliente: jest.fn(async (_idCliente: string): Promise<number | null> => null),
+    existeAccionDeCliente: jest.fn(async (_idCliente: string) => false),
     existeNombre: jest.fn(async (nombre: string) => (opciones.nombres ?? []).includes(nombre)),
     existePatente: jest.fn(async (patente: string) => (opciones.patentes ?? []).includes(patente)),
     tieneTurnoEnCurso: jest.fn(async () => opciones.enUso ?? false),
@@ -117,6 +119,72 @@ describe('EditarMaquinaUseCase', () => {
     expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA', versionBase: '4' }))).toBe('DATOS_INVALIDOS');
     await editar.execute({ ...base, estado: 'EN_RESERVA', versionBase: 4 });
     expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 4, { estado: 'EN_RESERVA' }, expect.any(Array));
+  });
+
+  it('con versión vieja, un cambio de ficha se aplica si nadie tocó esos mismos campos', async () => {
+    const { maquinaRepo, editar } = crear();
+    // Otro jefe de turno cambió el año (2019 -> 2020) mientras este corregía la patente
+    maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, version: 4, actualizadoPor: 'Juan Pérez' });
+
+    await editar.execute({ ...base, patente: 'ZZ-11-22', versionBase: 3, valoresBase: { patente: 'ab-cd-12' } });
+
+    // Se guarda sobre la versión actual y solo con el campo que este cambió
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 4, { patente: 'ZZ-11-22' }, expect.any(Array));
+  });
+
+  it('con versión vieja, si otro cambió el mismo campo es conflicto y dice cuál', async () => {
+    const { maquinaRepo, editar } = crear();
+    maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, version: 4, actualizadoPor: 'Juan Pérez' });
+
+    const error = await editar
+      .execute({ ...base, patente: 'ZZ-11-22', anio: 2021, versionBase: 3, valoresBase: { patente: 'XX-00-00', anio: 2019 } })
+      .catch((e: any) => e.getResponse());
+
+    expect(error).toMatchObject({
+      code: 'MAQUINA_MODIFICADA',
+      message: expect.stringContaining('CF-03 fue modificada por Juan Pérez (cambió el año y la patente)'),
+    });
+    // Sin el valor que vio de un campo que cambia, tampoco se combina
+    expect(await codigoDe(editar.execute({ ...base, patente: 'ZZ-11-22', versionBase: 3, valoresBase: {} }))).toBe('MAQUINA_MODIFICADA');
+    expect(maquinaRepo.actualizar).not.toHaveBeenCalled();
+  });
+
+  it('con versión vieja, el estado no se combina aunque venga valoresBase', async () => {
+    const { maquinaRepo, editar } = crear();
+    maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, version: 4 });
+    const cambio = { ...base, estado: 'EN_RESERVA', versionBase: 3, valoresBase: { estado: 'ACTIVA' } };
+    expect(await codigoDe(editar.execute(cambio))).toBe('MAQUINA_MODIFICADA');
+    expect(maquinaRepo.actualizar).not.toHaveBeenCalled();
+  });
+
+  it('un reintento con el mismo idCliente no repite la edición', async () => {
+    const { maquinaRepo, editar } = crear();
+    const idCliente = '7b1f6a0e-2c3d-4e5f-8a9b-0c1d2e3f4a5b';
+
+    await editar.execute({ ...base, estado: 'EN_RESERVA', versionBase: 1, idCliente });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { estado: 'EN_RESERVA' }, [expect.objectContaining({ idCliente })]);
+
+    // La respuesta no llegó y la app reenvía: ya está en la bitácora, se responde sin aplicarla otra vez
+    maquinaRepo.existeAccionDeCliente.mockResolvedValue(true);
+    maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, estado: 'EN_RESERVA', version: 2 });
+    await expect(editar.execute({ ...base, estado: 'EN_RESERVA', versionBase: 1, idCliente })).resolves.toMatchObject({ version: 2 });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledTimes(1);
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA', idCliente: 'x' }))).toBe('DATOS_INVALIDOS');
+  });
+
+  it('si otro jefe movió al operador que se asigna, es conflicto', async () => {
+    const { maquinaRepo, editar } = crear();
+    const juan = { idOperador: 4, nombre: 'Juan Pérez', rut: '1-9', maquinaAsignada: { idMaquina: 7, nombre: 'CF-07' } };
+    maquinaRepo.findOperadorAsignable.mockResolvedValue(juan as never);
+
+    // Lo vio en CF-02 y ahora está en CF-07
+    const error = await editar.execute({ ...base, idOperador: 4, valoresBase: { maquinaOperador: 2 } }).catch((e: any) => e.getResponse());
+    expect(error).toMatchObject({ code: 'MAQUINA_MODIFICADA', message: expect.stringContaining('Juan Pérez fue asignado a CF-07') });
+    expect(maquinaRepo.actualizar).not.toHaveBeenCalled();
+
+    // Si sigue donde lo vio, se mueve
+    await editar.execute({ ...base, idOperador: 4, valoresBase: { maquinaOperador: 7 } });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledTimes(1);
   });
 
   it('si otra acción se guarda entre la validación y el guardado, tampoco la pisa', async () => {

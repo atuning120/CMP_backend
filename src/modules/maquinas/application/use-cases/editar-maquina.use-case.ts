@@ -19,8 +19,10 @@ import type { ModeloMaquinaRepositoryPort } from '../../domain/repositories/mode
 import { maquinaError } from '../maquina.errors';
 import {
   accionesPorReasignacion,
+  camposModificados,
   guardarSinPisar,
   leerAnio,
+  leerIdCliente,
   leerOperador,
   leerRegresoEstimado,
   normalizarMarcaYTipo,
@@ -28,7 +30,9 @@ import {
   ROLES_GESTION_FLOTA,
   texto,
   textoMayusculas,
+  verificarMaquinaDelOperador,
   verificarVersionBase,
+  versionDesactualizada,
 } from '../maquina.datos';
 
 // Campos ausentes (undefined) no se modifican; null o '' borran un campo opcional
@@ -51,10 +55,36 @@ export interface EditarMaquinaDto {
   motivo?: unknown;
   observacion?: unknown;
   versionBase?: unknown; // versión de la máquina que vio el jefe de turno al preparar el cambio
+  // Lo que veía el jefe de turno en cada campo que cambia (el mismo nombre del campo). Con versionBase vieja, el cambio
+  // se aplica igual si nadie tocó esos campos. maquinaOperador: id de la máquina en que vio al operador que asigna (o null)
+  valoresBase?: unknown;
+  idCliente?: unknown; // UUID generado por el cliente: un reintento de una edición ya guardada no la repite
 }
 
 type CampoFicha = Exclude<keyof FichaMaquina, 'estado'>;
 const CAMPOS_FICHA: CampoFicha[] = ['nombre', 'marca', 'modelo', 'anio', 'tipoMaquina', 'patente', 'numeroChasis', 'esContratista', 'idOperador'];
+
+// Cómo se nombra cada campo en el mensaje de conflicto
+const NOMBRE_CAMPO: Record<CampoFicha, string> = {
+  nombre: 'el código',
+  marca: 'la marca',
+  modelo: 'el modelo',
+  anio: 'el año',
+  tipoMaquina: 'el tipo',
+  patente: 'la patente',
+  numeroChasis: 'el chasis',
+  esContratista: 'si es contratista',
+  idOperador: 'el operador',
+};
+
+// Mismo valor sin importar espacios, mayúsculas ni '' vs null (el cliente lo copió de la flota)
+const normalizar = (valor: unknown) => {
+  if (valor === undefined || valor === null) return null;
+  if (typeof valor === 'string') return valor.trim().toUpperCase() || null;
+  return valor;
+};
+
+const enumerar = (partes: string[]) => (partes.length < 2 ? partes.join('') : `${partes.slice(0, -1).join(', ')} y ${partes.at(-1)}`);
 
 @Injectable()
 export class EditarMaquinaUseCase {
@@ -73,7 +103,11 @@ export class EditarMaquinaUseCase {
     const idMaquina = Number(dto.idMaquina);
     const actual = Number.isInteger(idMaquina) && idMaquina > 0 ? await this.maquinaRepo.findFlotaById(idMaquina) : null;
     if (!actual) throw maquinaError('MAQUINA_NO_ENCONTRADA');
-    verificarVersionBase(actual, dto.versionBase);
+    const idCliente = leerIdCliente(dto.idCliente);
+    // Reintento de una edición ya guardada (la respuesta no llegó): se responde con cómo quedó, sin aplicarla de nuevo
+    if (idCliente && (await this.maquinaRepo.existeAccionDeCliente(idCliente))) return actual;
+    const desactualizada = versionDesactualizada(actual, dto.versionBase);
+    const valoresBase = typeof dto.valoresBase === 'object' && dto.valoresBase !== null ? (dto.valoresBase as Record<string, unknown>) : null;
 
     // Toda edición queda justificada en la bitácora del jefe de turno
     const motivo = texto('motivo', dto.motivo);
@@ -92,7 +126,10 @@ export class EditarMaquinaUseCase {
       idOperador: actual.operadorAsignado?.idOperador ?? null,
       estado: esEstadoMaquina(actual.estado) ? actual.estado : 'ACTIVA',
     };
+    // Otro jefe de turno cambió la máquina mientras este preparaba el cambio
+    if (desactualizada) this.combinarConCambiosDeOtro(dto, actual, antes, valoresBase);
     const { ficha: despues, marcaOTipoNuevo, operador } = await this.leerFicha(dto, antes);
+    verificarMaquinaDelOperador(operador, valoresBase?.maquinaOperador);
 
     const cambiados = CAMPOS_FICHA.filter((campo) => despues[campo] !== antes[campo]);
     const cambiaEstado = despues.estado !== antes.estado;
@@ -149,7 +186,14 @@ export class EditarMaquinaUseCase {
     const cambios: CambiosMaquina = Object.fromEntries(cambiados.map((campo) => [campo, despues[campo]]));
     if (cambiaEstado) cambios.estado = despues.estado;
     if (cambiaRegreso) cambios.regresoEstimado = regreso ?? null;
-    await guardarSinPisar(this.maquinaRepo, () => this.maquinaRepo.actualizar(idMaquina, actual.version, cambios, acciones));
+    if (idCliente) acciones[0].idCliente = idCliente;
+    try {
+      await guardarSinPisar(this.maquinaRepo, () => this.maquinaRepo.actualizar(idMaquina, actual.version, cambios, acciones));
+    } catch (error) {
+      // Dos reintentos simultáneos: el segundo choca con la versión que subió el primero
+      if (idCliente && (await this.maquinaRepo.existeAccionDeCliente(idCliente))) return (await this.maquinaRepo.findFlotaById(idMaquina)) ?? actual;
+      throw error;
+    }
 
     if (cambiados.some((campo) => campo === 'marca' || campo === 'modelo' || campo === 'tipoMaquina')) {
       await registrarModeloSiEsNuevo(this.modeloRepo, this.logger, {
@@ -162,6 +206,23 @@ export class EditarMaquinaUseCase {
 
     // Se vuelve a leer para entregar la nueva versión (la próxima acción del cliente parte de ella)
     return (await this.maquinaRepo.findFlotaById(idMaquina)) ?? actual;
+  }
+
+  /**
+   * Los campos de la ficha (incluido el operador) se combinan: el cambio se aplica si nadie tocó los mismos campos que
+   * este jefe de turno cambia, según lo que veía en ellos (valoresBase). El estado y su regreso no se combinan: si la
+   * máquina cambió, es conflicto. Sin valoresBase (versiones anteriores de la app o del panel) tampoco se combina.
+   */
+  private combinarConCambiosDeOtro(dto: EditarMaquinaDto, actual: MaquinaFlota, antes: FichaMaquina, valoresBase: Record<string, unknown> | null) {
+    const pedidos = CAMPOS_FICHA.filter((campo) => dto[campo] !== undefined);
+    if (dto.estado !== undefined || dto.regresoEstimado !== undefined || !valoresBase || pedidos.length === 0) {
+      // La versión está desactualizada: responde el conflicto de siempre
+      verificarVersionBase(actual, dto.versionBase);
+      return;
+    }
+    const tocados = pedidos.filter((campo) => !(campo in valoresBase) || normalizar(valoresBase[campo]) !== normalizar(antes[campo]));
+    if (tocados.length > 0) throw camposModificados(actual, enumerar(tocados.map((campo) => NOMBRE_CAMPO[campo])));
+    // Nadie tocó estos campos: se guarda sobre la versión actual (guardarSinPisar cubre a quien se adelante ahora)
   }
 
   // marcaOTipoNuevo: hay que registrar el modelo en el catálogo después de guardar

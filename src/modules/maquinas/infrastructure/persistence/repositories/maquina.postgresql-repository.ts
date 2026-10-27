@@ -277,8 +277,22 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
         es_contratista: datos.esContratista,
         actualizado_en: new Date(),
         actualizado_por: idUsuario,
+        id_cliente: datos.idCliente ?? null,
       }),
     );
+  }
+
+  async findIdPorIdCliente(idCliente: string): Promise<number | null> {
+    const fila = await this.ormRepository.findOne({ where: { id_cliente: idCliente }, select: { id_maquina: true } });
+    return fila?.id_maquina ?? null;
+  }
+
+  async existeAccionDeCliente(idCliente: string): Promise<boolean> {
+    const [fila]: { existe: boolean }[] = await this.ormRepository.query(
+      'SELECT EXISTS (SELECT 1 FROM bitacora_jefe_turno WHERE id_cliente = $1) AS existe',
+      [idCliente],
+    );
+    return fila.existe;
   }
 
   async findOperadoresAsignables(): Promise<OperadorAsignable[]> {
@@ -359,8 +373,8 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
   private async registrarAcciones(manager: EntityManager, idMaquina: number, acciones: AccionBitacora[]) {
     for (const accion of acciones) {
       await manager.query(
-        `INSERT INTO bitacora_jefe_turno (accion, id_maquina, id_usuario, motivo, observacion, detalle)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+        `INSERT INTO bitacora_jefe_turno (accion, id_maquina, id_usuario, motivo, observacion, detalle, id_cliente)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           accion.accion,
           accion.idMaquina ?? idMaquina,
@@ -368,6 +382,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
           accion.motivo,
           accion.observacion,
           accion.detalle === null ? null : JSON.stringify(accion.detalle),
+          accion.idCliente ?? null,
         ],
       );
     }
@@ -406,7 +421,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       await manager.query(
         `INSERT INTO bitacora_jefe_turno (accion, id_maquina, id_usuario, motivo, observacion, detalle)
          VALUES ('INCORPORAR', $1, $2, $3, $4, $5)`,
-        [creada.id_maquina, registro.idUsuario, registro.motivo, registro.observacion, JSON.stringify(datos)],
+        [creada.id_maquina, registro.idUsuario, registro.motivo, registro.observacion, JSON.stringify({ ...datos, idCliente: undefined })],
       );
       if (datos.idOperador !== null) await this.asignarOperador(manager, creada.id_maquina, datos.idOperador);
       await this.registrarAcciones(manager, creada.id_maquina, acciones);

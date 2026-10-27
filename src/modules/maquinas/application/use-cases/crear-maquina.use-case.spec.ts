@@ -8,6 +8,8 @@ const crear = (existentes: { nombres?: string[]; patentes?: string[]; tipos?: st
     findActivas: jest.fn(),
     findFlota: jest.fn(),
     findFlotaById: jest.fn(),
+    findIdPorIdCliente: jest.fn(async (_idCliente: string): Promise<number | null> => null),
+    existeAccionDeCliente: jest.fn(async (_idCliente: string) => false),
     tieneTurnoEnCurso: jest.fn(),
     actualizar: jest.fn(),
     existeNombre: jest.fn(async (nombre: string) => (existentes.nombres ?? []).includes(nombre)),
@@ -78,7 +80,40 @@ describe('CrearMaquinaUseCase', () => {
       horometroInicial: 12.5,
       esContratista: true,
       idOperador: null,
+      idCliente: null,
     }, { idUsuario: 7, motivo: 'Aumento de capacidad', observacion: null }, []);
+  });
+
+  it('un reintento con el mismo idCliente devuelve la máquina ya creada sin duplicarla', async () => {
+    const { maquinaRepo, crearMaquina } = crear({ nombres: ['CF-06'] });
+    const idCliente = '7b1f6a0e-2c3d-4e5f-8a9b-0c1d2e3f4a5b';
+    maquinaRepo.findIdPorIdCliente.mockResolvedValue(21);
+    maquinaRepo.findFlotaById.mockResolvedValue({ idMaquina: 21, nombre: 'CF-06' } as never);
+
+    // Aunque el código ya exista (es la misma máquina), no responde CODIGO_DUPLICADO
+    await expect(crearMaquina.execute({ ...base, idCliente: idCliente.toUpperCase() })).resolves.toMatchObject({ idMaquina: 21 });
+    expect(maquinaRepo.findIdPorIdCliente).toHaveBeenCalledWith(idCliente);
+    expect(maquinaRepo.create).not.toHaveBeenCalled();
+    expect(await codigoDe(crearMaquina.execute({ ...base, idCliente: 'no-es-uuid' }))).toBe('DATOS_INVALIDOS');
+  });
+
+  it('guarda el idCliente; si choca con un reintento simultáneo, responde con la del otro', async () => {
+    const { maquinaRepo, crearMaquina } = crear();
+    const idCliente = '7b1f6a0e-2c3d-4e5f-8a9b-0c1d2e3f4a5b';
+    await crearMaquina.execute({ ...base, idCliente });
+    expect(maquinaRepo.create).toHaveBeenCalledWith(expect.objectContaining({ idCliente }), expect.anything(), []);
+
+    maquinaRepo.create.mockRejectedValueOnce(new Error('duplicate key value violates unique constraint'));
+    maquinaRepo.findIdPorIdCliente.mockResolvedValueOnce(null).mockResolvedValueOnce(21);
+    maquinaRepo.findFlotaById.mockResolvedValueOnce({ idMaquina: 21, nombre: 'CF-06' } as never);
+    await expect(crearMaquina.execute({ ...base, idCliente })).resolves.toMatchObject({ idMaquina: 21 });
+  });
+
+  it('si otro jefe movió al operador que se asigna, es conflicto', async () => {
+    const { maquinaRepo, crearMaquina } = crear();
+    maquinaRepo.findOperadorAsignable.mockResolvedValue({ idOperador: 4, nombre: 'Juan Pérez', rut: '1-9', maquinaAsignada: null } as never);
+    expect(await codigoDe(crearMaquina.execute({ ...base, idOperador: 4, valoresBase: { maquinaOperador: 2 } }))).toBe('MAQUINA_MODIFICADA');
+    expect(maquinaRepo.create).not.toHaveBeenCalled();
   });
 
   it('solo un jefe de turno o administrador puede crear', async () => {

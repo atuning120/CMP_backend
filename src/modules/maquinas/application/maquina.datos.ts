@@ -194,10 +194,41 @@ const maquinaModificada = (maquina: MaquinaFlota) =>
 
 // versionBase: la versión de la máquina que vio el cliente al preparar la acción. Si no viene (versiones anteriores
 // de la app o del panel) no se compara
-export const verificarVersionBase = (maquina: MaquinaFlota, versionBase: unknown) => {
-  if (versionBase === undefined || versionBase === null) return;
+export const versionDesactualizada = (maquina: MaquinaFlota, versionBase: unknown): boolean => {
+  if (versionBase === undefined || versionBase === null) return false;
   if (!Number.isInteger(versionBase)) throw maquinaError('DATOS_INVALIDOS', 'La versión de la máquina no es válida');
-  if (versionBase !== maquina.version) throw maquinaModificada(maquina);
+  return versionBase !== maquina.version;
+};
+
+export const verificarVersionBase = (maquina: MaquinaFlota, versionBase: unknown) => {
+  if (versionDesactualizada(maquina, versionBase)) throw maquinaModificada(maquina);
+};
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// UUID que genera el cliente para una acción hecha sin señal: se repite en cada reintento (null si no viene)
+export const leerIdCliente = (valor: unknown): string | null => {
+  if (valor === undefined || valor === null) return null;
+  if (typeof valor !== 'string' || !UUID_REGEX.test(valor)) {
+    throw maquinaError('DATOS_INVALIDOS', 'El identificador de la acción no es válido');
+  }
+  return valor.toLowerCase();
+};
+
+// Otro jefe de turno cambió los mismos campos que este quería cambiar. queCambio: p. ej. "la patente y el año"
+export const camposModificados = (maquina: MaquinaFlota, queCambio: string) =>
+  maquinaError(
+    'MAQUINA_MODIFICADA',
+    `${maquina.nombre} fue modificada${maquina.actualizadoPor ? ` por ${maquina.actualizadoPor}` : ''} (cambió ${queCambio})`,
+  );
+
+// El jefe de turno eligió al operador viéndolo en una máquina (maquinaBase: su id, o null sin máquina). Si otro jefe de
+// turno lo movió mientras tanto, moverlo ahora sorprendería a ese otro: es conflicto. undefined = el cliente no la envía
+export const verificarMaquinaDelOperador = (operador: OperadorAsignable | null | undefined, maquinaBase: unknown) => {
+  if (!operador || maquinaBase === undefined) return;
+  if ((operador.maquinaAsignada?.idMaquina ?? null) === (maquinaBase ?? null)) return;
+  const donde = operador.maquinaAsignada ? `asignado a ${operador.maquinaAsignada.nombre}` : 'dejado sin máquina';
+  throw maquinaError('MAQUINA_MODIFICADA', `${operador.nombre} fue ${donde}`);
 };
 
 // Guarda la acción; si otra se guardó entre la validación y el guardado, se responde igual que a una versionBase vieja

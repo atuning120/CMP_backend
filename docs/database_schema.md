@@ -93,6 +93,7 @@ erDiagram
         int version "sube con cada acción del jefe de turno (409 MAQUINA_MODIFICADA si cambió)"
         timestamptz actualizado_en
         int actualizado_por FK "usuario de la última acción"
+        uuid id_cliente UK "generado por la app al incorporarla"
     }
     BITACORA_JEFE_TURNO {
         int id_bitacora PK
@@ -269,7 +270,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `AREA` | Geocerca principal de la faena | `estado` en uso: `ACTIVA`, `INACTIVA` |
 | `ZONA_TRABAJO` | Subdivisión de un área | `estado` en uso: `ACTIVA`, `INACTIVA` |
 | `AUDITORIA_GEOCERCA` | Historial de cambios de áreas y zonas | `entidad` ∈ `AREA`, `ZONA`; `accion` ∈ `CREAR`, `EDITAR`, `DESACTIVAR`; `id_entidad` es polimórfico (sin FK) |
-| `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJO_OBSERVACION`, `EN_MANTENIMIENTO`, `EN_RESERVA`, `BAJA` ("Sin operador" se deduce de la asignación); `nombre` y `patente` únicos (sin distinguir mayúsculas) |
+| `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJO_OBSERVACION`, `EN_MANTENIMIENTO`, `EN_RESERVA`, `BAJA` ("Sin operador" se deduce de la asignación); `nombre` y `patente` únicos (sin distinguir mayúsculas); `id_cliente` UNIQUE (incorporación idempotente) |
 | `MODELO_MAQUINA` | Modelo genérico por tipo de máquina ("Datos Previos" al incorporar una máquina); sin relaciones | (`marca`, `modelo`) únicos sin distinguir mayúsculas; `activo` default `TRUE` |
 | `DISPOSITIVO_GPS` | Equipo de telemetría | `imei` UNIQUE |
 | `BITACORA_JEFE_TURNO` | Acciones del jefe de turno sobre la flota con motivo y observación; junto con `TURNO` forma el historial | `accion` ∈ `INCORPORAR`, `EDITAR`, `HABILITAR`, `DESHABILITAR`, `CAMBIAR_ESTADO`, `REEMPLAZAR`, `DEVOLVER`; `motivo` obligatorio; `detalle` JSONB |

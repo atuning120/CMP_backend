@@ -54,4 +54,8 @@ export class MaquinaOrmEntity {
   @Column('integer', { name: 'actualizado_por', nullable: true })
   actualizado_por: number | null;
 
+  // UUID generado por el cliente al incorporarla: un reintento (p. ej. sincronizado sin señal) no la duplica
+  @Column('uuid', { name: 'id_cliente', nullable: true, unique: true })
+  id_cliente: string | null;
+
 }

@@ -91,6 +91,7 @@ CREATE TABLE MAQUINA (
     version         INT NOT NULL DEFAULT 1,
     actualizado_en  TIMESTAMPTZ, -- última acción del jefe de turno sobre la máquina
     actualizado_por INT,
+    id_cliente      UUID UNIQUE, -- generado por la app al incorporarla (sin señal): un reintento no la duplica
     CONSTRAINT fk_maquina_respaldo FOREIGN KEY (id_maquina_respaldo) REFERENCES MAQUINA(id_maquina) ON DELETE SET NULL,
     CONSTRAINT fk_maquina_actualizado_por FOREIGN KEY (actualizado_por) REFERENCES USUARIO(id_usuario) ON DELETE SET NULL,
     CONSTRAINT ck_maquina_estado_previo_respaldo
@@ -277,6 +278,7 @@ CREATE TABLE BITACORA_JEFE_TURNO (
     observacion     TEXT,
     detalle         JSONB, -- datos de la acción (p. ej. valores antes/después al editar)
     fecha           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id_cliente      UUID UNIQUE, -- generado por la app (acción sin señal): un reintento no la aplica dos veces
     CONSTRAINT fk_bitacora_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina),
     CONSTRAINT fk_bitacora_usuario FOREIGN KEY (id_usuario) REFERENCES USUARIO(id_usuario)
 );

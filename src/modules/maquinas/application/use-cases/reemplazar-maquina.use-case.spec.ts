@@ -40,6 +40,8 @@ const crear = (opciones: { enUso?: boolean } = {}) => {
     findActivas: jest.fn(),
     findFlota: jest.fn(),
     findFlotaById: jest.fn(async (id: number) => flota.get(id) ?? maquina(id, `NUEVA-${id}`)),
+    findIdPorIdCliente: jest.fn(async (_idCliente: string): Promise<number | null> => null),
+    existeAccionDeCliente: jest.fn(async (_idCliente: string) => false),
     existeNombre: jest.fn(async () => false),
     existePatente: jest.fn(async () => false),
     tieneTurnoEnCurso: jest.fn(async () => opciones.enUso ?? false),

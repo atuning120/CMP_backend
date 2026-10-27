@@ -81,6 +81,7 @@ export interface NuevaMaquina {
   horometroInicial: number;
   esContratista: boolean;
   idOperador: number | null; // operador asignado (opcional)
+  idCliente?: string | null; // UUID del cliente que la incorpora (hace idempotente el reintento)
 }
 
 // Quién y por qué: cada acción del jefe de turno sobre la flota queda en BITACORA_JEFE_TURNO
@@ -126,6 +127,8 @@ export interface AccionBitacora extends RegistroBitacora {
   detalle: Record<string, unknown> | null;
   // Otra máquina afectada (p. ej. la que pierde a su operador al reasignarlo); por defecto, la que se guarda
   idMaquina?: number;
+  // UUID del cliente que hizo la acción (solo en la primera fila que deja): hace idempotente el reintento
+  idCliente?: string | null;
 }
 
 // Reemplazo: la saliente queda en mantenimiento o fuera de servicio y la entrante (de la flota o nueva) toma su
@@ -165,6 +168,10 @@ export interface MaquinaRepositoryPort {
   // busqueda: texto ya normalizado; coincide con nombre, marca, modelo o tipo
   findFlota(busqueda: string | null): Promise<MaquinaFlota[]>;
   findFlotaById(idMaquina: number): Promise<MaquinaFlota | null>;
+  // La máquina incorporada con ese UUID del cliente, si ya existe
+  findIdPorIdCliente(idCliente: string): Promise<number | null>;
+  // Si ya se guardó una acción del jefe de turno con ese UUID del cliente
+  existeAccionDeCliente(idCliente: string): Promise<boolean>;
   // Comparación sin distinguir mayúsculas, igual que los índices únicos. exceptoId: la máquina que se edita
   existeNombre(nombre: string, exceptoId?: number): Promise<boolean>;
   existePatente(patente: string, exceptoId?: number): Promise<boolean>;

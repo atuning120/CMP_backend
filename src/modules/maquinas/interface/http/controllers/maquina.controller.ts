@@ -77,6 +77,8 @@ export class MaquinaController {
       idOperador: body?.idOperador,
       motivo: body?.motivo,
       observacion: body?.observacion,
+      idCliente: body?.idCliente,
+      valoresBase: body?.valoresBase,
     });
   }
 
@@ -144,6 +146,8 @@ export class MaquinaController {
       motivo: body?.motivo,
       observacion: body?.observacion,
       versionBase: body?.versionBase,
+      valoresBase: body?.valoresBase,
+      idCliente: body?.idCliente,
     });
   }
 }
