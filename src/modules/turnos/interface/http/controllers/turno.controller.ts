@@ -72,7 +72,8 @@ export class TurnoController {
   @HttpCode(HttpStatus.OK)
   async cerrarPorJefe(
     @Param('idMaquina') idMaquina: string,
-    @Body() body: { horometroFinal?: number; motivo?: string },
+    // idTurno: el turno que vio (la app); idCliente y fechaAccion: si lo cerró sin señal y se envía después
+    @Body() body: { horometroFinal?: number; motivo?: string; idTurno?: number; idCliente?: string; fechaAccion?: string },
     @CurrentUser() user: UsuarioAutenticado,
   ) {
     const turno = await this.cerrarTurnoPorJefeUseCase.execute({
@@ -81,6 +82,9 @@ export class TurnoController {
       idMaquina,
       horometroFinal: body?.horometroFinal,
       motivo: body?.motivo,
+      idTurno: body?.idTurno,
+      idCliente: body?.idCliente,
+      fechaAccion: body?.fechaAccion,
     });
     return presentTurnoCerrado(turno);
   }

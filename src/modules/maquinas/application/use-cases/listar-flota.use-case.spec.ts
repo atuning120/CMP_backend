@@ -8,7 +8,7 @@ const crear = () => {
     findFlota: jest.fn(async () => []),
     findFlotaById: jest.fn(async () => null),
     findIdPorIdCliente: jest.fn(async (_idCliente: string): Promise<number | null> => null),
-    existeAccionDeCliente: jest.fn(async (_idCliente: string) => false),
+    existeAccionDeCliente: jest.fn(async (_idCliente: string): Promise<boolean> => false),
     tieneTurnoEnCurso: jest.fn(async () => false),
     actualizar: jest.fn(async () => undefined),
     existeNombre: jest.fn(async () => false),

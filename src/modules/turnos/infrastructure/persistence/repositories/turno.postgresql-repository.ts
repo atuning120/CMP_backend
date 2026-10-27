@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, LessThan, LessThanOrEqual, Not, EntityManager } from 'typeorm';
 import type { TurnoRepositoryPort } from '../../../domain/repositories/turno.repository.port';
-import { Turno, EstadoTurno } from '../../../domain/entities/turno.entity';
+import { DURACION_MAXIMA_TURNO_HORAS, Turno, EstadoTurno } from '../../../domain/entities/turno.entity';
 import { UbicacionTurno, UbicacionTurnoRegistro } from '../../../domain/entities/ubicacion-turno';
 import { TurnoOrmEntity } from '../orm-entities/turno.orm-entity';
 import { TurnoUbicacionOrmEntity } from '../orm-entities/turno-ubicacion.orm-entity';
@@ -25,7 +25,7 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
     });
   }
 
-  async cerrar(turno: Turno, admiteCierreAutomatico: boolean): Promise<Turno | null> {
+  async cerrar(turno: Turno, admiteCierreAutomatico: boolean, idClienteCierre: string | null = null): Promise<Turno | null> {
     return this.ormRepository.manager.transaction(async (manager) => {
       // La condición va en el mismo UPDATE: un segundo cierre concurrente espera al primero y ya no la cumple
       const sigueAbierto = admiteCierreAutomatico
@@ -42,6 +42,7 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
           conflicto_detalle: turno.conflictoDetalle,
           cerrado_por: turno.cerradoPor,
           motivo_cierre: turno.motivoCierre,
+          ...(idClienteCierre ? { id_cliente_cierre: idClienteCierre } : {}),
         })
         .where('id_turno = :id', { id: turno.id })
         .andWhere(sigueAbierto)
@@ -159,6 +160,43 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
     const ormEntity = await this.ormRepository.findOne({ where: { id_turno: id } });
     if (!ormEntity) return null;
     return this.mapToDomain(ormEntity);
+  }
+
+  async findByIdClienteCierre(idClienteCierre: string): Promise<Turno | null> {
+    const ormEntity = await this.ormRepository.findOne({ where: { id_cliente_cierre: idClienteCierre } });
+    return ormEntity ? this.mapToDomain(ormEntity) : null;
+  }
+
+  async findUltimoRegistro(idTurno: number): Promise<Date | null> {
+    // Redondeado hacia arriba al milisegundo: la base guarda microsegundos y JavaScript no, y truncado el término
+    // quedaría una fracción antes del inicio de ese estado
+    const [fila]: { ultimo: Date | null }[] = await this.ormRepository.query(
+      `SELECT CASE WHEN ultimo = date_trunc('milliseconds', ultimo) THEN ultimo
+                   ELSE date_trunc('milliseconds', ultimo) + interval '1 millisecond' END AS ultimo
+       FROM (SELECT GREATEST(
+               (SELECT MAX(inicio) FROM turno_estado WHERE id_turno = $1),
+               (SELECT MAX(inicio) FROM turno_ubicacion WHERE id_turno = $1)
+             ) AS ultimo) u`,
+      [idTurno],
+    );
+    return fila?.ultimo ?? null;
+  }
+
+  async findCierre(idTurno: number): Promise<{ por: string; fecha: Date } | null> {
+    const [fila]: { por: string; fecha: Date }[] = await this.ormRepository.query(
+      `SELECT CASE
+                WHEN t.cerrado_por IS NOT NULL THEN u.nombre
+                WHEN t.estado = 'CERRADO_AUTO' THEN 'el sistema (superó las ${DURACION_MAXIMA_TURNO_HORAS} h)'
+                ELSE o.nombre || ' ' || o.apellido
+              END AS por,
+              t.hora_termino AS fecha
+       FROM turno t
+       JOIN operador o ON o.id_operador = t.id_operador
+       LEFT JOIN usuario u ON u.id_usuario = t.cerrado_por
+       WHERE t.id_turno = $1 AND t.hora_termino IS NOT NULL`,
+      [idTurno],
+    );
+    return fila ?? null;
   }
 
   async findByIdCliente(idCliente: string): Promise<Turno | null> {

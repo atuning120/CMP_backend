@@ -181,6 +181,7 @@ erDiagram
         string conflicto_detalle
         int cerrado_por FK "jefe de turno que lo cerró por el operador"
         string motivo_cierre
+        uuid id_cliente_cierre UK "cierre del jefe desde la app"
     }
     TURNO_UBICACION {
         int id_turno_ubicacion PK
@@ -361,7 +362,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 - Al cerrar un turno (manual o automático) se cierra su `TURNO_UBICACION` vigente.
 - `TURNO_UBICACION.id_zona`, si viene, debe pertenecer al `id_area` del mismo registro (validado en la aplicación, no en la BD).
 - Una máquina `EN_MANTENIMIENTO`, `EN_RESERVA` o `BAJA` no trabaja: no aparece para iniciar turno (si llega un inicio offline, se acepta como conflicto) y no se puede pasar a esos estados con un turno en curso. `BAJO_OBSERVACION` sí opera.
-- Para sacar de operación una máquina con turno en curso, el jefe de turno primero cierra ese turno (`POST /turnos/maquina/:id/cierre`, con `horometro_final` y motivo); queda en `cerrado_por` / `motivo_cierre` y la app del operador lo informa.
+- Para sacar de operación una máquina con turno en curso, el jefe de turno primero cierra ese turno (`POST /turnos/maquina/:id/cierre`, con `horometro_final` y motivo); queda en `cerrado_por` / `motivo_cierre` y la app del operador lo informa. Desde la app se puede hacer sin señal: envía el `id_turno` que vio, la hora en que tomó el horómetro e `id_cliente_cierre`; gana el primer cierre que llega al servidor y, si perdió, responde `TURNO_YA_CERRADO` con quién y a qué hora.
 - Reemplazo: la saliente queda `EN_MANTENIMIENTO` o `BAJA` (con `regreso_estimado` opcional), apunta a su respaldo en `id_maquina_respaldo` y guarda en `estado_previo_respaldo` el estado que tenía el respaldo. La devolución (`POST /maquinas/:id/devolucion`) la deja `ACTIVA` con el operador del respaldo, devuelve el respaldo a ese estado y borra el enlace. `regreso_estimado` se borra al volver a un estado operativo.
 - Fatiga por jornada: los turnos de un operador separados por menos de 8 h de descanso forman una jornada; al sumar 10 h trabajadas en una jornada de varios turnos se genera la alerta `JORNADA_EXTENDIDA` (calculada desde `TURNO`, no se guarda).
 

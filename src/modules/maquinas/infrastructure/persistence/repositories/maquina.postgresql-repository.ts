@@ -78,7 +78,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
              oa.id_operador AS id_operador_asignado, oa.nombre || ' ' || oa.apellido AS operador_asignado,
              baja.motivo AS motivo_baja, baja.observacion AS observacion_baja, baja.fecha AS fecha_baja,
              baja.reemplazada_por,
-             actual.operador, actual.ubicacion, actual.id_area, actual.id_zona,
+             actual.operador, actual.id_turno AS id_turno_actual, actual.ubicacion, actual.id_area, actual.id_zona,
              actual.id_estado, actual.estado_operacional, actual.categoria_estado, actual.estado_desde,
              COALESCE(ultimo.horometro, m.horometro_inicial) AS horometro,
              m.regreso_estimado, m.id_maquina_respaldo, r.nombre AS respaldo, m.estado_previo_respaldo,
@@ -99,7 +99,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
         LIMIT 1
       ) baja ON m.estado <> 'ACTIVA'
       LEFT JOIN LATERAL (
-        SELECT o.nombre || ' ' || o.apellido AS operador,
+        SELECT o.nombre || ' ' || o.apellido AS operador, t.id_turno,
                COALESCE(z.nombre, a.nombre) AS ubicacion, tu.id_area, tu.id_zona,
                vigente.id_estado, vigente.nombre AS estado_operacional, vigente.categoria AS categoria_estado,
                vigente.inicio AS estado_desde
@@ -154,6 +154,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
           ? null
           : { motivo: fila.motivo_baja, observacion: fila.observacion_baja, fecha: fila.fecha_baja, reemplazadaPor: fila.reemplazada_por },
       operadorActual: fila.operador,
+      idTurnoActual: fila.id_turno_actual,
       estadoOperacional:
         fila.id_estado === null || fila.estado_desde === null
           ? null
@@ -489,6 +490,7 @@ interface FilaFlota {
   fecha_baja: Date | null;
   reemplazada_por: string | null;
   operador: string | null;
+  id_turno_actual: number | null;
   id_estado: number | null;
   estado_operacional: string | null;
   categoria_estado: string | null;

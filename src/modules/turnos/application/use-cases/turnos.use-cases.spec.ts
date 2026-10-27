@@ -50,7 +50,7 @@ const turnoIniciadoHace = (horas: number, overrides: Partial<Turno> = {}) =>
 const crearRepos = () => {
   const turnoRepo = {
     save: jest.fn(async (turno: Turno) => Object.assign(turno, { id: turno.id ?? 99 })),
-    cerrar: jest.fn<Promise<Turno | null>, [Turno, boolean]>(async (turno) => turno),
+    cerrar: jest.fn<Promise<Turno | null>, [Turno, boolean, (string | null)?]>(async (turno) => turno),
     iniciar: jest.fn(async (turno: Turno, _ubicacion: UbicacionTurno) => Object.assign(turno, { id: 99 })),
     findUbicacionVigente: jest.fn<Promise<UbicacionTurno | null>, [number]>(async () => ubicacionValida),
     findById: jest.fn<Promise<Turno | null>, [number]>(async () => null),
@@ -62,6 +62,9 @@ const crearRepos = () => {
     findUbicacionByIdCliente: jest.fn<Promise<UbicacionTurnoRegistro | null>, [string]>(async () => null),
     registrarUbicacion: jest.fn(async (data: Omit<UbicacionTurnoRegistro, 'idTurnoUbicacion'>) => ({ idTurnoUbicacion: 4, ...data })),
     findUltimoHorometroFinal: jest.fn<Promise<number | null>, [number, Date]>(async () => null),
+    findByIdClienteCierre: jest.fn(async (_idCliente: string): Promise<Turno | null> => null),
+    findUltimoRegistro: jest.fn(async (_idTurno: number): Promise<Date | null> => null),
+    findCierre: jest.fn(async (_idTurno: number): Promise<{ por: string; fecha: Date } | null> => null),
   } satisfies TurnoRepositoryPort;
   const maquinaRepo = {
     findById: jest.fn<Promise<MaquinaResumen | null>, [number]>(async () => maquina),
@@ -69,7 +72,7 @@ const crearRepos = () => {
     findFlota: jest.fn(async () => []),
     findFlotaById: jest.fn(async () => null),
     findIdPorIdCliente: jest.fn(async (_idCliente: string): Promise<number | null> => null),
-    existeAccionDeCliente: jest.fn(async (_idCliente: string) => false),
+    existeAccionDeCliente: jest.fn(async (_idCliente: string): Promise<boolean> => false),
     tieneTurnoEnCurso: jest.fn(async () => false),
     actualizar: jest.fn(async () => undefined),
     existeNombre: jest.fn(async () => false),

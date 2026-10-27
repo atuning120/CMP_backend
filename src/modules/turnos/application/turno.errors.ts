@@ -68,3 +68,24 @@ export const turnoError = (code: TurnoErrorCode) => {
       });
   }
 };
+
+const formatoHora = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const formatoDia = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit' });
+// "31/12" (el separador de es-CL cambia según la versión de ICU)
+const dia = (fecha: Date) => {
+  const partes = formatoDia.formatToParts(fecha);
+  return `${partes.find((p) => p.type === 'day')?.value}/${partes.find((p) => p.type === 'month')?.value}`;
+};
+
+/**
+ * El jefe de turno cerró sin señal un turno que, cuando llegó al servidor, ya estaba cerrado (gana el primer cierre).
+ * por: quién lo cerró (el operador, otro jefe de turno o el sistema); la fecha va en hora de Chile, con el día si no es hoy
+ */
+export const turnoYaCerrado = (por: string, fecha: Date, ahora: Date = new Date()) => {
+  const otroDia = dia(fecha) === dia(ahora) ? '' : ` del ${dia(fecha)}`;
+  return new ConflictException({
+    statusCode: 409,
+    code: 'TURNO_YA_CERRADO',
+    message: `El turno ya fue cerrado por ${por} a las ${formatoHora.format(fecha)}${otroDia}`,
+  });
+};

@@ -213,6 +213,7 @@ CREATE TABLE TURNO (
     conflicto_detalle TEXT,
     cerrado_por       INT, -- jefe de turno que lo cerró por el operador
     motivo_cierre     VARCHAR(100),
+    id_cliente_cierre UUID UNIQUE, -- cierre del jefe de turno desde la app (sin señal): un reintento no lo repite
     CONSTRAINT fk_turno_cerrado_por FOREIGN KEY (cerrado_por) REFERENCES USUARIO(id_usuario) ON DELETE SET NULL,
     CONSTRAINT fk_turno_operador FOREIGN KEY (id_operador) REFERENCES OPERADOR(id_operador),
     CONSTRAINT fk_turno_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina)
