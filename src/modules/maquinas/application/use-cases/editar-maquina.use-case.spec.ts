@@ -173,6 +173,23 @@ describe('EditarMaquinaUseCase', () => {
     expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA', idCliente: 'x' }))).toBe('DATOS_INVALIDOS');
   });
 
+  it('una acción hecha sin señal hace más de 72 h ya no se aplica (salvo un reintento de una ya guardada)', async () => {
+    const { maquinaRepo, editar } = crear();
+    const horasAtras = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000).toISOString();
+
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA', fechaAccion: horasAtras(73) }))).toBe('ACCION_VENCIDA');
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA', fechaAccion: 'ayer' }))).toBe('DATOS_INVALIDOS');
+    expect(maquinaRepo.actualizar).not.toHaveBeenCalled();
+    await editar.execute({ ...base, estado: 'EN_RESERVA', fechaAccion: horasAtras(71) });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledTimes(1);
+
+    // La respuesta de una edición ya guardada no llegó y el reintento llega tarde: se responde sin error
+    maquinaRepo.existeAccionDeCliente.mockResolvedValue(true);
+    await expect(
+      editar.execute({ ...base, estado: 'EN_RESERVA', idCliente: '7b1f6a0e-2c3d-4e5f-8a9b-0c1d2e3f4a5b', fechaAccion: horasAtras(80) }),
+    ).resolves.toBeDefined();
+  });
+
   it('si otro jefe movió al operador que se asigna, es conflicto', async () => {
     const { maquinaRepo, editar } = crear();
     const juan = { idOperador: 4, nombre: 'Juan Pérez', rut: '1-9', maquinaAsignada: { idMaquina: 7, nombre: 'CF-07' } };

@@ -10,6 +10,7 @@ import type {
 } from '../domain/repositories/maquina.repository.port';
 import type { ModeloMaquinaRepositoryPort } from '../domain/repositories/modelo-maquina.repository.port';
 import { maquinaError } from './maquina.errors';
+import { accionVencida } from '../../../shared/application/vigencia-accion';
 
 // Validación y normalización compartidas por la incorporación y la edición de máquinas
 
@@ -213,6 +214,22 @@ export const leerIdCliente = (valor: unknown): string | null => {
     throw maquinaError('DATOS_INVALIDOS', 'El identificador de la acción no es válido');
   }
   return valor.toLowerCase();
+};
+
+// Desfase tolerado entre el reloj del teléfono y el del servidor
+const DESFASE_MAXIMO_MS = 5 * 60 * 1000;
+
+/**
+ * fechaAccion: cuándo hizo el jefe de turno la acción, si la hizo sin señal y se envía después. Pasadas 72 h ya no se
+ * aplica (la app la descarta antes; esto es el respaldo). undefined o null: la acción es de ahora
+ */
+export const verificarVigencia = (fechaAccion: unknown, ahora: Date = new Date()) => {
+  if (fechaAccion === undefined || fechaAccion === null) return;
+  const fecha = typeof fechaAccion === 'string' ? new Date(fechaAccion) : null;
+  if (!fecha || Number.isNaN(fecha.getTime()) || fecha.getTime() > ahora.getTime() + DESFASE_MAXIMO_MS) {
+    throw maquinaError('DATOS_INVALIDOS', 'La fecha de la acción no es válida');
+  }
+  if (accionVencida(fecha, ahora)) throw maquinaError('ACCION_VENCIDA');
 };
 
 // Otro jefe de turno cambió los mismos campos que este quería cambiar. queCambio: p. ej. "la patente y el año"

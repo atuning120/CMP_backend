@@ -13,6 +13,7 @@ import {
   ROLES_GESTION_FLOTA,
   texto,
   verificarMaquinaDelOperador,
+  verificarVigencia,
 } from '../maquina.datos';
 import type { NuevaMaquinaDto } from '../maquina.datos';
 
@@ -24,6 +25,7 @@ export interface CrearMaquinaDto extends NuevaMaquinaDto {
   observacion?: unknown;
   idCliente?: unknown; // UUID generado por el cliente: un reintento devuelve la misma máquina
   valoresBase?: unknown; // { maquinaOperador }: la máquina en que el jefe de turno vio al operador que asigna
+  fechaAccion?: unknown; // cuándo la incorporó, si fue sin señal: pasadas 72 h ya no se aplica
 }
 
 @Injectable()
@@ -49,6 +51,7 @@ export class CrearMaquinaUseCase {
     // Reintento de una incorporación ya guardada (p. ej. la respuesta no llegó): se devuelve la misma máquina
     const yaCreada = idCliente ? await this.encontrar(idCliente) : null;
     if (yaCreada) return yaCreada;
+    verificarVigencia(dto.fechaAccion);
 
     const { datos, marcaYTipo } = await leerNuevaMaquina(this.maquinaRepo, dto);
     const operador = await leerOperador(this.maquinaRepo, dto.idOperador);

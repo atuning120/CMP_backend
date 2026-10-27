@@ -32,6 +32,7 @@ import {
   textoMayusculas,
   verificarMaquinaDelOperador,
   verificarVersionBase,
+  verificarVigencia,
   versionDesactualizada,
 } from '../maquina.datos';
 
@@ -59,6 +60,7 @@ export interface EditarMaquinaDto {
   // se aplica igual si nadie tocó esos campos. maquinaOperador: id de la máquina en que vio al operador que asigna (o null)
   valoresBase?: unknown;
   idCliente?: unknown; // UUID generado por el cliente: un reintento de una edición ya guardada no la repite
+  fechaAccion?: unknown; // cuándo la hizo, si fue sin señal: pasadas 72 h ya no se aplica
 }
 
 type CampoFicha = Exclude<keyof FichaMaquina, 'estado'>;
@@ -106,6 +108,7 @@ export class EditarMaquinaUseCase {
     const idCliente = leerIdCliente(dto.idCliente);
     // Reintento de una edición ya guardada (la respuesta no llegó): se responde con cómo quedó, sin aplicarla de nuevo
     if (idCliente && (await this.maquinaRepo.existeAccionDeCliente(idCliente))) return actual;
+    verificarVigencia(dto.fechaAccion);
     const desactualizada = versionDesactualizada(actual, dto.versionBase);
     const valoresBase = typeof dto.valoresBase === 'object' && dto.valoresBase !== null ? (dto.valoresBase as Record<string, unknown>) : null;
 

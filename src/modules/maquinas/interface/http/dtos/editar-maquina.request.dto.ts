@@ -18,4 +18,5 @@ export class EditarMaquinaRequestDto {
   // maquinaOperador: la máquina en que vio al operador que asigna (null = sin máquina)
   valoresBase?: Record<string, unknown> & { maquinaOperador?: number | null };
   idCliente?: string; // UUID generado por el cliente: un reintento de una edición ya guardada no la repite
+  fechaAccion?: string; // ISO: cuándo la hizo, si fue sin señal (pasadas 72 h responde 400 ACCION_VENCIDA)
 }

@@ -79,6 +79,7 @@ export class MaquinaController {
       observacion: body?.observacion,
       idCliente: body?.idCliente,
       valoresBase: body?.valoresBase,
+      fechaAccion: body?.fechaAccion,
     });
   }
 
@@ -148,6 +149,7 @@ export class MaquinaController {
       versionBase: body?.versionBase,
       valoresBase: body?.valoresBase,
       idCliente: body?.idCliente,
+      fechaAccion: body?.fechaAccion,
     });
   }
 }

@@ -4,6 +4,7 @@ import { TURNO_REPOSITORY } from '../../domain/repositories/turno.repository.por
 import type { TurnoRepositoryPort } from '../../domain/repositories/turno.repository.port';
 import { fechaDelEvento, validarIdCliente } from '../datos-cliente';
 import { turnoError, turnoYaCerrado } from '../turno.errors';
+import { accionVencida } from '../../../../shared/application/vigencia-accion';
 
 const ROLES_CIERRE = ['JEFE_TURNO', 'ADMIN'];
 const LARGO_MAXIMO_MOTIVO = 100;
@@ -49,6 +50,8 @@ export class CerrarTurnoPorJefeUseCase {
     if (yaGuardado) return yaGuardado;
     if (dto.fechaAccion != null && typeof dto.fechaAccion !== 'string') throw turnoError('FECHA_INVALIDA');
     const fecha = fechaDelEvento(dto.fechaAccion, ahora);
+    // Hecho sin señal hace más de 72 h: ya no se aplica (la app lo descarta antes; esto es el respaldo)
+    if (dto.fechaAccion != null && accionVencida(fecha, ahora)) throw turnoError('ACCION_VENCIDA');
 
     const turno = await this.turnoACerrar(dto, ahora);
 

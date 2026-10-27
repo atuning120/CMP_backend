@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DURACION_MAXIMA_TURNO_HORAS } from '../domain/entities/turno.entity';
+import { MENSAJE_ACCION_VENCIDA } from '../../../shared/application/vigencia-accion';
 
 // Errores de turnos: código estable para que la app decida qué mostrar, más un mensaje legible.
 export type TurnoErrorCode =
@@ -18,6 +19,7 @@ export type TurnoErrorCode =
   | 'TURNO_CERRADO_AUTOMATICAMENTE'
   | 'SIN_PERMISO_CIERRE'
   | 'MOTIVO_INVALIDO'
+  | 'ACCION_VENCIDA'
   | 'SIN_TURNO_EN_CURSO';
 
 export const turnoError = (code: TurnoErrorCode) => {
@@ -52,6 +54,8 @@ export const turnoError = (code: TurnoErrorCode) => {
       return new ConflictException({ statusCode: 409, code, message: 'El turno ya se encuentra cerrado' });
     case 'SIN_PERMISO_CIERRE':
       return new ForbiddenException({ statusCode: 403, code, message: 'Solo un jefe de turno o administrador puede cerrar el turno de un operador' });
+    case 'ACCION_VENCIDA':
+      return new BadRequestException({ statusCode: 400, code, message: MENSAJE_ACCION_VENCIDA });
     case 'MOTIVO_INVALIDO':
       return new BadRequestException({ statusCode: 400, code, message: 'Indica el motivo del cierre (hasta 100 caracteres)' });
     case 'SIN_TURNO_EN_CURSO':

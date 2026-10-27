@@ -148,6 +148,14 @@ describe('CerrarTurnoPorJefeUseCase: cierre hecho sin señal (app)', () => {
     expect(turnoRepo.cerrar).not.toHaveBeenCalled();
   });
 
+  it('un cierre hecho sin señal hace más de 72 h ya no se aplica', async () => {
+    const { turnoRepo, cerrar } = crear(null);
+    turnoRepo.findById.mockResolvedValue(turnoDe(80));
+    const fechaAccion = new Date(ahora.getTime() - 73 * HORA).toISOString();
+    expect(await codigoDe(cerrar.execute({ ...sinSenal, fechaAccion }, ahora))).toBe('ACCION_VENCIDA');
+    expect(turnoRepo.cerrar).not.toHaveBeenCalled();
+  });
+
   it('no cierra un turno de otra máquina ni acepta datos inválidos', async () => {
     const { turnoRepo, cerrar } = crear(null);
     turnoRepo.findById.mockResolvedValue(new Turno(11, 4, 2, new Date(ahora.getTime() - HORA), null, 1000, null, 'EN_CURSO'));

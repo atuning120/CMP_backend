@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { MENSAJE_ACCION_VENCIDA } from '../../../shared/application/vigencia-accion';
 
 // Errores de máquinas: código estable para que la app decida qué mostrar, más un mensaje legible.
 export type MaquinaErrorCode =
@@ -12,7 +13,8 @@ export type MaquinaErrorCode =
   | 'SIN_CAMBIOS'
   | 'MAQUINA_EN_USO'
   | 'SIN_RESPALDO'
-  | 'MAQUINA_MODIFICADA';
+  | 'MAQUINA_MODIFICADA'
+  | 'ACCION_VENCIDA';
 
 export const maquinaError = (code: MaquinaErrorCode, detalle?: string) => {
   switch (code) {
@@ -38,6 +40,8 @@ export const maquinaError = (code: MaquinaErrorCode, detalle?: string) => {
         code,
         message: `${detalle} tiene un turno en curso: primero hay que cerrarlo para sacarla de operación`,
       });
+    case 'ACCION_VENCIDA':
+      return new BadRequestException({ statusCode: 400, code, message: MENSAJE_ACCION_VENCIDA });
     case 'MAQUINA_MODIFICADA':
       // detalle: "CF-12 fue modificada por Juan Pérez"
       return new ConflictException({

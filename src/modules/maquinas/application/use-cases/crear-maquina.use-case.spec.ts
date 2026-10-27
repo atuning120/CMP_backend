@@ -110,6 +110,13 @@ describe('CrearMaquinaUseCase', () => {
     await expect(crearMaquina.execute({ ...base, idCliente })).resolves.toMatchObject({ idMaquina: 21 });
   });
 
+  it('una incorporación hecha sin señal hace más de 72 h ya no se aplica', async () => {
+    const { maquinaRepo, crearMaquina } = crear();
+    const fechaAccion = new Date(Date.now() - 73 * 60 * 60 * 1000).toISOString();
+    expect(await codigoDe(crearMaquina.execute({ ...base, fechaAccion }))).toBe('ACCION_VENCIDA');
+    expect(maquinaRepo.create).not.toHaveBeenCalled();
+  });
+
   it('si otro jefe movió al operador que se asigna, es conflicto', async () => {
     const { maquinaRepo, crearMaquina } = crear();
     maquinaRepo.findOperadorAsignable.mockResolvedValue({ idOperador: 4, nombre: 'Juan Pérez', rut: '1-9', maquinaAsignada: null } as never);
