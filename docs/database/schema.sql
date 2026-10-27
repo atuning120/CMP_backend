@@ -87,7 +87,12 @@ CREATE TABLE MAQUINA (
     -- Tras un reemplazo: la máquina que la cubre y a qué estado vuelve ese respaldo al devolverla
     id_maquina_respaldo    INT,
     estado_previo_respaldo VARCHAR(20),
+    -- Sube con cada acción del jefe de turno: detecta cambios de otro jefe mientras tanto (409 MAQUINA_MODIFICADA)
+    version         INT NOT NULL DEFAULT 1,
+    actualizado_en  TIMESTAMPTZ, -- última acción del jefe de turno sobre la máquina
+    actualizado_por INT,
     CONSTRAINT fk_maquina_respaldo FOREIGN KEY (id_maquina_respaldo) REFERENCES MAQUINA(id_maquina) ON DELETE SET NULL,
+    CONSTRAINT fk_maquina_actualizado_por FOREIGN KEY (actualizado_por) REFERENCES USUARIO(id_usuario) ON DELETE SET NULL,
     CONSTRAINT ck_maquina_estado_previo_respaldo
         CHECK (estado_previo_respaldo IN ('ACTIVA', 'BAJO_OBSERVACION', 'EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA'))
 );
@@ -237,6 +242,9 @@ CREATE TABLE TURNO_ESTADO (
     CONSTRAINT fk_testado_estado FOREIGN KEY (id_estado) REFERENCES ESTADO_OPERACIONAL(id_estado)
 );
 
+-- Alertas de mantención o falla por rango de fechas
+CREATE INDEX idx_turno_estado_inicio ON TURNO_ESTADO (inicio);
+
 CREATE TABLE REPORTE_TURNO (
     id_reporte            SERIAL PRIMARY KEY,
     id_turno              INT NOT NULL,
@@ -279,12 +287,13 @@ CREATE INDEX idx_bitacora_fecha ON BITACORA_JEFE_TURNO (fecha DESC);
 -- atención; las siguientes, notas posteriores. No se borran ni se editan (auditoría)
 CREATE TABLE ATENCION_ALERTA (
     id_atencion     SERIAL PRIMARY KEY,
-    id_alerta       VARCHAR(20) NOT NULL, -- 'E-<id_turno>', 'J-<id_turno>' o 'A-<id_turno>'
+    id_alerta       VARCHAR(20) NOT NULL, -- 'E-<id_turno>', 'J-<id_turno>', 'A-<id_turno>' o 'M-<id_turno_estado>'
     id_turno        INT NOT NULL,
     id_usuario      INT NOT NULL, -- jefe de turno o administrador que la atendió
     comentario      TEXT,         -- opcional al atender; obligatorio en las notas posteriores
     fecha           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT ck_atencion_alerta_id CHECK (id_alerta ~ '^[EJA]-[0-9]+$'),
+    id_cliente      UUID UNIQUE,  -- generado por el cliente; hace idempotente el reintento
+    CONSTRAINT ck_atencion_alerta_id CHECK (id_alerta ~ '^[EJAM]-[0-9]+$'),
     CONSTRAINT fk_atencion_turno FOREIGN KEY (id_turno) REFERENCES TURNO(id_turno) ON DELETE CASCADE,
     CONSTRAINT fk_atencion_usuario FOREIGN KEY (id_usuario) REFERENCES USUARIO(id_usuario)
 );

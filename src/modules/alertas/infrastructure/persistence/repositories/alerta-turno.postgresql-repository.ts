@@ -26,6 +26,9 @@ interface FilaAlerta {
   inicio_jornada: Date | null;
   turnos_jornada: number | null;
   segundos_jornada: number | null;
+  estado_detencion: string | null;
+  inicio_detencion: Date | null;
+  fin_detencion: Date | null;
   // jsonb: las fechas llegan como texto ISO
   atenciones: { usuario: string; fecha: string; comentario: string | null }[];
 }
@@ -137,15 +140,37 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
           ORDER BY fecha DESC, id DESC
           LIMIT $7
         )
+
+        UNION ALL
+
+        (
+          -- Cada vez que el operador marcó un estado de mantención o falla
+          SELECT 'M-' || te.id_turno_estado, 'MANTENCION', date_trunc('milliseconds', te.inicio), te.id_turno,
+                 NULL::timestamptz, NULL::bigint, NULL::float8
+          FROM turno_estado te
+          JOIN estado_operacional eo ON eo.id_estado = te.id_estado
+          WHERE $11
+            AND eo.categoria = 'MANTENCION'
+            AND te.inicio >= $3::timestamptz
+            AND ($4::timestamptz IS NULL OR te.inicio < $4::timestamptz)
+            AND ($5::timestamptz IS NULL
+                 OR (date_trunc('milliseconds', te.inicio), 'M-' || te.id_turno_estado) < ($5::timestamptz, $6::text))
+            AND ${POR_ATENCION("'M-' || te.id_turno_estado")}
+          ORDER BY 3 DESC, 1 DESC
+          LIMIT $7
+        )
       )
       SELECT a.id, a.tipo, a.fecha, t.id_turno, t.estado, t.hora_inicio, t.hora_termino,
              t.horometro_inicial, t.horometro_final,
              o.nombre || ' ' || o.apellido AS operador, m.id_maquina, m.nombre AS maquina,
              ubicacion.area, ubicacion.zona,
              a.inicio_jornada, a.turnos_jornada::int AS turnos_jornada, a.segundos_jornada,
+             eo.nombre AS estado_detencion, te.inicio AS inicio_detencion, te.fin AS fin_detencion,
              COALESCE(atendida.atenciones, '[]'::jsonb) AS atenciones
       FROM alertas a
       JOIN turno t ON t.id_turno = a.id_turno
+      LEFT JOIN turno_estado te ON a.tipo = 'MANTENCION' AND te.id_turno_estado = substring(a.id FROM 3)::int
+      LEFT JOIN estado_operacional eo ON eo.id_estado = te.id_estado
       JOIN operador o ON o.id_operador = t.id_operador
       JOIN maquina m ON m.id_maquina = t.id_maquina
       LEFT JOIN LATERAL (
@@ -179,6 +204,7 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
         HORAS_AVISO_TURNO_EXTENDIDO,
         HORAS_DESCANSO_ENTRE_JORNADAS,
         filtro.estado,
+        filtro.incluirMantenciones,
       ],
     );
     return filas.map((fila) => ({
@@ -205,40 +231,55 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
               horas: Math.round((Number(fila.segundos_jornada) / 3600) * 10) / 10,
             }
           : null,
+      detencion:
+        fila.tipo === 'MANTENCION' && fila.estado_detencion && fila.inicio_detencion
+          ? { estado: fila.estado_detencion, inicio: fila.inicio_detencion, fin: fila.fin_detencion }
+          : null,
       atenciones: fila.atenciones.map((a) => ({ usuario: a.usuario, fecha: new Date(a.fecha), comentario: a.comentario })),
     }));
   }
 
-  async existe(tipo: TipoAlertaTurno, idTurno: number): Promise<boolean> {
+  async turnoDeAlerta(tipo: TipoAlertaTurno, id: number): Promise<number | null> {
     const consultas: Record<TipoAlertaTurno, string> = {
       TURNO_EXTENDIDO: `
-        SELECT 1 FROM turno
+        SELECT id_turno FROM turno
         WHERE id_turno = $1 AND COALESCE(hora_termino, CURRENT_TIMESTAMP) >= hora_inicio + make_interval(hours => $2)`,
-      CIERRE_AUTOMATICO: `SELECT 1 FROM turno WHERE id_turno = $1 AND estado = 'CERRADO_AUTO'`,
+      CIERRE_AUTOMATICO: `SELECT id_turno FROM turno WHERE id_turno = $1 AND estado = 'CERRADO_AUTO'`,
       // La jornada se arma desde el inicio del turno (JORNADAS mira 72 h hacia atrás)
       JORNADA_EXTENDIDA: `
         WITH ${JORNADAS('(SELECT hora_inicio FROM turno WHERE id_turno = $1)', 'NULL::timestamptz', '$3')}
-        SELECT 1 FROM jornadas
+        SELECT id_turno FROM jornadas
         WHERE id_turno = $1 AND orden > 1
           AND antes < make_interval(hours => $2) AND antes + (fin - hora_inicio) >= make_interval(hours => $2)`,
+      MANTENCION: `
+        SELECT te.id_turno FROM turno_estado te
+        JOIN estado_operacional eo ON eo.id_estado = te.id_estado
+        WHERE te.id_turno_estado = $1 AND eo.categoria = 'MANTENCION'`,
     };
     const parametros: Record<TipoAlertaTurno, unknown[]> = {
-      TURNO_EXTENDIDO: [idTurno, HORAS_AVISO_TURNO_EXTENDIDO],
-      CIERRE_AUTOMATICO: [idTurno],
-      JORNADA_EXTENDIDA: [idTurno, HORAS_AVISO_TURNO_EXTENDIDO, HORAS_DESCANSO_ENTRE_JORNADAS],
+      TURNO_EXTENDIDO: [id, HORAS_AVISO_TURNO_EXTENDIDO],
+      CIERRE_AUTOMATICO: [id],
+      JORNADA_EXTENDIDA: [id, HORAS_AVISO_TURNO_EXTENDIDO, HORAS_DESCANSO_ENTRE_JORNADAS],
+      MANTENCION: [id],
     };
-    const filas: unknown[] = await this.dataSource.query(consultas[tipo], parametros[tipo]);
-    return filas.length > 0;
+    const [fila]: { id_turno: number }[] = await this.dataSource.query(consultas[tipo], parametros[tipo]);
+    return fila ? Number(fila.id_turno) : null;
   }
 
-  // Un operador cuenta una vez, ya sea porque su turno pasó las horas de aviso o porque las pasó sumando su jornada
-  async contarExtendidosEnCurso(): Promise<number> {
+  // Un operador cuenta una vez, ya sea porque su turno pasó las horas de aviso o porque las pasó sumando su jornada.
+  // Una máquina detenida cuenta una vez aunque haya encadenado varios estados de mantención
+  async contarActivas(): Promise<number> {
     const [fila]: { total: string }[] = await this.dataSource.query(
       `
       WITH ${JORNADAS('CURRENT_TIMESTAMP', 'NULL::timestamptz', '$2')}
-      SELECT COUNT(DISTINCT id_operador) AS total
-      FROM jornadas
-      WHERE estado = 'EN_CURSO' AND antes + (fin - hora_inicio) >= make_interval(hours => $1)
+      SELECT
+        (SELECT COUNT(DISTINCT id_operador) FROM jornadas
+          WHERE estado = 'EN_CURSO' AND antes + (fin - hora_inicio) >= make_interval(hours => $1))
+        +
+        (SELECT COUNT(DISTINCT t.id_maquina) FROM turno t
+          JOIN turno_estado te ON te.id_turno = t.id_turno AND te.fin IS NULL
+          JOIN estado_operacional eo ON eo.id_estado = te.id_estado
+          WHERE t.estado = 'EN_CURSO' AND eo.categoria = 'MANTENCION') AS total
       `,
       [HORAS_AVISO_TURNO_EXTENDIDO, HORAS_DESCANSO_ENTRE_JORNADAS],
     );

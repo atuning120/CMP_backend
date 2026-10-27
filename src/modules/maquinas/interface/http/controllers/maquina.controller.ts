@@ -98,6 +98,7 @@ export class MaquinaController {
       regresoEstimado: body?.regresoEstimado,
       motivo: body?.motivo,
       observacion: body?.observacion,
+      versionBase: body?.versionBase,
     });
   }
 
@@ -105,7 +106,7 @@ export class MaquinaController {
   @Post(':id/devolucion')
   async devolver(
     @Param('id') id: string,
-    @Body() body: { motivo?: string; observacion?: string | null },
+    @Body() body: { motivo?: string; observacion?: string | null; versionBase?: number },
     @CurrentUser() user: { rol: string; idUsuario: number },
   ) {
     return this.devolverMaquinaUseCase.execute({
@@ -114,6 +115,7 @@ export class MaquinaController {
       idMaquina: id,
       motivo: body?.motivo,
       observacion: body?.observacion,
+      versionBase: body?.versionBase,
     });
   }
 
@@ -141,6 +143,7 @@ export class MaquinaController {
       regresoEstimado: body?.regresoEstimado,
       motivo: body?.motivo,
       observacion: body?.observacion,
+      versionBase: body?.versionBase,
     });
   }
 }

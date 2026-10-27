@@ -23,6 +23,9 @@ const maquina = (id: number, nombre: string, extra: Partial<MaquinaFlota> = {}):
   regresoEstimado: null,
   respaldo: null,
   cubreA: null,
+  version: 1,
+  actualizadoEn: null,
+  actualizadoPor: null,
   ...extra,
 });
 
@@ -77,6 +80,10 @@ describe('DevolverMaquinaUseCase', () => {
       idRespaldo: 5,
       estadoRespaldo: 'EN_RESERVA',
       idOperador: 4,
+      versiones: [
+        { idMaquina: 1, version: 1 },
+        { idMaquina: 5, version: 1 },
+      ],
       accionesOriginal: [
         {
           ...registro,

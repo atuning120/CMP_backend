@@ -10,6 +10,7 @@ const turnoDe = (horasAbierto: number) =>
 const crear = (turno: Turno | null) => {
   const turnoRepo = {
     save: jest.fn(async (t: Turno) => t),
+    cerrar: jest.fn<Promise<Turno | null>, [Turno, boolean]>(async (t) => t),
     iniciar: jest.fn(),
     findById: jest.fn(),
     findByIdCliente: jest.fn(),
@@ -44,7 +45,7 @@ describe('CerrarTurnoPorJefeUseCase', () => {
     await cerrar.execute(base, ahora);
 
     expect(turno).toMatchObject({ estadoActual: 'CERRADO', fechaFin: ahora, horometroFinal: 1006, cerradoPor: 7, motivoCierre: 'Falla mecánica' });
-    expect(turnoRepo.save).toHaveBeenCalledWith(turno);
+    expect(turnoRepo.cerrar).toHaveBeenCalledWith(turno, false);
   });
 
   it('un turno que ya pasó el límite queda CERRADO_AUTO en el límite, con el horómetro', async () => {
@@ -61,9 +62,15 @@ describe('CerrarTurnoPorJefeUseCase', () => {
     expect(await codigoDe(cerrar.execute({ ...base, motivo: 'x'.repeat(101) }, ahora))).toBe('MOTIVO_INVALIDO');
     expect(await codigoDe(cerrar.execute({ ...base, horometroFinal: 999 }, ahora))).toBe('HOROMETRO_INVALIDO');
     expect(await codigoDe(cerrar.execute({ ...base, horometroFinal: '1006' }, ahora))).toBe('HOROMETRO_INVALIDO');
-    expect(turnoRepo.save).not.toHaveBeenCalled();
+    expect(turnoRepo.cerrar).not.toHaveBeenCalled();
 
     const sinTurno = crear(null);
     expect(await codigoDe(sinTurno.cerrar.execute(base, ahora))).toBe('SIN_TURNO_EN_CURSO');
+  });
+
+  it('si el operador u otro jefe de turno lo cerró mientras tanto, gana el primer cierre', async () => {
+    const { turnoRepo, cerrar } = crear(turnoDe(6));
+    turnoRepo.cerrar.mockResolvedValueOnce(null);
+    expect(await codigoDe(cerrar.execute(base, ahora))).toBe('SIN_TURNO_EN_CURSO');
   });
 });

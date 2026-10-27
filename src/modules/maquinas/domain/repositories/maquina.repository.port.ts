@@ -50,6 +50,24 @@ export interface MaquinaFlota extends MaquinaResumen {
   respaldo: { idMaquina: number; nombre: string; estadoAlDevolver: EstadoMaquina } | null;
   // Si esta máquina es el respaldo de otra: la original a la que cubre
   cubreA: { idMaquina: number; nombre: string } | null;
+  // Sube con cada acción del jefe de turno; el cliente la devuelve como versionBase al modificarla
+  version: number;
+  // Última acción sobre la máquina: cuándo y quién (nombre del usuario)
+  actualizadoEn: Date | null;
+  actualizadoPor: string | null;
+}
+
+// Versión con que se validó una acción: si la máquina cambió antes de guardar, la acción no se aplica
+export interface VersionEsperada {
+  idMaquina: number;
+  version: number;
+}
+
+// Otra acción sobre la máquina se guardó entre la validación y el guardado (la transacción se revierte)
+export class MaquinaModificadaError extends Error {
+  constructor(public readonly idMaquina: number) {
+    super(`La máquina ${idMaquina} cambió antes de guardar`);
+  }
 }
 
 export interface NuevaMaquina {
@@ -121,6 +139,7 @@ export interface ReemplazoMaquina {
   // De la flota (habilitar: estaba fuera de servicio) o una máquina nueva que se crea
   entrante: { idMaquina: number; habilitar: boolean } | { nueva: Omit<NuevaMaquina, 'idOperador'> };
   idOperador: number | null; // operador a cargo de la entrante al terminar
+  versiones: VersionEsperada[]; // la saliente y, si es de la flota, la entrante
   accionesSaliente: AccionBitacora[];
   accionesEntrante: AccionBitacora[]; // se registran con el id de la entrante (que aún no existe si es nueva)
   accionesOtras: AccionBitacora[]; // con idMaquina explícito (p. ej. la máquina de donde viene el operador)
@@ -132,6 +151,7 @@ export interface DevolucionMaquina {
   idRespaldo: number;
   estadoRespaldo: EstadoMaquina; // al que vuelve el respaldo
   idOperador: number | null; // el operador del respaldo vuelve a la original
+  versiones: VersionEsperada[]; // la original y su respaldo
   accionesOriginal: AccionBitacora[];
   accionesRespaldo: AccionBitacora[];
 }
@@ -151,7 +171,9 @@ export interface MaquinaRepositoryPort {
   tieneTurnoEnCurso(idMaquina: number): Promise<boolean>;
   // Los cambios y sus registros en la bitácora se guardan en una misma transacción
   // Al volver a un estado operativo se borra el regreso estimado
-  actualizar(idMaquina: number, cambios: CambiosMaquina, acciones: AccionBitacora[]): Promise<void>;
+  // Toda acción que se guarda sube la versión de las máquinas que toca (también la que pierde a su operador).
+  // Si una máquina validada (version) ya cambió, lanza MaquinaModificadaError sin guardar nada
+  actualizar(idMaquina: number, version: number, cambios: CambiosMaquina, acciones: AccionBitacora[]): Promise<void>;
   // La máquina, su operador y los registros en la bitácora se guardan en una misma transacción.
   // Asignar un operador cierra su asignación anterior (otra máquina); acciones: registros extra en la bitácora
   create(datos: NuevaMaquina, registro: RegistroBitacora, acciones?: AccionBitacora[]): Promise<MaquinaFlota>;

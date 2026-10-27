@@ -4,7 +4,8 @@ import type { AlertaTurno, AlertaTurnoRepositoryPort, EstadoAtencionAlerta } fro
 import { leerRangoPaginado } from '../../../../shared/application/rango-paginado';
 import type { RangoPaginadoDto } from '../../../../shared/application/rango-paginado';
 
-export type FiltroTipoAlerta = 'TODO' | 'EXTENDIDOS' | 'CIERRES_AUTOMATICOS';
+export type FiltroTipoAlerta = 'TODO' | 'EXTENDIDOS' | 'CIERRES_AUTOMATICOS' | 'MANTENCIONES';
+const FILTROS_TIPO: FiltroTipoAlerta[] = ['EXTENDIDOS', 'CIERRES_AUTOMATICOS', 'MANTENCIONES'];
 
 export interface ListarAlertasDto extends RangoPaginadoDto {
   rol: string;
@@ -15,7 +16,8 @@ export interface ListarAlertasDto extends RangoPaginadoDto {
 export interface PaginaAlertas {
   alertas: AlertaTurno[];
   hayMas: boolean;
-  // Operadores con más de 10 h trabajadas ahora mismo (turno o jornada), sin importar el rango (contador de la pestaña)
+  // Lo que requiere acción ahora, sin importar el rango (contador de la pestaña): operadores con más de 10 h trabajadas
+  // (turno o jornada) y máquinas detenidas en mantención o falla
   activas: number;
 }
 
@@ -34,20 +36,21 @@ export class ListarAlertasUseCase {
       throw new ForbiddenException({ statusCode: 403, code: 'SIN_PERMISO', message: 'Solo un jefe de turno o administrador puede ver las alertas' });
     }
 
-    const tipo: FiltroTipoAlerta = dto.tipo === 'EXTENDIDOS' || dto.tipo === 'CIERRES_AUTOMATICOS' ? dto.tipo : 'TODO';
+    const tipo: FiltroTipoAlerta = FILTROS_TIPO.find((t) => t === dto.tipo) ?? 'TODO';
     const estado: EstadoAtencionAlerta = dto.estado === 'PENDIENTES' || dto.estado === 'ATENDIDAS' ? dto.estado : 'TODAS';
     const { limite, ...rango } = leerRangoPaginado(dto);
 
     // Se pide una más para saber si hay otra página sin hacer un COUNT
     const [alertas, activas] = await Promise.all([
       this.alertaRepo.listar({
-        incluirExtendidos: tipo !== 'CIERRES_AUTOMATICOS',
-        incluirCierresAutomaticos: tipo !== 'EXTENDIDOS',
+        incluirExtendidos: tipo === 'TODO' || tipo === 'EXTENDIDOS',
+        incluirCierresAutomaticos: tipo === 'TODO' || tipo === 'CIERRES_AUTOMATICOS',
+        incluirMantenciones: tipo === 'TODO' || tipo === 'MANTENCIONES',
         estado,
         ...rango,
         limite: limite + 1,
       }),
-      this.alertaRepo.contarExtendidosEnCurso(),
+      this.alertaRepo.contarActivas(),
     ]);
     return { alertas: alertas.slice(0, limite), hayMas: alertas.length > limite, activas };
   }

@@ -6,15 +6,22 @@ export const HORAS_AVISO_TURNO_EXTENDIDO = 10;
 // máquina porque la suya falló): la fatiga se mide por jornada, no por turno
 export const HORAS_DESCANSO_ENTRE_JORNADAS = 8;
 
-// Alertas de turno: se calculan desde TURNO (fuente de verdad), no se guardan aparte
+// Alertas de turno: se calculan desde TURNO y TURNO_ESTADO (fuente de verdad), no se guardan aparte
 // - TURNO_EXTENDIDO: el turno llegó a las 10 h (fecha = inicio + 10 h)
 // - CIERRE_AUTOMATICO: el sistema lo cerró a las 13 h, probablemente porque el operador olvidó finalizarlo
 // - JORNADA_EXTENDIDA: el operador sumó 10 h trabajadas en una jornada de varios turnos (fecha = el momento en que
 //   las cruzó, dentro del turno en que pasó). Un turno solo que llega a 10 h ya es TURNO_EXTENDIDO
-export type TipoAlertaTurno = 'TURNO_EXTENDIDO' | 'CIERRE_AUTOMATICO' | 'JORNADA_EXTENDIDA';
+// - MANTENCION: el operador marcó un estado operacional de la categoría MANTENCION (falla, mantención, siniestro; en
+//   rojo en el mapa). Una por cada vez que lo marca (fecha = inicio del estado); sigue activa mientras no lo cambie
+export type TipoAlertaTurno = 'TURNO_EXTENDIDO' | 'CIERRE_AUTOMATICO' | 'JORNADA_EXTENDIDA' | 'MANTENCION';
 
-// Prefijo del id de cada tipo de alerta: '<prefijo>-<id_turno>'
-export const PREFIJO_ALERTA: Record<TipoAlertaTurno, string> = { TURNO_EXTENDIDO: 'E', JORNADA_EXTENDIDA: 'J', CIERRE_AUTOMATICO: 'A' };
+// Prefijo del id de cada tipo de alerta: '<prefijo>-<id_turno>', o '<prefijo>-<id_turno_estado>' en MANTENCION
+export const PREFIJO_ALERTA: Record<TipoAlertaTurno, string> = {
+  TURNO_EXTENDIDO: 'E',
+  JORNADA_EXTENDIDA: 'J',
+  CIERRE_AUTOMATICO: 'A',
+  MANTENCION: 'M',
+};
 
 // Registro de quién atendió la alerta (ATENCION_ALERTA). La primera es la atención; las siguientes, notas posteriores
 export interface AtencionAlerta {
@@ -46,6 +53,8 @@ export interface AlertaTurno {
   // Solo JORNADA_EXTENDIDA: desde cuándo trabaja, en cuántos turnos y cuántas horas lleva (hasta el fin del turno
   // de la alerta, o hasta ahora si sigue en curso)
   jornada: { inicio: Date; turnos: number; horas: number } | null;
+  // Solo MANTENCION: el estado que marcó el operador, desde cuándo y hasta cuándo (null = sigue en él)
+  detencion: { estado: string; inicio: Date; fin: Date | null } | null;
   atenciones: AtencionAlerta[]; // vacío = pendiente
 }
 
@@ -57,6 +66,7 @@ export interface CursorAlerta {
 export interface FiltroAlertas {
   incluirExtendidos: boolean;
   incluirCierresAutomaticos: boolean;
+  incluirMantenciones: boolean;
   estado: EstadoAtencionAlerta;
   desde: Date; // inclusive
   hasta: Date | null; // exclusiva; null = hasta ahora
@@ -66,8 +76,10 @@ export interface FiltroAlertas {
 
 export interface AlertaTurnoRepositoryPort {
   listar(filtro: FiltroAlertas): Promise<AlertaTurno[]>;
-  // Operadores trabajando ahora que ya pasaron las horas de aviso, en su turno o sumando su jornada (contador)
-  contarExtendidosEnCurso(): Promise<number>;
-  // Si la alerta de ese tipo existe hoy para el turno (las alertas se calculan: se valida antes de atenderla)
-  existe(tipo: TipoAlertaTurno, idTurno: number): Promise<boolean>;
+  // Lo que requiere acción ahora (contador): operadores trabajando que ya pasaron las horas de aviso (en su turno o
+  // sumando su jornada) más máquinas con turno en curso detenidas en un estado de mantención
+  contarActivas(): Promise<number>;
+  // Turno de la alerta, o null si no existe (las alertas se calculan: se valida antes de atenderla). id es el número
+  // del id de la alerta: id_turno, o id_turno_estado en MANTENCION
+  turnoDeAlerta(tipo: TipoAlertaTurno, id: number): Promise<number | null>;
 }

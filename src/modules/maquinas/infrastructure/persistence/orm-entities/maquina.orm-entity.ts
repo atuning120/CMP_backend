@@ -44,4 +44,14 @@ export class MaquinaOrmEntity {
   @Column('varchar', { name: 'estado_previo_respaldo', nullable: true })
   estado_previo_respaldo: string | null;
 
+  // Sube con cada acción del jefe de turno sobre la máquina: detecta cambios hechos por otro mientras tanto
+  @Column('integer', { name: 'version', default: 1 })
+  version: number;
+
+  @Column('timestamp with time zone', { name: 'actualizado_en', nullable: true })
+  actualizado_en: Date | null;
+
+  @Column('integer', { name: 'actualizado_por', nullable: true })
+  actualizado_por: number | null;
+
 }

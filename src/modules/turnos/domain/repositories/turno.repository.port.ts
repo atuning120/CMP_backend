@@ -6,6 +6,9 @@ export const TURNO_REPOSITORY = Symbol('TURNO_REPOSITORY');
 export interface TurnoRepositoryPort {
   // Al guardar un turno con fecha de término, también cierra su ubicación vigente.
   save(turno: Turno): Promise<Turno>;
+  // Guarda el cierre solo si el turno sigue abierto (o, con admiteCierreAutomatico, cerrado por el sistema sin
+  // horómetro): de dos cierres simultáneos gana el primero. null si otro cierre llegó antes
+  cerrar(turno: Turno, admiteCierreAutomatico: boolean): Promise<Turno | null>;
   // Crea el turno junto a su ubicación inicial en una sola transacción.
   iniciar(turno: Turno, ubicacion: UbicacionTurno): Promise<Turno>;
   findById(id: number): Promise<Turno | null>;

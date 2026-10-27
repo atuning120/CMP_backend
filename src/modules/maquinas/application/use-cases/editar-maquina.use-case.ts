@@ -19,6 +19,7 @@ import type { ModeloMaquinaRepositoryPort } from '../../domain/repositories/mode
 import { maquinaError } from '../maquina.errors';
 import {
   accionesPorReasignacion,
+  guardarSinPisar,
   leerAnio,
   leerOperador,
   leerRegresoEstimado,
@@ -27,6 +28,7 @@ import {
   ROLES_GESTION_FLOTA,
   texto,
   textoMayusculas,
+  verificarVersionBase,
 } from '../maquina.datos';
 
 // Campos ausentes (undefined) no se modifican; null o '' borran un campo opcional
@@ -48,6 +50,7 @@ export interface EditarMaquinaDto {
   regresoEstimado?: unknown;
   motivo?: unknown;
   observacion?: unknown;
+  versionBase?: unknown; // versión de la máquina que vio el jefe de turno al preparar el cambio
 }
 
 type CampoFicha = Exclude<keyof FichaMaquina, 'estado'>;
@@ -70,6 +73,7 @@ export class EditarMaquinaUseCase {
     const idMaquina = Number(dto.idMaquina);
     const actual = Number.isInteger(idMaquina) && idMaquina > 0 ? await this.maquinaRepo.findFlotaById(idMaquina) : null;
     if (!actual) throw maquinaError('MAQUINA_NO_ENCONTRADA');
+    verificarVersionBase(actual, dto.versionBase);
 
     // Toda edición queda justificada en la bitácora del jefe de turno
     const motivo = texto('motivo', dto.motivo);
@@ -145,17 +149,7 @@ export class EditarMaquinaUseCase {
     const cambios: CambiosMaquina = Object.fromEntries(cambiados.map((campo) => [campo, despues[campo]]));
     if (cambiaEstado) cambios.estado = despues.estado;
     if (cambiaRegreso) cambios.regresoEstimado = regreso ?? null;
-    await this.maquinaRepo.actualizar(idMaquina, cambios, acciones);
-
-    // Solo cambió el estado: la respuesta se arma sin volver a consultar la flota (ahorra la consulta más pesada)
-    if (cambiados.length === 0) {
-      return {
-        ...actual,
-        estado: despues.estado,
-        regresoEstimado: regresoNuevo,
-        motivoEstado: despues.estado === 'ACTIVA' ? null : { motivo, observacion, fecha: new Date(), reemplazadaPor: null },
-      };
-    }
+    await guardarSinPisar(this.maquinaRepo, () => this.maquinaRepo.actualizar(idMaquina, actual.version, cambios, acciones));
 
     if (cambiados.some((campo) => campo === 'marca' || campo === 'modelo' || campo === 'tipoMaquina')) {
       await registrarModeloSiEsNuevo(this.modeloRepo, this.logger, {
@@ -166,6 +160,7 @@ export class EditarMaquinaUseCase {
       });
     }
 
+    // Se vuelve a leer para entregar la nueva versión (la próxima acción del cliente parte de ella)
     return (await this.maquinaRepo.findFlotaById(idMaquina)) ?? actual;
   }
 

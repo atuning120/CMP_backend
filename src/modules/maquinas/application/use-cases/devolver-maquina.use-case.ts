@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { MAQUINA_REPOSITORY } from '../../domain/repositories/maquina.repository.port';
 import type { AccionBitacora, MaquinaFlota, MaquinaRepositoryPort } from '../../domain/repositories/maquina.repository.port';
 import { maquinaError } from '../maquina.errors';
-import { ROLES_GESTION_FLOTA, texto } from '../maquina.datos';
+import { guardarSinPisar, ROLES_GESTION_FLOTA, texto, verificarVersionBase } from '../maquina.datos';
 
 export interface DevolverMaquinaDto {
   rol: string;
@@ -10,6 +10,7 @@ export interface DevolverMaquinaDto {
   idMaquina: unknown; // la original, la que vuelve a operar
   motivo?: unknown;
   observacion?: unknown;
+  versionBase?: unknown; // versión de la original que vio el jefe de turno
 }
 
 export interface ResultadoDevolucion {
@@ -35,6 +36,7 @@ export class DevolverMaquinaUseCase {
     const id = Number(dto.idMaquina);
     const original = Number.isInteger(id) && id > 0 ? await this.maquinaRepo.findFlotaById(id) : null;
     if (!original) throw maquinaError('MAQUINA_NO_ENCONTRADA');
+    verificarVersionBase(original, dto.versionBase);
     if (!original.respaldo) throw maquinaError('SIN_RESPALDO');
 
     const motivo = texto('motivo', dto.motivo);
@@ -78,14 +80,20 @@ export class DevolverMaquinaUseCase {
       });
     }
 
-    await this.maquinaRepo.devolver({
-      idOriginal: original.idMaquina,
-      idRespaldo: respaldo.idMaquina,
-      estadoRespaldo,
-      idOperador: operador?.idOperador ?? null,
-      accionesOriginal,
-      accionesRespaldo,
-    });
+    await guardarSinPisar(this.maquinaRepo, () =>
+      this.maquinaRepo.devolver({
+        idOriginal: original.idMaquina,
+        idRespaldo: respaldo.idMaquina,
+        estadoRespaldo,
+        idOperador: operador?.idOperador ?? null,
+        versiones: [
+          { idMaquina: original.idMaquina, version: original.version },
+          { idMaquina: respaldo.idMaquina, version: respaldo.version },
+        ],
+        accionesOriginal,
+        accionesRespaldo,
+      }),
+    );
 
     const [originalFinal, respaldoFinal] = await Promise.all([
       this.maquinaRepo.findFlotaById(original.idMaquina),

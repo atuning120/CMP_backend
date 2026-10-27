@@ -30,14 +30,23 @@ export class AlertasController {
   }
 
   // Atiende la alerta (la primera vez; comentario opcional) o le agrega una nota (comentario obligatorio).
-  // Responde { idAlerta, atenciones } con todas sus atenciones
+  // Responde { idAlerta, atenciones } con todas sus atenciones. idCliente (UUID) hace idempotente el reintento;
+  // atencionesVistas: cuántas tenía al atenderla (si otro la atendió entremedio, se acepta sin comentario);
+  // fechaAccion: cuándo la atendió, si se hizo sin señal y se envía después
   @Post(':idAlerta/atenciones')
   @HttpCode(HttpStatus.CREATED)
   async atender(
     @Param('idAlerta') idAlerta: string,
-    @Body() body: { comentario?: string },
+    @Body() body: { comentario?: string; idCliente?: string; atencionesVistas?: number; fechaAccion?: string },
     @CurrentUser() user: { idUsuario: number; rol: string },
   ) {
-    return this.atenderAlertaUseCase.execute({ idAlerta, comentario: body?.comentario, autor: user });
+    return this.atenderAlertaUseCase.execute({
+      idAlerta,
+      comentario: body?.comentario,
+      autor: user,
+      idCliente: body?.idCliente,
+      atencionesVistas: body?.atencionesVistas,
+      fechaAccion: body?.fechaAccion,
+    });
   }
 }

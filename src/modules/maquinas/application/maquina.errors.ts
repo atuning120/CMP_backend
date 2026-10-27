@@ -11,7 +11,8 @@ export type MaquinaErrorCode =
   | 'MAQUINA_NO_ENCONTRADA'
   | 'SIN_CAMBIOS'
   | 'MAQUINA_EN_USO'
-  | 'SIN_RESPALDO';
+  | 'SIN_RESPALDO'
+  | 'MAQUINA_MODIFICADA';
 
 export const maquinaError = (code: MaquinaErrorCode, detalle?: string) => {
   switch (code) {
@@ -36,6 +37,13 @@ export const maquinaError = (code: MaquinaErrorCode, detalle?: string) => {
         statusCode: 409,
         code,
         message: `${detalle} tiene un turno en curso: primero hay que cerrarlo para sacarla de operación`,
+      });
+    case 'MAQUINA_MODIFICADA':
+      // detalle: "CF-12 fue modificada por Juan Pérez"
+      return new ConflictException({
+        statusCode: 409,
+        code,
+        message: `${detalle} mientras hacías este cambio. Revisa cómo quedó e intenta nuevamente`,
       });
     case 'SIN_RESPALDO':
       return new ConflictException({ statusCode: 409, code, message: 'La máquina no tiene un respaldo que devolver' });

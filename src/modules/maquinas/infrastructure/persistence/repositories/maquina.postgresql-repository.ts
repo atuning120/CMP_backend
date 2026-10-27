@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
-import { esEstadoMaquina, operaEnEstado } from '../../../domain/repositories/maquina.repository.port';
+import { esEstadoMaquina, MaquinaModificadaError, operaEnEstado } from '../../../domain/repositories/maquina.repository.port';
 import type {
   AccionBitacora,
   CambiosMaquina,
@@ -14,6 +14,7 @@ import type {
   OperadorAsignable,
   ReemplazoMaquina,
   RegistroBitacora,
+  VersionEsperada,
 } from '../../../domain/repositories/maquina.repository.port';
 import { MaquinaOrmEntity } from '../orm-entities/maquina.orm-entity';
 
@@ -81,8 +82,10 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
              actual.id_estado, actual.estado_operacional, actual.categoria_estado, actual.estado_desde,
              COALESCE(ultimo.horometro, m.horometro_inicial) AS horometro,
              m.regreso_estimado, m.id_maquina_respaldo, r.nombre AS respaldo, m.estado_previo_respaldo,
-             cubierta.id_maquina AS id_cubre_a, cubierta.nombre AS cubre_a
+             cubierta.id_maquina AS id_cubre_a, cubierta.nombre AS cubre_a,
+             m.version, m.actualizado_en, ua.nombre AS actualizado_por
       FROM maquina m
+      LEFT JOIN usuario ua ON ua.id_usuario = m.actualizado_por
       LEFT JOIN maquina r ON r.id_maquina = m.id_maquina_respaldo
       LEFT JOIN maquina cubierta ON cubierta.id_maquina_respaldo = m.id_maquina
       LEFT JOIN asignacion_operador ao ON ao.id_maquina = m.id_maquina AND ao.vigente_hasta IS NULL
@@ -170,6 +173,9 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
               estadoAlDevolver: esEstadoMaquina(fila.estado_previo_respaldo) ? fila.estado_previo_respaldo : 'EN_RESERVA',
             },
       cubreA: fila.id_cubre_a === null ? null : { idMaquina: fila.id_cubre_a, nombre: fila.cubre_a ?? '' },
+      version: fila.version,
+      actualizadoEn: fila.actualizado_en,
+      actualizadoPor: fila.actualizado_por,
     }));
   }
 
@@ -197,11 +203,13 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
 
   async reemplazar(reemplazo: ReemplazoMaquina): Promise<number> {
     return this.ormRepository.manager.transaction(async (manager) => {
+      const idUsuario = reemplazo.accionesSaliente[0].idUsuario;
+      await this.verificarVersiones(manager, reemplazo.versiones, idUsuario);
       const repo = manager.getRepository(MaquinaOrmEntity);
       const { entrante } = reemplazo;
       let idEntrante: number;
       if ('nueva' in entrante) {
-        idEntrante = (await this.insertarMaquina(manager, entrante.nueva)).id_maquina;
+        idEntrante = (await this.insertarMaquina(manager, entrante.nueva, idUsuario)).id_maquina;
       } else {
         idEntrante = entrante.idMaquina;
         if (entrante.habilitar) await repo.update({ id_maquina: idEntrante }, { estado: 'ACTIVA' });
@@ -224,12 +232,14 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       await this.registrarAcciones(manager, reemplazo.idSaliente, reemplazo.accionesSaliente);
       await this.registrarAcciones(manager, idEntrante, reemplazo.accionesEntrante);
       await this.registrarAcciones(manager, idEntrante, reemplazo.accionesOtras);
+      await this.subirVersiones(manager, this.otrasMaquinas(reemplazo.accionesOtras, reemplazo.versiones), idUsuario);
       return idEntrante;
     });
   }
 
   async devolver(devolucion: DevolucionMaquina): Promise<void> {
     await this.ormRepository.manager.transaction(async (manager) => {
+      await this.verificarVersiones(manager, devolucion.versiones, devolucion.accionesOriginal[0].idUsuario);
       const repo = manager.getRepository(MaquinaOrmEntity);
       await repo.update(
         { id_maquina: devolucion.idOriginal },
@@ -247,7 +257,11 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
     });
   }
 
-  private async insertarMaquina(manager: EntityManager, datos: Omit<NuevaMaquina, 'idOperador'>): Promise<MaquinaOrmEntity> {
+  private async insertarMaquina(
+    manager: EntityManager,
+    datos: Omit<NuevaMaquina, 'idOperador'>,
+    idUsuario: number,
+  ): Promise<MaquinaOrmEntity> {
     const repo = manager.getRepository(MaquinaOrmEntity);
     return repo.save(
       repo.create({
@@ -261,6 +275,8 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
         numero_chasis: datos.numeroChasis,
         horometro_inicial: String(datos.horometroInicial),
         es_contratista: datos.esContratista,
+        actualizado_en: new Date(),
+        actualizado_por: idUsuario,
       }),
     );
   }
@@ -309,6 +325,37 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
     }
   }
 
+  // Sube la versión de las máquinas validadas solo si siguen en la versión con que se validó la acción. El UPDATE
+  // bloquea la fila hasta el fin de la transacción: una acción concurrente espera y luego ya no la encuentra
+  private async verificarVersiones(manager: EntityManager, versiones: VersionEsperada[], idUsuario: number) {
+    for (const { idMaquina, version } of versiones) {
+      const resultado = await manager
+        .createQueryBuilder()
+        .update(MaquinaOrmEntity)
+        .set({ version: () => 'version + 1', actualizado_en: () => 'CURRENT_TIMESTAMP', actualizado_por: idUsuario })
+        .where('id_maquina = :idMaquina AND version = :version', { idMaquina, version })
+        .execute();
+      if (!resultado.affected) throw new MaquinaModificadaError(idMaquina);
+    }
+  }
+
+  // Otras máquinas que la acción también cambia (p. ej. la que pierde a su operador): suben su versión sin validarla
+  private async subirVersiones(manager: EntityManager, idsMaquina: number[], idUsuario: number) {
+    if (idsMaquina.length === 0) return;
+    await manager
+      .createQueryBuilder()
+      .update(MaquinaOrmEntity)
+      .set({ version: () => 'version + 1', actualizado_en: () => 'CURRENT_TIMESTAMP', actualizado_por: idUsuario })
+      .where('id_maquina IN (:...idsMaquina)', { idsMaquina })
+      .execute();
+  }
+
+  private otrasMaquinas(acciones: AccionBitacora[], versiones: VersionEsperada[]): number[] {
+    const validadas = new Set(versiones.map((v) => v.idMaquina));
+    const otras = acciones.map((a) => a.idMaquina).filter((id): id is number => id !== undefined && !validadas.has(id));
+    return [...new Set(otras)];
+  }
+
   private async registrarAcciones(manager: EntityManager, idMaquina: number, acciones: AccionBitacora[]) {
     for (const accion of acciones) {
       await manager.query(
@@ -326,7 +373,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
     }
   }
 
-  async actualizar(idMaquina: number, cambios: CambiosMaquina, acciones: AccionBitacora[]): Promise<void> {
+  async actualizar(idMaquina: number, version: number, cambios: CambiosMaquina, acciones: AccionBitacora[]): Promise<void> {
     const columnas: Partial<MaquinaOrmEntity> = {
       nombre: cambios.nombre,
       marca: cambios.marca,
@@ -343,15 +390,19 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
     // Solo las columnas que cambian (undefined = no se toca; null sí se guarda)
     const set = Object.fromEntries(Object.entries(columnas).filter(([, valor]) => valor !== undefined));
     await this.ormRepository.manager.transaction(async (manager) => {
+      const versiones = [{ idMaquina, version }];
+      const idUsuario = acciones[0].idUsuario;
+      await this.verificarVersiones(manager, versiones, idUsuario);
       if (Object.keys(set).length > 0) await manager.getRepository(MaquinaOrmEntity).update({ id_maquina: idMaquina }, set);
       if (cambios.idOperador !== undefined) await this.asignarOperador(manager, idMaquina, cambios.idOperador);
       await this.registrarAcciones(manager, idMaquina, acciones);
+      await this.subirVersiones(manager, this.otrasMaquinas(acciones, versiones), idUsuario);
     });
   }
 
   async create(datos: NuevaMaquina, registro: RegistroBitacora, acciones: AccionBitacora[] = []): Promise<MaquinaFlota> {
     const ormEntity = await this.ormRepository.manager.transaction(async (manager) => {
-      const creada = await this.insertarMaquina(manager, datos);
+      const creada = await this.insertarMaquina(manager, datos, registro.idUsuario);
       await manager.query(
         `INSERT INTO bitacora_jefe_turno (accion, id_maquina, id_usuario, motivo, observacion, detalle)
          VALUES ('INCORPORAR', $1, $2, $3, $4, $5)`,
@@ -359,6 +410,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       );
       if (datos.idOperador !== null) await this.asignarOperador(manager, creada.id_maquina, datos.idOperador);
       await this.registrarAcciones(manager, creada.id_maquina, acciones);
+      await this.subirVersiones(manager, this.otrasMaquinas(acciones, [{ idMaquina: creada.id_maquina, version: 1 }]), registro.idUsuario);
       return creada;
     });
     // Se lee como en la flota para traer al operador asignado; recién incorporada, aún no tiene turnos
@@ -436,6 +488,9 @@ interface FilaFlota {
   estado_previo_respaldo: string | null;
   id_cubre_a: number | null;
   cubre_a: string | null;
+  version: number;
+  actualizado_en: Date | null;
+  actualizado_por: string | null;
 }
 
 interface FilaMaquina {

@@ -7,11 +7,29 @@ import type { AtencionAlertaRepositoryPort } from '../../../domain/repositories/
 export class AtencionAlertaPostgresqlRepository implements AtencionAlertaRepositoryPort {
   constructor(private readonly dataSource: DataSource) {}
 
-  async registrar({ idAlerta, idTurno, idUsuario, comentario }: { idAlerta: string; idTurno: number; idUsuario: number; comentario: string | null }) {
+  async registrar(datos: {
+    idAlerta: string;
+    idTurno: number;
+    idUsuario: number;
+    comentario: string | null;
+    idCliente: string | null;
+    fecha: Date | null;
+  }) {
+    // Dos reintentos simultáneos del mismo cliente: el segundo no inserta (id_cliente es único)
     await this.dataSource.query(
-      `INSERT INTO atencion_alerta (id_alerta, id_turno, id_usuario, comentario) VALUES ($1, $2, $3, $4)`,
-      [idAlerta, idTurno, idUsuario, comentario],
+      `INSERT INTO atencion_alerta (id_alerta, id_turno, id_usuario, comentario, id_cliente, fecha)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()))
+       ON CONFLICT (id_cliente) DO NOTHING`,
+      [datos.idAlerta, datos.idTurno, datos.idUsuario, datos.comentario, datos.idCliente, datos.fecha],
     );
+  }
+
+  async existeIdCliente(idCliente: string): Promise<boolean> {
+    const [fila]: { existe: boolean }[] = await this.dataSource.query(
+      `SELECT EXISTS (SELECT 1 FROM atencion_alerta WHERE id_cliente = $1) AS existe`,
+      [idCliente],
+    );
+    return fila.existe;
   }
 
   async listar(idAlerta: string): Promise<AtencionAlerta[]> {

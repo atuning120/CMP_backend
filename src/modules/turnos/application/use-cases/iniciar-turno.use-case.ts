@@ -125,7 +125,7 @@ export class IniciarTurnoUseCase {
       return turno;
     }
     turno.cerrarAutomaticamente();
-    await this.turnoRepo.save(turno);
+    await this.turnoRepo.cerrar(turno, false);
     return null;
   }
 }

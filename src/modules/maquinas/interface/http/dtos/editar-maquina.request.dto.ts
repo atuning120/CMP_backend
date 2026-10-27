@@ -13,4 +13,5 @@ export class EditarMaquinaRequestDto {
   regresoEstimado?: string | null; // ISO; solo en mantenimiento o fuera de servicio
   motivo: string;
   observacion?: string | null;
+  versionBase?: number; // versión de la máquina que vio el jefe de turno; si cambió, responde 409 MAQUINA_MODIFICADA
 }

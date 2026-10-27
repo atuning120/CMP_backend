@@ -1,6 +1,8 @@
 import type { Logger } from '@nestjs/common';
+import { MaquinaModificadaError } from '../domain/repositories/maquina.repository.port';
 import type {
   AccionBitacora,
+  MaquinaFlota,
   MaquinaRepositoryPort,
   NuevaMaquina,
   OperadorAsignable,
@@ -183,4 +185,28 @@ export const leerRegresoEstimado = (valor: unknown, ahora: Date = new Date()): D
     throw maquinaError('DATOS_INVALIDOS', 'La fecha estimada de regreso no puede ser en más de un año');
   }
   return fecha;
+};
+
+// Varios jefes de turno (en la web y en la app) gestionan la misma flota: una acción preparada sobre una versión
+// vieja de la máquina no pisa lo que otro cambió mientras tanto
+const maquinaModificada = (maquina: MaquinaFlota) =>
+  maquinaError('MAQUINA_MODIFICADA', `${maquina.nombre} fue modificada${maquina.actualizadoPor ? ` por ${maquina.actualizadoPor}` : ''}`);
+
+// versionBase: la versión de la máquina que vio el cliente al preparar la acción. Si no viene (versiones anteriores
+// de la app o del panel) no se compara
+export const verificarVersionBase = (maquina: MaquinaFlota, versionBase: unknown) => {
+  if (versionBase === undefined || versionBase === null) return;
+  if (!Number.isInteger(versionBase)) throw maquinaError('DATOS_INVALIDOS', 'La versión de la máquina no es válida');
+  if (versionBase !== maquina.version) throw maquinaModificada(maquina);
+};
+
+// Guarda la acción; si otra se guardó entre la validación y el guardado, se responde igual que a una versionBase vieja
+export const guardarSinPisar = async <T>(maquinaRepo: MaquinaRepositoryPort, guardar: () => Promise<T>): Promise<T> => {
+  try {
+    return await guardar();
+  } catch (error) {
+    if (!(error instanceof MaquinaModificadaError)) throw error;
+    const actual = await maquinaRepo.findFlotaById(error.idMaquina);
+    throw actual ? maquinaModificada(actual) : maquinaError('MAQUINA_NO_ENCONTRADA');
+  }
 };

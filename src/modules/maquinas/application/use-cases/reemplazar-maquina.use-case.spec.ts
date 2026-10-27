@@ -24,6 +24,9 @@ const maquina = (id: number, nombre: string, extra: Partial<MaquinaFlota> = {}):
   regresoEstimado: null,
   respaldo: null,
   cubreA: null,
+  version: 1,
+  actualizadoEn: null,
+  actualizadoPor: null,
   ...extra,
 });
 
@@ -80,6 +83,10 @@ describe('ReemplazarMaquinaUseCase', () => {
       estadoPrevioEntrante: 'BAJA',
       entrante: { idMaquina: 9, habilitar: true },
       idOperador: 1,
+      versiones: [
+        { idMaquina: 3, version: 1 },
+        { idMaquina: 9, version: 1 },
+      ],
       accionesSaliente: [
         {
           ...registro,

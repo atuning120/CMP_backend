@@ -41,6 +41,9 @@ export class CerrarTurnoPorJefeUseCase {
     if (!Number.isFinite(horometro) || horometro < turno.horometroInicial) throw turnoError('HOROMETRO_INVALIDO');
 
     turno.cerrarPorJefe(ahora, horometro, dto.idUsuario, motivo);
-    return this.turnoRepo.save(turno);
+    // El operador u otro jefe de turno lo cerró mientras tanto: gana el primer cierre
+    const cerrado = await this.turnoRepo.cerrar(turno, false);
+    if (!cerrado) throw turnoError('SIN_TURNO_EN_CURSO');
+    return cerrado;
   }
 }

@@ -55,7 +55,11 @@ export const turnoError = (code: TurnoErrorCode) => {
     case 'MOTIVO_INVALIDO':
       return new BadRequestException({ statusCode: 400, code, message: 'Indica el motivo del cierre (hasta 100 caracteres)' });
     case 'SIN_TURNO_EN_CURSO':
-      return new ConflictException({ statusCode: 409, code, message: 'La máquina no tiene un turno en curso' });
+      return new ConflictException({
+        statusCode: 409,
+        code,
+        message: 'La máquina no tiene un turno en curso. Puede que el operador u otro jefe de turno ya lo haya cerrado',
+      });
     case 'TURNO_CERRADO_AUTOMATICAMENTE':
       return new ConflictException({
         statusCode: 409,

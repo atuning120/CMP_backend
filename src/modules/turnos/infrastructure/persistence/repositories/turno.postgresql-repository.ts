@@ -20,21 +20,42 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
   async save(turno: Turno): Promise<Turno> {
     return this.ormRepository.manager.transaction(async (manager) => {
       const saved = await this.saveWith(manager, turno);
-      if (saved.hora_termino) {
-        // Al cerrar el turno se cierran también su ubicación y su estado operacional vigentes
-        await manager.update(
-          TurnoUbicacionOrmEntity,
-          { id_turno: saved.id_turno, fin: IsNull() },
-          { fin: saved.hora_termino },
-        );
-        await manager.update(
-          TurnoEstadoOrmEntity,
-          { id_turno: saved.id_turno, fin: IsNull() },
-          { fin: saved.hora_termino },
-        );
-      }
+      if (saved.hora_termino) await this.cerrarVigentes(manager, saved.id_turno, saved.hora_termino);
       return this.mapToDomain(saved);
     });
+  }
+
+  async cerrar(turno: Turno, admiteCierreAutomatico: boolean): Promise<Turno | null> {
+    return this.ormRepository.manager.transaction(async (manager) => {
+      // La condición va en el mismo UPDATE: un segundo cierre concurrente espera al primero y ya no la cumple
+      const sigueAbierto = admiteCierreAutomatico
+        ? "(hora_termino IS NULL OR (estado = 'CERRADO_AUTO' AND horometro_final IS NULL))"
+        : 'hora_termino IS NULL';
+      const resultado = await manager
+        .createQueryBuilder()
+        .update(TurnoOrmEntity)
+        .set({
+          hora_termino: turno.fechaFin,
+          horometro_final: turno.horometroFinal,
+          estado: turno.estadoActual,
+          conflicto: turno.conflicto,
+          conflicto_detalle: turno.conflictoDetalle,
+          cerrado_por: turno.cerradoPor,
+          motivo_cierre: turno.motivoCierre,
+        })
+        .where('id_turno = :id', { id: turno.id })
+        .andWhere(sigueAbierto)
+        .execute();
+      if (!resultado.affected) return null;
+      if (turno.fechaFin) await this.cerrarVigentes(manager, turno.id!, turno.fechaFin);
+      return turno;
+    });
+  }
+
+  // Al cerrar el turno se cierran también su ubicación y su estado operacional vigentes
+  private async cerrarVigentes(manager: EntityManager, idTurno: number, fin: Date) {
+    await manager.update(TurnoUbicacionOrmEntity, { id_turno: idTurno, fin: IsNull() }, { fin });
+    await manager.update(TurnoEstadoOrmEntity, { id_turno: idTurno, fin: IsNull() }, { fin });
   }
 
   async iniciar(turno: Turno, ubicacion: UbicacionTurno): Promise<Turno> {

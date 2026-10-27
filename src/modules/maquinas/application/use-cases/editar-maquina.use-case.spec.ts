@@ -1,3 +1,4 @@
+import { MaquinaModificadaError } from '../../domain/repositories/maquina.repository.port';
 import type { MaquinaFlota, MaquinaRepositoryPort } from '../../domain/repositories/maquina.repository.port';
 import type { ModeloMaquinaRepositoryPort } from '../../domain/repositories/modelo-maquina.repository.port';
 import { EditarMaquinaUseCase } from './editar-maquina.use-case';
@@ -24,6 +25,9 @@ const maquina: MaquinaFlota = {
   regresoEstimado: null,
   respaldo: null,
   cubreA: null,
+  version: 1,
+  actualizadoEn: null,
+  actualizadoPor: null,
 };
 
 const crear = (opciones: { nombres?: string[]; patentes?: string[]; enUso?: boolean; tipos?: string[] } = {}) => {
@@ -67,7 +71,7 @@ describe('EditarMaquinaUseCase', () => {
   it('guarda solo los campos que cambian y deja el antes/después en la bitácora', async () => {
     const { maquinaRepo, editar } = crear();
     await editar.execute({ ...base, nombre: ' cf-03 ', patente: 'zz-yy-99', numeroChasis: ' VIN123 ', anio: 2020 });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { patente: 'ZZ-YY-99', numeroChasis: 'VIN123' }, [
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { patente: 'ZZ-YY-99', numeroChasis: 'VIN123' }, [
       {
         ...registro,
         accion: 'EDITAR',
@@ -82,26 +86,43 @@ describe('EditarMaquinaUseCase', () => {
   it('un cambio de estado se registra como habilitar, deshabilitar o cambiar estado', async () => {
     const { maquinaRepo, editar } = crear();
     await editar.execute({ ...base, estado: 'BAJA' });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { estado: 'BAJA' }, [
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { estado: 'BAJA' }, [
       { ...registro, accion: 'DESHABILITAR', detalle: { antes: { estado: 'ACTIVA' }, despues: { estado: 'BAJA' } } },
     ]);
     await editar.execute({ ...base, estado: 'EN_MANTENIMIENTO' });
-    expect(maquinaRepo.actualizar).toHaveBeenLastCalledWith(3, { estado: 'EN_MANTENIMIENTO' }, [
+    expect(maquinaRepo.actualizar).toHaveBeenLastCalledWith(3, 1, { estado: 'EN_MANTENIMIENTO' }, [
       { ...registro, accion: 'CAMBIAR_ESTADO', detalle: { antes: { estado: 'ACTIVA' }, despues: { estado: 'EN_MANTENIMIENTO' } } },
     ]);
     expect(await codigoDe(editar.execute({ ...base, estado: 'SIN_OPERADOR' }))).toBe('DATOS_INVALIDOS');
   });
 
-  it('un cambio solo de estado no consulta catálogos ni vuelve a leer la flota', async () => {
+  it('un cambio solo de estado no consulta catálogos y relee la máquina para entregar su nueva versión', async () => {
     const { maquinaRepo, editar } = crear();
+    maquinaRepo.findFlotaById.mockResolvedValueOnce(maquina).mockResolvedValueOnce({ ...maquina, estado: 'EN_RESERVA', version: 2 });
     const resultado = await editar.execute({ ...base, estado: 'EN_RESERVA', observacion: 'Respaldo del turno B' });
     expect(maquinaRepo.findMarcas).not.toHaveBeenCalled();
     expect(maquinaRepo.findTipos).not.toHaveBeenCalled();
-    expect(maquinaRepo.findFlotaById).toHaveBeenCalledTimes(1);
-    expect(resultado).toMatchObject({
-      estado: 'EN_RESERVA',
-      motivoEstado: { motivo: registro.motivo, observacion: 'Respaldo del turno B', reemplazadaPor: null },
-    });
+    expect(maquinaRepo.findFlotaById).toHaveBeenCalledTimes(2);
+    expect(resultado).toMatchObject({ estado: 'EN_RESERVA', version: 2 });
+  });
+
+  it('no pisa un cambio que otro jefe de turno hizo después de que se vio la máquina', async () => {
+    const { maquinaRepo, editar } = crear();
+    maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, version: 4, actualizadoPor: 'Juan Pérez' });
+
+    const error = await editar.execute({ ...base, estado: 'EN_RESERVA', versionBase: 3 }).catch((e: any) => e.getResponse());
+
+    expect(error).toMatchObject({ code: 'MAQUINA_MODIFICADA', message: expect.stringContaining('CF-03 fue modificada por Juan Pérez') });
+    expect(maquinaRepo.actualizar).not.toHaveBeenCalled();
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA', versionBase: '4' }))).toBe('DATOS_INVALIDOS');
+    await editar.execute({ ...base, estado: 'EN_RESERVA', versionBase: 4 });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 4, { estado: 'EN_RESERVA' }, expect.any(Array));
+  });
+
+  it('si otra acción se guarda entre la validación y el guardado, tampoco la pisa', async () => {
+    const { maquinaRepo, editar } = crear();
+    maquinaRepo.actualizar.mockRejectedValueOnce(new MaquinaModificadaError(3));
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA' }))).toBe('MAQUINA_MODIFICADA');
   });
 
   it('pasar a un estado distinto de fuera de servicio no se bloquea por un turno en curso', async () => {
@@ -115,7 +136,7 @@ describe('EditarMaquinaUseCase', () => {
   it('editar y cambiar el estado a la vez deja ambos registros', async () => {
     const { maquinaRepo, editar } = crear();
     await editar.execute({ ...base, esContratista: true, estado: 'BAJA' });
-    const [, cambios, acciones] = maquinaRepo.actualizar.mock.calls[0] as unknown as [number, object, { accion: string }[]];
+    const [, , cambios, acciones] = maquinaRepo.actualizar.mock.calls[0] as unknown as [number, number, object, { accion: string }[]];
     expect(cambios).toEqual({ esContratista: true, estado: 'BAJA' });
     expect(acciones.map((a) => a.accion)).toEqual(['EDITAR', 'DESHABILITAR']);
   });
@@ -168,7 +189,7 @@ describe('EditarMaquinaUseCase', () => {
       maquinaAsignada: { idMaquina: 2, nombre: 'CF-02' },
     } as never);
     await editar.execute({ ...base, idOperador: 4 });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { idOperador: 4 }, [
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { idOperador: 4 }, [
       { ...registro, accion: 'EDITAR', detalle: { antes: { operador: 'Ana Soto' }, despues: { operador: 'Juan Pérez' } } },
       expect.objectContaining({ idMaquina: 2, observacion: 'Juan Pérez pasó a CF-03' }),
     ]);
@@ -180,7 +201,7 @@ describe('EditarMaquinaUseCase', () => {
     expect(await codigoDe(editar.execute({ ...base, idOperador: 1 }))).toBe('SIN_CAMBIOS');
     expect(maquinaRepo.findOperadorAsignable).not.toHaveBeenCalled();
     await editar.execute({ ...base, idOperador: null });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { idOperador: null }, [
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { idOperador: null }, [
       { ...registro, accion: 'EDITAR', detalle: { antes: { operador: 'Ana Soto' }, despues: { operador: null } } },
     ]);
   });
@@ -200,15 +221,14 @@ describe('EditarMaquinaUseCase', () => {
   it('en mantenimiento guarda la fecha estimada de regreso y la deja en la bitácora', async () => {
     const { maquinaRepo, editar } = crear();
     const regreso = new Date(Date.now() + 40 * 3600_000);
-    const resultado = await editar.execute({ ...base, estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso.toISOString() });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso }, [
+    await editar.execute({ ...base, estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso.toISOString() });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso }, [
       {
         ...registro,
         accion: 'CAMBIAR_ESTADO',
         detalle: { antes: { estado: 'ACTIVA' }, despues: { estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso.toISOString() } },
       },
     ]);
-    expect(resultado.regresoEstimado).toEqual(regreso);
   });
 
   it('valida la fecha de regreso: futura, de menos de un año y solo fuera de operación', async () => {
@@ -228,7 +248,7 @@ describe('EditarMaquinaUseCase', () => {
     const despues = new Date(Date.now() + 30 * 3600_000);
     maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, estado: 'EN_MANTENIMIENTO', regresoEstimado: antes });
     await editar.execute({ ...base, regresoEstimado: despues.toISOString() });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { regresoEstimado: despues }, [
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { regresoEstimado: despues }, [
       {
         ...registro,
         accion: 'EDITAR',
