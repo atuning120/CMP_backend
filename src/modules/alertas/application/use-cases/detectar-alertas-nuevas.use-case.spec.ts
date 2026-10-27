@@ -11,6 +11,7 @@ const alerta = (id: string): AlertaTurno => ({
   area: 'Área 15',
   zona: null,
   jornada: null,
+  detencion: null,
   atenciones: [],
 });
 
@@ -18,8 +19,8 @@ const crear = () => {
   const estado = { ids: [] as string[], activas: 0 };
   const alertaRepo = {
     listar: jest.fn(async (_filtro: FiltroAlertas) => estado.ids.map(alerta)),
-    contarExtendidosEnCurso: jest.fn(async () => estado.activas),
-    existe: jest.fn(async () => true),
+    contarActivas: jest.fn(async () => estado.activas),
+    turnoDeAlerta: jest.fn(async (_tipo: string, id: number) => id),
   } satisfies AlertaTurnoRepositoryPort;
   return { estado, alertaRepo, detectar: new DetectarAlertasNuevasUseCase(alertaRepo) };
 };
@@ -53,7 +54,7 @@ describe('DetectarAlertasNuevasUseCase', () => {
     await expect(detectar.execute()).resolves.toEqual({ nuevas: [], activas: 0 });
   });
 
-  it('busca en las últimas 24 h, ambos tipos y sin paginar', async () => {
+  it('busca en las últimas 24 h, todos los tipos y sin paginar', async () => {
     const { alertaRepo, detectar } = crear();
     const ahora = new Date(2026, 9, 8, 12, 0);
     await detectar.execute(ahora);
@@ -61,6 +62,7 @@ describe('DetectarAlertasNuevasUseCase', () => {
       expect.objectContaining({
         incluirExtendidos: true,
         incluirCierresAutomaticos: true,
+        incluirMantenciones: true,
         desde: new Date(2026, 9, 7, 12, 0),
         hasta: null,
         despuesDe: null,

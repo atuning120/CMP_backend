@@ -44,4 +44,8 @@ export class TurnoOrmEntity {
   @Column('varchar', { name: 'motivo_cierre', nullable: true })
   motivo_cierre: string | null;
 
+  // UUID del cierre que hizo un jefe de turno desde la app (puede venir de una acción hecha sin señal)
+  @Column('uuid', { name: 'id_cliente_cierre', nullable: true, unique: true })
+  id_cliente_cierre: string | null;
+
 }

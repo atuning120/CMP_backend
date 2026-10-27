@@ -50,6 +50,7 @@ const turnoIniciadoHace = (horas: number, overrides: Partial<Turno> = {}) =>
 const crearRepos = () => {
   const turnoRepo = {
     save: jest.fn(async (turno: Turno) => Object.assign(turno, { id: turno.id ?? 99 })),
+    cerrar: jest.fn<Promise<Turno | null>, [Turno, boolean, (string | null)?]>(async (turno) => turno),
     iniciar: jest.fn(async (turno: Turno, _ubicacion: UbicacionTurno) => Object.assign(turno, { id: 99 })),
     findUbicacionVigente: jest.fn<Promise<UbicacionTurno | null>, [number]>(async () => ubicacionValida),
     findById: jest.fn<Promise<Turno | null>, [number]>(async () => null),
@@ -61,12 +62,17 @@ const crearRepos = () => {
     findUbicacionByIdCliente: jest.fn<Promise<UbicacionTurnoRegistro | null>, [string]>(async () => null),
     registrarUbicacion: jest.fn(async (data: Omit<UbicacionTurnoRegistro, 'idTurnoUbicacion'>) => ({ idTurnoUbicacion: 4, ...data })),
     findUltimoHorometroFinal: jest.fn<Promise<number | null>, [number, Date]>(async () => null),
+    findByIdClienteCierre: jest.fn(async (_idCliente: string): Promise<Turno | null> => null),
+    findUltimoRegistro: jest.fn(async (_idTurno: number): Promise<Date | null> => null),
+    findCierre: jest.fn(async (_idTurno: number): Promise<{ por: string; fecha: Date } | null> => null),
   } satisfies TurnoRepositoryPort;
   const maquinaRepo = {
     findById: jest.fn<Promise<MaquinaResumen | null>, [number]>(async () => maquina),
     findActivas: jest.fn(async () => [{ ...maquina, idOperadorAsignado: null, horometroUltimo: null }]),
     findFlota: jest.fn(async () => []),
     findFlotaById: jest.fn(async () => null),
+    findIdPorIdCliente: jest.fn(async (_idCliente: string): Promise<number | null> => null),
+    existeAccionDeCliente: jest.fn(async (_idCliente: string): Promise<boolean> => false),
     tieneTurnoEnCurso: jest.fn(async () => false),
     actualizar: jest.fn(async () => undefined),
     existeNombre: jest.fn(async () => false),
@@ -145,7 +151,7 @@ describe('ObtenerTurnoActualUseCase', () => {
     const result = await obtener(repos).execute(ID_OPERADOR);
 
     expect(turno.estadoActual).toBe('CERRADO_AUTO');
-    expect(repos.turnoRepo.save.mock.calls).toContainEqual([turno]);
+    expect(repos.turnoRepo.cerrar.mock.calls).toContainEqual([turno, false]);
     expect(result.turno).toBeNull();
     expect(result.turnoCerradoAutomaticamente).toBe(turno);
   });
@@ -303,6 +309,35 @@ describe('FinalizarTurnoUseCase', () => {
 
     expect(cerrado.horometroFinal).toBe(1008);
     expect(repos.turnoRepo.save.mock.calls).toHaveLength(0);
+  });
+
+  it('el cierre del operador después del de un jefe de turno conserva su horómetro y marca el turno', async () => {
+    const repos = crearRepos();
+    const turno = turnoIniciadoHace(8, { estadoActual: 'CERRADO', fechaFin: new Date(), horometroFinal: 1006, cerradoPor: 7 });
+    repos.turnoRepo.findById.mockResolvedValue(turno);
+    const finalizar = new FinalizarTurnoUseCase(repos.turnoRepo);
+
+    const cerrado = await finalizar.execute({ idOperador: ID_OPERADOR, idTurno: 1, horometroFinal: 1008 });
+
+    expect(cerrado).toMatchObject({ estadoActual: 'CERRADO', cerradoPor: 7, horometroFinal: 1008, conflicto: true });
+    expect(cerrado.conflictoDetalle).toContain('horómetro 1006');
+    // Reintento del mismo cierre: no se vuelve a marcar
+    await finalizar.execute({ idOperador: ID_OPERADOR, idTurno: 1, horometroFinal: 1008 });
+    expect(repos.turnoRepo.save.mock.calls).toHaveLength(1);
+  });
+
+  it('si un jefe de turno cierra mientras tanto, gana su cierre y se adjunta el horómetro del operador', async () => {
+    const repos = crearRepos();
+    repos.turnoRepo.findById.mockResolvedValueOnce(turnoIniciadoHace(8));
+    repos.turnoRepo.cerrar.mockResolvedValueOnce(null);
+    repos.turnoRepo.findById.mockResolvedValueOnce(
+      turnoIniciadoHace(8, { estadoActual: 'CERRADO', fechaFin: new Date(), horometroFinal: 1006, cerradoPor: 7, motivoCierre: 'Falla' }),
+    );
+
+    const cerrado = await new FinalizarTurnoUseCase(repos.turnoRepo).execute({ idOperador: ID_OPERADOR, idTurno: 1, horometroFinal: 1008 });
+
+    expect(repos.turnoRepo.cerrar).toHaveBeenCalledWith(expect.any(Turno), true);
+    expect(cerrado).toMatchObject({ cerradoPor: 7, motivoCierre: 'Falla', horometroFinal: 1008, conflicto: true });
   });
 
   it('no permite cerrar el turno de otro operador', async () => {

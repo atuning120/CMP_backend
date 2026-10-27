@@ -14,12 +14,14 @@ import { MODELO_MAQUINA_REPOSITORY } from '../../domain/repositories/modelo-maqu
 import type { ModeloMaquinaRepositoryPort } from '../../domain/repositories/modelo-maquina.repository.port';
 import { maquinaError } from '../maquina.errors';
 import {
+  guardarSinPisar,
   leerNuevaMaquina,
   leerOperador,
   leerRegresoEstimado,
   registrarModeloSiEsNuevo,
   ROLES_GESTION_FLOTA,
   texto,
+  verificarVersionBase,
 } from '../maquina.datos';
 import type { MarcaYTipo, NuevaMaquinaDto } from '../maquina.datos';
 
@@ -38,6 +40,7 @@ export interface ReemplazarMaquinaDto {
   regresoEstimado?: unknown; // ISO; cuándo se espera que la saliente vuelva a operar
   motivo?: unknown;
   observacion?: unknown;
+  versionBase?: unknown; // versión de la saliente que vio el jefe de turno
 }
 
 // La entrante que estaba fuera de servicio o en reserva entra a operar
@@ -76,6 +79,7 @@ export class ReemplazarMaquinaUseCase {
 
     const saliente = await this.buscar(dto.idMaquina);
     if (!saliente) throw maquinaError('MAQUINA_NO_ENCONTRADA');
+    verificarVersionBase(saliente, dto.versionBase);
 
     const motivo = texto('motivo', dto.motivo);
     if (!motivo) throw maquinaError('DATOS_INVALIDOS', 'El motivo del reemplazo es obligatorio');
@@ -182,11 +186,13 @@ export class ReemplazarMaquinaUseCase {
       estadoPrevioEntrante,
       entrante: existente ? { idMaquina: existente.idMaquina, habilitar: habilitar(existente) } : { nueva: datosNueva!.datos },
       idOperador: operador?.idOperador ?? null,
+      // La entrante también se validó (no cubre a otra, no está en mantenimiento): tampoco puede haber cambiado
+      versiones: [saliente, ...(existente ? [existente] : [])].map((m) => ({ idMaquina: m.idMaquina, version: m.version })),
       accionesSaliente,
       accionesEntrante,
       accionesOtras,
     };
-    const idEntrante = await this.maquinaRepo.reemplazar(reemplazo);
+    const idEntrante = await guardarSinPisar(this.maquinaRepo, () => this.maquinaRepo.reemplazar(reemplazo));
 
     if (datosNueva) await this.registrarModelo(datosNueva.marcaYTipo, datosNueva.datos.modelo);
 

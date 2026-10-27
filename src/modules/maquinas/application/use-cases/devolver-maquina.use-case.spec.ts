@@ -15,6 +15,7 @@ const maquina = (id: number, nombre: string, extra: Partial<MaquinaFlota> = {}):
   operadorAsignado: null,
   motivoEstado: null,
   operadorActual: null,
+  idTurnoActual: null,
   estadoOperacional: null,
   ubicacionActual: null,
   idAreaActual: null,
@@ -23,6 +24,9 @@ const maquina = (id: number, nombre: string, extra: Partial<MaquinaFlota> = {}):
   regresoEstimado: null,
   respaldo: null,
   cubreA: null,
+  version: 1,
+  actualizadoEn: null,
+  actualizadoPor: null,
   ...extra,
 });
 
@@ -41,6 +45,8 @@ const crear = (opciones: { enUso?: boolean; original?: MaquinaFlota } = {}) => {
     findActivas: jest.fn(),
     findFlota: jest.fn(),
     findFlotaById: jest.fn(async (id: number) => flota.get(id) ?? null),
+    findIdPorIdCliente: jest.fn(async (_idCliente: string): Promise<number | null> => null),
+    existeAccionDeCliente: jest.fn(async (_idCliente: string): Promise<boolean> => false),
     existeNombre: jest.fn(),
     existePatente: jest.fn(),
     tieneTurnoEnCurso: jest.fn(async () => opciones.enUso ?? false),
@@ -77,6 +83,10 @@ describe('DevolverMaquinaUseCase', () => {
       idRespaldo: 5,
       estadoRespaldo: 'EN_RESERVA',
       idOperador: 4,
+      versiones: [
+        { idMaquina: 1, version: 1 },
+        { idMaquina: 5, version: 1 },
+      ],
       accionesOriginal: [
         {
           ...registro,

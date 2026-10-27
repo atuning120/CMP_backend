@@ -87,7 +87,13 @@ CREATE TABLE MAQUINA (
     -- Tras un reemplazo: la máquina que la cubre y a qué estado vuelve ese respaldo al devolverla
     id_maquina_respaldo    INT,
     estado_previo_respaldo VARCHAR(20),
+    -- Sube con cada acción del jefe de turno: detecta cambios de otro jefe mientras tanto (409 MAQUINA_MODIFICADA)
+    version         INT NOT NULL DEFAULT 1,
+    actualizado_en  TIMESTAMPTZ, -- última acción del jefe de turno sobre la máquina
+    actualizado_por INT,
+    id_cliente      UUID UNIQUE, -- generado por la app al incorporarla (sin señal): un reintento no la duplica
     CONSTRAINT fk_maquina_respaldo FOREIGN KEY (id_maquina_respaldo) REFERENCES MAQUINA(id_maquina) ON DELETE SET NULL,
+    CONSTRAINT fk_maquina_actualizado_por FOREIGN KEY (actualizado_por) REFERENCES USUARIO(id_usuario) ON DELETE SET NULL,
     CONSTRAINT ck_maquina_estado_previo_respaldo
         CHECK (estado_previo_respaldo IN ('ACTIVA', 'BAJO_OBSERVACION', 'EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA'))
 );
@@ -207,6 +213,7 @@ CREATE TABLE TURNO (
     conflicto_detalle TEXT,
     cerrado_por       INT, -- jefe de turno que lo cerró por el operador
     motivo_cierre     VARCHAR(100),
+    id_cliente_cierre UUID UNIQUE, -- cierre del jefe de turno desde la app (sin señal): un reintento no lo repite
     CONSTRAINT fk_turno_cerrado_por FOREIGN KEY (cerrado_por) REFERENCES USUARIO(id_usuario) ON DELETE SET NULL,
     CONSTRAINT fk_turno_operador FOREIGN KEY (id_operador) REFERENCES OPERADOR(id_operador),
     CONSTRAINT fk_turno_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina)
@@ -236,6 +243,9 @@ CREATE TABLE TURNO_ESTADO (
     CONSTRAINT fk_testado_turno FOREIGN KEY (id_turno) REFERENCES TURNO(id_turno) ON DELETE CASCADE,
     CONSTRAINT fk_testado_estado FOREIGN KEY (id_estado) REFERENCES ESTADO_OPERACIONAL(id_estado)
 );
+
+-- Alertas de mantención o falla por rango de fechas
+CREATE INDEX idx_turno_estado_inicio ON TURNO_ESTADO (inicio);
 
 CREATE TABLE REPORTE_TURNO (
     id_reporte            SERIAL PRIMARY KEY,
@@ -269,6 +279,7 @@ CREATE TABLE BITACORA_JEFE_TURNO (
     observacion     TEXT,
     detalle         JSONB, -- datos de la acción (p. ej. valores antes/después al editar)
     fecha           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id_cliente      UUID UNIQUE, -- generado por la app (acción sin señal): un reintento no la aplica dos veces
     CONSTRAINT fk_bitacora_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina),
     CONSTRAINT fk_bitacora_usuario FOREIGN KEY (id_usuario) REFERENCES USUARIO(id_usuario)
 );
@@ -279,12 +290,13 @@ CREATE INDEX idx_bitacora_fecha ON BITACORA_JEFE_TURNO (fecha DESC);
 -- atención; las siguientes, notas posteriores. No se borran ni se editan (auditoría)
 CREATE TABLE ATENCION_ALERTA (
     id_atencion     SERIAL PRIMARY KEY,
-    id_alerta       VARCHAR(20) NOT NULL, -- 'E-<id_turno>', 'J-<id_turno>' o 'A-<id_turno>'
+    id_alerta       VARCHAR(20) NOT NULL, -- 'E-<id_turno>', 'J-<id_turno>', 'A-<id_turno>' o 'M-<id_turno_estado>'
     id_turno        INT NOT NULL,
     id_usuario      INT NOT NULL, -- jefe de turno o administrador que la atendió
     comentario      TEXT,         -- opcional al atender; obligatorio en las notas posteriores
     fecha           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT ck_atencion_alerta_id CHECK (id_alerta ~ '^[EJA]-[0-9]+$'),
+    id_cliente      UUID UNIQUE,  -- generado por el cliente; hace idempotente el reintento
+    CONSTRAINT ck_atencion_alerta_id CHECK (id_alerta ~ '^[EJAM]-[0-9]+$'),
     CONSTRAINT fk_atencion_turno FOREIGN KEY (id_turno) REFERENCES TURNO(id_turno) ON DELETE CASCADE,
     CONSTRAINT fk_atencion_usuario FOREIGN KEY (id_usuario) REFERENCES USUARIO(id_usuario)
 );

@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DURACION_MAXIMA_TURNO_HORAS } from '../domain/entities/turno.entity';
+import { MENSAJE_ACCION_VENCIDA } from '../../../shared/application/vigencia-accion';
 
 // Errores de turnos: código estable para que la app decida qué mostrar, más un mensaje legible.
 export type TurnoErrorCode =
@@ -18,6 +19,7 @@ export type TurnoErrorCode =
   | 'TURNO_CERRADO_AUTOMATICAMENTE'
   | 'SIN_PERMISO_CIERRE'
   | 'MOTIVO_INVALIDO'
+  | 'ACCION_VENCIDA'
   | 'SIN_TURNO_EN_CURSO';
 
 export const turnoError = (code: TurnoErrorCode) => {
@@ -52,10 +54,16 @@ export const turnoError = (code: TurnoErrorCode) => {
       return new ConflictException({ statusCode: 409, code, message: 'El turno ya se encuentra cerrado' });
     case 'SIN_PERMISO_CIERRE':
       return new ForbiddenException({ statusCode: 403, code, message: 'Solo un jefe de turno o administrador puede cerrar el turno de un operador' });
+    case 'ACCION_VENCIDA':
+      return new BadRequestException({ statusCode: 400, code, message: MENSAJE_ACCION_VENCIDA });
     case 'MOTIVO_INVALIDO':
       return new BadRequestException({ statusCode: 400, code, message: 'Indica el motivo del cierre (hasta 100 caracteres)' });
     case 'SIN_TURNO_EN_CURSO':
-      return new ConflictException({ statusCode: 409, code, message: 'La máquina no tiene un turno en curso' });
+      return new ConflictException({
+        statusCode: 409,
+        code,
+        message: 'La máquina no tiene un turno en curso. Puede que el operador u otro jefe de turno ya lo haya cerrado',
+      });
     case 'TURNO_CERRADO_AUTOMATICAMENTE':
       return new ConflictException({
         statusCode: 409,
@@ -63,4 +71,25 @@ export const turnoError = (code: TurnoErrorCode) => {
         message: `El turno superó las ${DURACION_MAXIMA_TURNO_HORAS} horas y fue cerrado automáticamente`,
       });
   }
+};
+
+const formatoHora = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const formatoDia = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit' });
+// "31/12" (el separador de es-CL cambia según la versión de ICU)
+const dia = (fecha: Date) => {
+  const partes = formatoDia.formatToParts(fecha);
+  return `${partes.find((p) => p.type === 'day')?.value}/${partes.find((p) => p.type === 'month')?.value}`;
+};
+
+/**
+ * El jefe de turno cerró sin señal un turno que, cuando llegó al servidor, ya estaba cerrado (gana el primer cierre).
+ * por: quién lo cerró (el operador, otro jefe de turno o el sistema); la fecha va en hora de Chile, con el día si no es hoy
+ */
+export const turnoYaCerrado = (por: string, fecha: Date, ahora: Date = new Date()) => {
+  const otroDia = dia(fecha) === dia(ahora) ? '' : ` del ${dia(fecha)}`;
+  return new ConflictException({
+    statusCode: 409,
+    code: 'TURNO_YA_CERRADO',
+    message: `El turno ya fue cerrado por ${por} a las ${formatoHora.format(fecha)}${otroDia}`,
+  });
 };

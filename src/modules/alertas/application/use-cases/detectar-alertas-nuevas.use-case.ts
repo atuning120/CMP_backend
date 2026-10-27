@@ -3,7 +3,8 @@ import { ALERTA_TURNO_REPOSITORY } from '../../domain/repositories/alerta-turno.
 import type { AlertaTurnoRepositoryPort } from '../../domain/repositories/alerta-turno.repository.port';
 import type { NovedadAlertas } from '../ports/publicador-alertas.port';
 
-// Las alertas no se guardan: aparecen solas en TURNO cuando un turno cruza las 10 h o el sistema lo cierra. Se miran
+// Las alertas no se guardan: aparecen solas en TURNO cuando un turno cruza las 10 h o el sistema lo cierra, y en
+// TURNO_ESTADO cuando el operador marca una mantención o falla. Se miran
 // las de las últimas 24 h y no solo las del último minuto porque su fecha puede quedar atrás: el cierre automático
 // lleva la hora del límite (no la de la revisión) y un turno sincronizado sin conexión llega con sus horas reales
 const VENTANA_MS = 24 * 60 * 60 * 1000;
@@ -29,13 +30,14 @@ export class DetectarAlertasNuevasUseCase {
       this.alertaRepo.listar({
         incluirExtendidos: true,
         incluirCierresAutomaticos: true,
+        incluirMantenciones: true,
         estado: 'TODAS',
         desde: new Date(ahora.getTime() - VENTANA_MS),
         hasta: null,
         despuesDe: null,
         limite: LIMITE,
       }),
-      this.alertaRepo.contarExtendidosEnCurso(),
+      this.alertaRepo.contarActivas(),
     ]);
 
     const anteriores = this.vistas;

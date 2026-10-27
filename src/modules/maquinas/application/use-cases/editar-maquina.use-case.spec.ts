@@ -1,3 +1,4 @@
+import { MaquinaModificadaError } from '../../domain/repositories/maquina.repository.port';
 import type { MaquinaFlota, MaquinaRepositoryPort } from '../../domain/repositories/maquina.repository.port';
 import type { ModeloMaquinaRepositoryPort } from '../../domain/repositories/modelo-maquina.repository.port';
 import { EditarMaquinaUseCase } from './editar-maquina.use-case';
@@ -16,6 +17,7 @@ const maquina: MaquinaFlota = {
   operadorAsignado: null,
   motivoEstado: null,
   operadorActual: null,
+  idTurnoActual: null,
   estadoOperacional: null,
   ubicacionActual: null,
   idAreaActual: null,
@@ -24,6 +26,9 @@ const maquina: MaquinaFlota = {
   regresoEstimado: null,
   respaldo: null,
   cubreA: null,
+  version: 1,
+  actualizadoEn: null,
+  actualizadoPor: null,
 };
 
 const crear = (opciones: { nombres?: string[]; patentes?: string[]; enUso?: boolean; tipos?: string[] } = {}) => {
@@ -32,6 +37,8 @@ const crear = (opciones: { nombres?: string[]; patentes?: string[]; enUso?: bool
     findActivas: jest.fn(),
     findFlota: jest.fn(),
     findFlotaById: jest.fn(async (id: number) => (id === maquina.idMaquina ? maquina : null)),
+    findIdPorIdCliente: jest.fn(async (_idCliente: string): Promise<number | null> => null),
+    existeAccionDeCliente: jest.fn(async (_idCliente: string): Promise<boolean> => false),
     existeNombre: jest.fn(async (nombre: string) => (opciones.nombres ?? []).includes(nombre)),
     existePatente: jest.fn(async (patente: string) => (opciones.patentes ?? []).includes(patente)),
     tieneTurnoEnCurso: jest.fn(async () => opciones.enUso ?? false),
@@ -67,7 +74,7 @@ describe('EditarMaquinaUseCase', () => {
   it('guarda solo los campos que cambian y deja el antes/después en la bitácora', async () => {
     const { maquinaRepo, editar } = crear();
     await editar.execute({ ...base, nombre: ' cf-03 ', patente: 'zz-yy-99', numeroChasis: ' VIN123 ', anio: 2020 });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { patente: 'ZZ-YY-99', numeroChasis: 'VIN123' }, [
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { patente: 'ZZ-YY-99', numeroChasis: 'VIN123' }, [
       {
         ...registro,
         accion: 'EDITAR',
@@ -82,26 +89,126 @@ describe('EditarMaquinaUseCase', () => {
   it('un cambio de estado se registra como habilitar, deshabilitar o cambiar estado', async () => {
     const { maquinaRepo, editar } = crear();
     await editar.execute({ ...base, estado: 'BAJA' });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { estado: 'BAJA' }, [
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { estado: 'BAJA' }, [
       { ...registro, accion: 'DESHABILITAR', detalle: { antes: { estado: 'ACTIVA' }, despues: { estado: 'BAJA' } } },
     ]);
     await editar.execute({ ...base, estado: 'EN_MANTENIMIENTO' });
-    expect(maquinaRepo.actualizar).toHaveBeenLastCalledWith(3, { estado: 'EN_MANTENIMIENTO' }, [
+    expect(maquinaRepo.actualizar).toHaveBeenLastCalledWith(3, 1, { estado: 'EN_MANTENIMIENTO' }, [
       { ...registro, accion: 'CAMBIAR_ESTADO', detalle: { antes: { estado: 'ACTIVA' }, despues: { estado: 'EN_MANTENIMIENTO' } } },
     ]);
     expect(await codigoDe(editar.execute({ ...base, estado: 'SIN_OPERADOR' }))).toBe('DATOS_INVALIDOS');
   });
 
-  it('un cambio solo de estado no consulta catálogos ni vuelve a leer la flota', async () => {
+  it('un cambio solo de estado no consulta catálogos y relee la máquina para entregar su nueva versión', async () => {
     const { maquinaRepo, editar } = crear();
+    maquinaRepo.findFlotaById.mockResolvedValueOnce(maquina).mockResolvedValueOnce({ ...maquina, estado: 'EN_RESERVA', version: 2 });
     const resultado = await editar.execute({ ...base, estado: 'EN_RESERVA', observacion: 'Respaldo del turno B' });
     expect(maquinaRepo.findMarcas).not.toHaveBeenCalled();
     expect(maquinaRepo.findTipos).not.toHaveBeenCalled();
-    expect(maquinaRepo.findFlotaById).toHaveBeenCalledTimes(1);
-    expect(resultado).toMatchObject({
-      estado: 'EN_RESERVA',
-      motivoEstado: { motivo: registro.motivo, observacion: 'Respaldo del turno B', reemplazadaPor: null },
+    expect(maquinaRepo.findFlotaById).toHaveBeenCalledTimes(2);
+    expect(resultado).toMatchObject({ estado: 'EN_RESERVA', version: 2 });
+  });
+
+  it('no pisa un cambio que otro jefe de turno hizo después de que se vio la máquina', async () => {
+    const { maquinaRepo, editar } = crear();
+    maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, version: 4, actualizadoPor: 'Juan Pérez' });
+
+    const error = await editar.execute({ ...base, estado: 'EN_RESERVA', versionBase: 3 }).catch((e: any) => e.getResponse());
+
+    expect(error).toMatchObject({ code: 'MAQUINA_MODIFICADA', message: expect.stringContaining('CF-03 fue modificada por Juan Pérez') });
+    expect(maquinaRepo.actualizar).not.toHaveBeenCalled();
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA', versionBase: '4' }))).toBe('DATOS_INVALIDOS');
+    await editar.execute({ ...base, estado: 'EN_RESERVA', versionBase: 4 });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 4, { estado: 'EN_RESERVA' }, expect.any(Array));
+  });
+
+  it('con versión vieja, un cambio de ficha se aplica si nadie tocó esos mismos campos', async () => {
+    const { maquinaRepo, editar } = crear();
+    // Otro jefe de turno cambió el año (2019 -> 2020) mientras este corregía la patente
+    maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, version: 4, actualizadoPor: 'Juan Pérez' });
+
+    await editar.execute({ ...base, patente: 'ZZ-11-22', versionBase: 3, valoresBase: { patente: 'ab-cd-12' } });
+
+    // Se guarda sobre la versión actual y solo con el campo que este cambió
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 4, { patente: 'ZZ-11-22' }, expect.any(Array));
+  });
+
+  it('con versión vieja, si otro cambió el mismo campo es conflicto y dice cuál', async () => {
+    const { maquinaRepo, editar } = crear();
+    maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, version: 4, actualizadoPor: 'Juan Pérez' });
+
+    const error = await editar
+      .execute({ ...base, patente: 'ZZ-11-22', anio: 2021, versionBase: 3, valoresBase: { patente: 'XX-00-00', anio: 2019 } })
+      .catch((e: any) => e.getResponse());
+
+    expect(error).toMatchObject({
+      code: 'MAQUINA_MODIFICADA',
+      message: expect.stringContaining('CF-03 fue modificada por Juan Pérez (cambió el año y la patente)'),
     });
+    // Sin el valor que vio de un campo que cambia, tampoco se combina
+    expect(await codigoDe(editar.execute({ ...base, patente: 'ZZ-11-22', versionBase: 3, valoresBase: {} }))).toBe('MAQUINA_MODIFICADA');
+    expect(maquinaRepo.actualizar).not.toHaveBeenCalled();
+  });
+
+  it('con versión vieja, el estado no se combina aunque venga valoresBase', async () => {
+    const { maquinaRepo, editar } = crear();
+    maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, version: 4 });
+    const cambio = { ...base, estado: 'EN_RESERVA', versionBase: 3, valoresBase: { estado: 'ACTIVA' } };
+    expect(await codigoDe(editar.execute(cambio))).toBe('MAQUINA_MODIFICADA');
+    expect(maquinaRepo.actualizar).not.toHaveBeenCalled();
+  });
+
+  it('un reintento con el mismo idCliente no repite la edición', async () => {
+    const { maquinaRepo, editar } = crear();
+    const idCliente = '7b1f6a0e-2c3d-4e5f-8a9b-0c1d2e3f4a5b';
+
+    await editar.execute({ ...base, estado: 'EN_RESERVA', versionBase: 1, idCliente });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { estado: 'EN_RESERVA' }, [expect.objectContaining({ idCliente })]);
+
+    // La respuesta no llegó y la app reenvía: ya está en la bitácora, se responde sin aplicarla otra vez
+    maquinaRepo.existeAccionDeCliente.mockResolvedValue(true);
+    maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, estado: 'EN_RESERVA', version: 2 });
+    await expect(editar.execute({ ...base, estado: 'EN_RESERVA', versionBase: 1, idCliente })).resolves.toMatchObject({ version: 2 });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledTimes(1);
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA', idCliente: 'x' }))).toBe('DATOS_INVALIDOS');
+  });
+
+  it('una acción hecha sin señal hace más de 72 h ya no se aplica (salvo un reintento de una ya guardada)', async () => {
+    const { maquinaRepo, editar } = crear();
+    const horasAtras = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000).toISOString();
+
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA', fechaAccion: horasAtras(73) }))).toBe('ACCION_VENCIDA');
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA', fechaAccion: 'ayer' }))).toBe('DATOS_INVALIDOS');
+    expect(maquinaRepo.actualizar).not.toHaveBeenCalled();
+    await editar.execute({ ...base, estado: 'EN_RESERVA', fechaAccion: horasAtras(71) });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledTimes(1);
+
+    // La respuesta de una edición ya guardada no llegó y el reintento llega tarde: se responde sin error
+    maquinaRepo.existeAccionDeCliente.mockResolvedValue(true);
+    await expect(
+      editar.execute({ ...base, estado: 'EN_RESERVA', idCliente: '7b1f6a0e-2c3d-4e5f-8a9b-0c1d2e3f4a5b', fechaAccion: horasAtras(80) }),
+    ).resolves.toBeDefined();
+  });
+
+  it('si otro jefe movió al operador que se asigna, es conflicto', async () => {
+    const { maquinaRepo, editar } = crear();
+    const juan = { idOperador: 4, nombre: 'Juan Pérez', rut: '1-9', maquinaAsignada: { idMaquina: 7, nombre: 'CF-07' } };
+    maquinaRepo.findOperadorAsignable.mockResolvedValue(juan as never);
+
+    // Lo vio en CF-02 y ahora está en CF-07
+    const error = await editar.execute({ ...base, idOperador: 4, valoresBase: { maquinaOperador: 2 } }).catch((e: any) => e.getResponse());
+    expect(error).toMatchObject({ code: 'MAQUINA_MODIFICADA', message: expect.stringContaining('Juan Pérez fue asignado a CF-07') });
+    expect(maquinaRepo.actualizar).not.toHaveBeenCalled();
+
+    // Si sigue donde lo vio, se mueve
+    await editar.execute({ ...base, idOperador: 4, valoresBase: { maquinaOperador: 7 } });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledTimes(1);
+  });
+
+  it('si otra acción se guarda entre la validación y el guardado, tampoco la pisa', async () => {
+    const { maquinaRepo, editar } = crear();
+    maquinaRepo.actualizar.mockRejectedValueOnce(new MaquinaModificadaError(3));
+    expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA' }))).toBe('MAQUINA_MODIFICADA');
   });
 
   it('pasar a un estado distinto de fuera de servicio no se bloquea por un turno en curso', async () => {
@@ -115,7 +222,7 @@ describe('EditarMaquinaUseCase', () => {
   it('editar y cambiar el estado a la vez deja ambos registros', async () => {
     const { maquinaRepo, editar } = crear();
     await editar.execute({ ...base, esContratista: true, estado: 'BAJA' });
-    const [, cambios, acciones] = maquinaRepo.actualizar.mock.calls[0] as unknown as [number, object, { accion: string }[]];
+    const [, , cambios, acciones] = maquinaRepo.actualizar.mock.calls[0] as unknown as [number, number, object, { accion: string }[]];
     expect(cambios).toEqual({ esContratista: true, estado: 'BAJA' });
     expect(acciones.map((a) => a.accion)).toEqual(['EDITAR', 'DESHABILITAR']);
   });
@@ -168,7 +275,7 @@ describe('EditarMaquinaUseCase', () => {
       maquinaAsignada: { idMaquina: 2, nombre: 'CF-02' },
     } as never);
     await editar.execute({ ...base, idOperador: 4 });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { idOperador: 4 }, [
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { idOperador: 4 }, [
       { ...registro, accion: 'EDITAR', detalle: { antes: { operador: 'Ana Soto' }, despues: { operador: 'Juan Pérez' } } },
       expect.objectContaining({ idMaquina: 2, observacion: 'Juan Pérez pasó a CF-03' }),
     ]);
@@ -180,7 +287,7 @@ describe('EditarMaquinaUseCase', () => {
     expect(await codigoDe(editar.execute({ ...base, idOperador: 1 }))).toBe('SIN_CAMBIOS');
     expect(maquinaRepo.findOperadorAsignable).not.toHaveBeenCalled();
     await editar.execute({ ...base, idOperador: null });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { idOperador: null }, [
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { idOperador: null }, [
       { ...registro, accion: 'EDITAR', detalle: { antes: { operador: 'Ana Soto' }, despues: { operador: null } } },
     ]);
   });
@@ -200,15 +307,14 @@ describe('EditarMaquinaUseCase', () => {
   it('en mantenimiento guarda la fecha estimada de regreso y la deja en la bitácora', async () => {
     const { maquinaRepo, editar } = crear();
     const regreso = new Date(Date.now() + 40 * 3600_000);
-    const resultado = await editar.execute({ ...base, estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso.toISOString() });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso }, [
+    await editar.execute({ ...base, estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso.toISOString() });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso }, [
       {
         ...registro,
         accion: 'CAMBIAR_ESTADO',
         detalle: { antes: { estado: 'ACTIVA' }, despues: { estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso.toISOString() } },
       },
     ]);
-    expect(resultado.regresoEstimado).toEqual(regreso);
   });
 
   it('valida la fecha de regreso: futura, de menos de un año y solo fuera de operación', async () => {
@@ -228,7 +334,7 @@ describe('EditarMaquinaUseCase', () => {
     const despues = new Date(Date.now() + 30 * 3600_000);
     maquinaRepo.findFlotaById.mockResolvedValue({ ...maquina, estado: 'EN_MANTENIMIENTO', regresoEstimado: antes });
     await editar.execute({ ...base, regresoEstimado: despues.toISOString() });
-    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, { regresoEstimado: despues }, [
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { regresoEstimado: despues }, [
       {
         ...registro,
         accion: 'EDITAR',

@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { MENSAJE_ACCION_VENCIDA } from '../../../shared/application/vigencia-accion';
 
 // Errores de máquinas: código estable para que la app decida qué mostrar, más un mensaje legible.
 export type MaquinaErrorCode =
@@ -11,7 +12,9 @@ export type MaquinaErrorCode =
   | 'MAQUINA_NO_ENCONTRADA'
   | 'SIN_CAMBIOS'
   | 'MAQUINA_EN_USO'
-  | 'SIN_RESPALDO';
+  | 'SIN_RESPALDO'
+  | 'MAQUINA_MODIFICADA'
+  | 'ACCION_VENCIDA';
 
 export const maquinaError = (code: MaquinaErrorCode, detalle?: string) => {
   switch (code) {
@@ -36,6 +39,15 @@ export const maquinaError = (code: MaquinaErrorCode, detalle?: string) => {
         statusCode: 409,
         code,
         message: `${detalle} tiene un turno en curso: primero hay que cerrarlo para sacarla de operación`,
+      });
+    case 'ACCION_VENCIDA':
+      return new BadRequestException({ statusCode: 400, code, message: MENSAJE_ACCION_VENCIDA });
+    case 'MAQUINA_MODIFICADA':
+      // detalle: "CF-12 fue modificada por Juan Pérez"
+      return new ConflictException({
+        statusCode: 409,
+        code,
+        message: `${detalle} mientras hacías este cambio. Revisa cómo quedó e intenta nuevamente`,
       });
     case 'SIN_RESPALDO':
       return new ConflictException({ statusCode: 409, code, message: 'La máquina no tiene un respaldo que devolver' });

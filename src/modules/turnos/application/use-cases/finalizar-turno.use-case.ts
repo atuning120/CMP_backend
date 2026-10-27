@@ -37,11 +37,7 @@ export class FinalizarTurnoUseCase {
    */
   async execute(dto: FinalizarTurnoDto, ahora: Date = new Date()): Promise<Turno> {
     const turno = await buscarTurnoDelOperador(this.turnoRepo, dto.idOperador, dto);
-
-    // Reintento de un cierre ya aplicado (o cierre automático que ya registró el horómetro)
-    if (turno.estadoActual === 'CERRADO' || (turno.estadoActual === 'CERRADO_AUTO' && turno.horometroFinal !== null)) {
-      return turno;
-    }
+    if (yaCerrado(turno)) return this.cierreTardio(turno, dto.horometroFinal);
 
     const fechaFin = fechaDelEvento(dto.fechaFin, ahora);
     if (!Number.isFinite(dto.horometroFinal) || dto.horometroFinal < turno.horometroInicial) {
@@ -52,6 +48,33 @@ export class FinalizarTurnoUseCase {
     }
 
     turno.finalizar(fechaFin, dto.horometroFinal);
+    const cerrado = await this.turnoRepo.cerrar(turno, true);
+    if (cerrado) return cerrado;
+    // Un jefe de turno lo cerró mientras tanto: gana su cierre
+    const actual = await this.turnoRepo.findById(turno.id!);
+    if (!actual) throw turnoError('TURNO_NO_ENCONTRADO');
+    return this.cierreTardio(actual, dto.horometroFinal);
+  }
+
+  /**
+   * El turno ya estaba cerrado. Si lo cerró el operador (o el sistema con el horómetro ya informado) es un reintento
+   * del mismo cierre. Si lo cerró un jefe de turno, su cierre se mantiene, pero el horómetro del operador es la
+   * lectura física: reemplaza al que informó el jefe y el turno queda marcado para revisión (nunca se descarta).
+   */
+  private async cierreTardio(turno: Turno, horometroOperador: number): Promise<Turno> {
+    if (turno.cerradoPor === null || horometroOperador === turno.horometroFinal) return turno;
+    const valido = Number.isFinite(horometroOperador) && horometroOperador >= turno.horometroInicial;
+    const detalle = valido
+      ? `Cerrado por el jefe de turno con horómetro ${turno.horometroFinal ?? '(sin informar)'}; el operador informó ${horometroOperador} al cerrar desde la app`
+      : `El operador informó un horómetro final no válido (${horometroOperador}) después del cierre del jefe de turno`;
+    // Reintento de un cierre tardío ya registrado
+    if (turno.conflictoDetalle?.includes(detalle)) return turno;
+    if (valido) turno.horometroFinal = horometroOperador;
+    turno.marcarConflicto(detalle);
     return this.turnoRepo.save(turno);
   }
 }
+
+// Reintento de un cierre ya aplicado, cierre de un jefe de turno o cierre automático que ya registró el horómetro
+const yaCerrado = (turno: Turno) =>
+  turno.estadoActual === 'CERRADO' || (turno.estadoActual === 'CERRADO_AUTO' && turno.horometroFinal !== null);

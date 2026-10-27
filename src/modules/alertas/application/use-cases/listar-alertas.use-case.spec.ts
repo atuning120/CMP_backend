@@ -11,14 +11,15 @@ const alerta = (n: number): AlertaTurno => ({
   area: 'Área 15',
   zona: null,
   jornada: null,
+  detencion: null,
   atenciones: [],
 });
 
 const crear = (cantidad = 0, activas = 0) => {
   const alertaRepo = {
     listar: jest.fn(async (_filtro: FiltroAlertas) => Array.from({ length: cantidad }, (_, i) => alerta(i))),
-    contarExtendidosEnCurso: jest.fn(async () => activas),
-    existe: jest.fn(async () => true),
+    contarActivas: jest.fn(async () => activas),
+    turnoDeAlerta: jest.fn(async (_tipo: string, id: number) => id),
   } satisfies AlertaTurnoRepositoryPort;
   return { alertaRepo, listar: new ListarAlertasUseCase(alertaRepo) };
 };
@@ -37,6 +38,7 @@ describe('ListarAlertasUseCase', () => {
     expect(alertaRepo.listar).toHaveBeenLastCalledWith({
       incluirExtendidos: false,
       incluirCierresAutomaticos: true,
+      incluirMantenciones: false,
       estado: 'TODAS',
       desde: new Date(desde),
       hasta: null,
@@ -44,7 +46,17 @@ describe('ListarAlertasUseCase', () => {
       limite: 31,
     });
     await listar.execute({ rol: 'JEFE_TURNO', tipo: 'EXTENDIDOS', desde });
-    expect(alertaRepo.listar).toHaveBeenLastCalledWith(expect.objectContaining({ incluirExtendidos: true, incluirCierresAutomaticos: false }));
+    expect(alertaRepo.listar).toHaveBeenLastCalledWith(
+      expect.objectContaining({ incluirExtendidos: true, incluirCierresAutomaticos: false, incluirMantenciones: false }),
+    );
+    await listar.execute({ rol: 'JEFE_TURNO', tipo: 'MANTENCIONES', desde });
+    expect(alertaRepo.listar).toHaveBeenLastCalledWith(
+      expect.objectContaining({ incluirExtendidos: false, incluirCierresAutomaticos: false, incluirMantenciones: true }),
+    );
+    await listar.execute({ rol: 'JEFE_TURNO', desde });
+    expect(alertaRepo.listar).toHaveBeenLastCalledWith(
+      expect.objectContaining({ incluirExtendidos: true, incluirCierresAutomaticos: true, incluirMantenciones: true }),
+    );
   });
 
   it('rechaza un rango inválido', async () => {

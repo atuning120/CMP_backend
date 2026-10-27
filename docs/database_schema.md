@@ -90,6 +90,10 @@ erDiagram
         timestamptz regreso_estimado "si está en mantenimiento o fuera de servicio"
         int id_maquina_respaldo FK "máquina que la cubre tras un reemplazo"
         string estado_previo_respaldo "estado al que vuelve el respaldo al devolver"
+        int version "sube con cada acción del jefe de turno (409 MAQUINA_MODIFICADA si cambió)"
+        timestamptz actualizado_en
+        int actualizado_por FK "usuario de la última acción"
+        uuid id_cliente UK "generado por la app al incorporarla"
     }
     BITACORA_JEFE_TURNO {
         int id_bitacora PK
@@ -103,11 +107,12 @@ erDiagram
     }
     ATENCION_ALERTA {
         int id_atencion PK
-        string id_alerta "E-, J- o A- + id_turno (la alerta se calcula, no se guarda)"
+        string id_alerta "E-, J- o A- + id_turno, o M- + id_turno_estado (la alerta se calcula, no se guarda)"
         int id_turno FK
         int id_usuario FK
         text comentario "opcional al atender; obligatorio en notas"
         timestamptz fecha
+        uuid id_cliente UK "reintento idempotente"
     }
     MODELO_MAQUINA {
         int id_modelo PK
@@ -176,6 +181,7 @@ erDiagram
         string conflicto_detalle
         int cerrado_por FK "jefe de turno que lo cerró por el operador"
         string motivo_cierre
+        uuid id_cliente_cierre UK "cierre del jefe desde la app"
     }
     TURNO_UBICACION {
         int id_turno_ubicacion PK
@@ -249,6 +255,7 @@ erDiagram
     USUARIO ||--o{ BITACORA_JEFE_TURNO : "realiza"
     TURNO ||--o{ ATENCION_ALERTA : "alertas atendidas"
     USUARIO ||--o{ ATENCION_ALERTA : "atiende"
+    USUARIO |o--o{ MAQUINA : "última acción"
 ```
 
 ## Tablas
@@ -264,7 +271,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `AREA` | Geocerca principal de la faena | `estado` en uso: `ACTIVA`, `INACTIVA` |
 | `ZONA_TRABAJO` | Subdivisión de un área | `estado` en uso: `ACTIVA`, `INACTIVA` |
 | `AUDITORIA_GEOCERCA` | Historial de cambios de áreas y zonas | `entidad` ∈ `AREA`, `ZONA`; `accion` ∈ `CREAR`, `EDITAR`, `DESACTIVAR`; `id_entidad` es polimórfico (sin FK) |
-| `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJO_OBSERVACION`, `EN_MANTENIMIENTO`, `EN_RESERVA`, `BAJA` ("Sin operador" se deduce de la asignación); `nombre` y `patente` únicos (sin distinguir mayúsculas) |
+| `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJO_OBSERVACION`, `EN_MANTENIMIENTO`, `EN_RESERVA`, `BAJA` ("Sin operador" se deduce de la asignación); `nombre` y `patente` únicos (sin distinguir mayúsculas); `id_cliente` UNIQUE (incorporación idempotente) |
 | `MODELO_MAQUINA` | Modelo genérico por tipo de máquina ("Datos Previos" al incorporar una máquina); sin relaciones | (`marca`, `modelo`) únicos sin distinguir mayúsculas; `activo` default `TRUE` |
 | `DISPOSITIVO_GPS` | Equipo de telemetría | `imei` UNIQUE |
 | `BITACORA_JEFE_TURNO` | Acciones del jefe de turno sobre la flota con motivo y observación; junto con `TURNO` forma el historial | `accion` ∈ `INCORPORAR`, `EDITAR`, `HABILITAR`, `DESHABILITAR`, `CAMBIAR_ESTADO`, `REEMPLAZAR`, `DEVOLVER`; `motivo` obligatorio; `detalle` JSONB |
@@ -279,7 +286,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `ASIGNACION_OPERADOR` | Operador a cargo de cada máquina (preseleccionada al iniciar turno), con historial | `vigente_hasta` NULL = vigente; índices únicos parciales: un vigente por máquina y por operador |
 | `TRACKING_HISTORY` | Posiciones GPS recibidas | PK (`id_history`, `timestamp`); `id_maquina` se copia al ingerir; `payload_crudo` JSONB |
 | `ALERTA` | Reservada para alertas del GPS (p. ej. `RALENTI_EXCESIVO`); hoy sin uso | `atendida` default `FALSE`; `atendida_por`/`atendida_en` NULL hasta atenderla |
-| `ATENCION_ALERTA` | Quién atendió cada alerta de turno, cuándo y con qué comentario (las alertas se calculan desde `TURNO`). La primera fila de una alerta es su atención; las siguientes, notas | `id_alerta` ~ `^[EJA]-[0-9]+$`; filas inmutables (sin UPDATE ni DELETE desde la app) |
+| `ATENCION_ALERTA` | Quién atendió cada alerta de turno, cuándo y con qué comentario (las alertas se calculan desde `TURNO` y, las de mantención o falla, desde `TURNO_ESTADO`). La primera fila de una alerta es su atención; las siguientes, notas | `id_alerta` ~ `^[EJAM]-[0-9]+$`; filas inmutables (sin UPDATE ni DELETE desde la app) |
 
 ### Gestión de turnos
 
@@ -287,7 +294,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 |---|---|---|
 | `TURNO` | Jornada de un operador en una máquina | `estado` ∈ `EN_CURSO`, `CERRADO`, `CERRADO_AUTO`; `hora_termino` y `horometro_final` NULL mientras está en curso; `id_cliente` UNIQUE; `conflicto` default `FALSE` |
 | `TURNO_UBICACION` | Área/zona donde se desarrolla el turno (historial; el operador puede cambiarla durante el turno) | `id_zona` opcional; `fin` NULL = ubicación vigente; `id_cliente` UUID del cambio hecho en la app |
-| `TURNO_ESTADO` | Historial de estados operacionales del turno | `fin` NULL = estado vigente; `id_cliente` UNIQUE |
+| `TURNO_ESTADO` | Historial de estados operacionales del turno. Cada estado de categoría `MANTENCION` es una alerta `M-<id_turno_estado>` | `fin` NULL = estado vigente; `id_cliente` UNIQUE; índice por `inicio` |
 | `REPORTE_TURNO` | Reporte del turno: instrucciones al iniciar, novedades al cerrar o novedad durante el turno | `tipo` ∈ `INICIO`, `FIN`, `NOVEDAD`; `estado_sincronizacion` (`SINCRONIZADO`, `PENDIENTE`, `ERROR_SINCRONIZACION`); `id_cliente` UNIQUE |
 | `EVIDENCIA` | Foto adjunta a un reporte | `url_blob` NOT NULL (clave en el almacenamiento, p. ej. `turno-25/<uuid>.jpg`); `id_cliente` UNIQUE |
 
@@ -312,6 +319,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `fk_alerta_usuario` | `ALERTA.atendida_por` | `USUARIO.id_usuario` | SET NULL |
 | `fk_turno_operador` | `TURNO.id_operador` | `OPERADOR.id_operador` | NO ACTION |
 | `fk_turno_maquina` | `TURNO.id_maquina` | `MAQUINA.id_maquina` | NO ACTION |
+| `fk_maquina_actualizado_por` | `MAQUINA.actualizado_por` | `USUARIO.id_usuario` | SET NULL |
 | `fk_bitacora_maquina` | `BITACORA_JEFE_TURNO.id_maquina` | `MAQUINA.id_maquina` | NO ACTION |
 | `fk_bitacora_usuario` | `BITACORA_JEFE_TURNO.id_usuario` | `USUARIO.id_usuario` | NO ACTION |
 | `fk_atencion_turno` | `ATENCION_ALERTA.id_turno` | `TURNO.id_turno` | CASCADE |
@@ -354,7 +362,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 - Al cerrar un turno (manual o automático) se cierra su `TURNO_UBICACION` vigente.
 - `TURNO_UBICACION.id_zona`, si viene, debe pertenecer al `id_area` del mismo registro (validado en la aplicación, no en la BD).
 - Una máquina `EN_MANTENIMIENTO`, `EN_RESERVA` o `BAJA` no trabaja: no aparece para iniciar turno (si llega un inicio offline, se acepta como conflicto) y no se puede pasar a esos estados con un turno en curso. `BAJO_OBSERVACION` sí opera.
-- Para sacar de operación una máquina con turno en curso, el jefe de turno primero cierra ese turno (`POST /turnos/maquina/:id/cierre`, con `horometro_final` y motivo); queda en `cerrado_por` / `motivo_cierre` y la app del operador lo informa.
+- Para sacar de operación una máquina con turno en curso, el jefe de turno primero cierra ese turno (`POST /turnos/maquina/:id/cierre`, con `horometro_final` y motivo); queda en `cerrado_por` / `motivo_cierre` y la app del operador lo informa. Desde la app se puede hacer sin señal: envía el `id_turno` que vio, la hora en que tomó el horómetro e `id_cliente_cierre`; gana el primer cierre que llega al servidor y, si perdió, responde `TURNO_YA_CERRADO` con quién y a qué hora.
 - Reemplazo: la saliente queda `EN_MANTENIMIENTO` o `BAJA` (con `regreso_estimado` opcional), apunta a su respaldo en `id_maquina_respaldo` y guarda en `estado_previo_respaldo` el estado que tenía el respaldo. La devolución (`POST /maquinas/:id/devolucion`) la deja `ACTIVA` con el operador del respaldo, devuelve el respaldo a ese estado y borra el enlace. `regreso_estimado` se borra al volver a un estado operativo.
 - Fatiga por jornada: los turnos de un operador separados por menos de 8 h de descanso forman una jornada; al sumar 10 h trabajadas en una jornada de varios turnos se genera la alerta `JORNADA_EXTENDIDA` (calculada desde `TURNO`, no se guarda).
 

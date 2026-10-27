@@ -6,6 +6,15 @@ export const TURNO_REPOSITORY = Symbol('TURNO_REPOSITORY');
 export interface TurnoRepositoryPort {
   // Al guardar un turno con fecha de término, también cierra su ubicación vigente.
   save(turno: Turno): Promise<Turno>;
+  // Guarda el cierre solo si el turno sigue abierto (o, con admiteCierreAutomatico, cerrado por el sistema sin
+  // horómetro): de dos cierres simultáneos gana el primero. null si otro cierre llegó antes.
+  // idClienteCierre: UUID del cierre hecho por un jefe de turno desde la app (hace idempotente el reintento)
+  cerrar(turno: Turno, admiteCierreAutomatico: boolean, idClienteCierre?: string | null): Promise<Turno | null>;
+  findByIdClienteCierre(idClienteCierre: string): Promise<Turno | null>;
+  // Inicio del último estado o ubicación registrado en el turno (un cierre no puede quedar antes)
+  findUltimoRegistro(idTurno: number): Promise<Date | null>;
+  // Quién cerró el turno (operador, jefe de turno o el sistema) y cuándo; null si sigue abierto
+  findCierre(idTurno: number): Promise<{ por: string; fecha: Date } | null>;
   // Crea el turno junto a su ubicación inicial en una sola transacción.
   iniciar(turno: Turno, ubicacion: UbicacionTurno): Promise<Turno>;
   findById(id: number): Promise<Turno | null>;

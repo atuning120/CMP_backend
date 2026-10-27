@@ -44,4 +44,18 @@ export class MaquinaOrmEntity {
   @Column('varchar', { name: 'estado_previo_respaldo', nullable: true })
   estado_previo_respaldo: string | null;
 
+  // Sube con cada acción del jefe de turno sobre la máquina: detecta cambios hechos por otro mientras tanto
+  @Column('integer', { name: 'version', default: 1 })
+  version: number;
+
+  @Column('timestamp with time zone', { name: 'actualizado_en', nullable: true })
+  actualizado_en: Date | null;
+
+  @Column('integer', { name: 'actualizado_por', nullable: true })
+  actualizado_por: number | null;
+
+  // UUID generado por el cliente al incorporarla: un reintento (p. ej. sincronizado sin señal) no la duplica
+  @Column('uuid', { name: 'id_cliente', nullable: true, unique: true })
+  id_cliente: string | null;
+
 }

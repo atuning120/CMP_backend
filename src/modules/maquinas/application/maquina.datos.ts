@@ -1,6 +1,8 @@
 import type { Logger } from '@nestjs/common';
+import { MaquinaModificadaError } from '../domain/repositories/maquina.repository.port';
 import type {
   AccionBitacora,
+  MaquinaFlota,
   MaquinaRepositoryPort,
   NuevaMaquina,
   OperadorAsignable,
@@ -8,6 +10,7 @@ import type {
 } from '../domain/repositories/maquina.repository.port';
 import type { ModeloMaquinaRepositoryPort } from '../domain/repositories/modelo-maquina.repository.port';
 import { maquinaError } from './maquina.errors';
+import { accionVencida } from '../../../shared/application/vigencia-accion';
 
 // Validación y normalización compartidas por la incorporación y la edición de máquinas
 
@@ -183,4 +186,75 @@ export const leerRegresoEstimado = (valor: unknown, ahora: Date = new Date()): D
     throw maquinaError('DATOS_INVALIDOS', 'La fecha estimada de regreso no puede ser en más de un año');
   }
   return fecha;
+};
+
+// Varios jefes de turno (en la web y en la app) gestionan la misma flota: una acción preparada sobre una versión
+// vieja de la máquina no pisa lo que otro cambió mientras tanto
+const maquinaModificada = (maquina: MaquinaFlota) =>
+  maquinaError('MAQUINA_MODIFICADA', `${maquina.nombre} fue modificada${maquina.actualizadoPor ? ` por ${maquina.actualizadoPor}` : ''}`);
+
+// versionBase: la versión de la máquina que vio el cliente al preparar la acción. Si no viene (versiones anteriores
+// de la app o del panel) no se compara
+export const versionDesactualizada = (maquina: MaquinaFlota, versionBase: unknown): boolean => {
+  if (versionBase === undefined || versionBase === null) return false;
+  if (!Number.isInteger(versionBase)) throw maquinaError('DATOS_INVALIDOS', 'La versión de la máquina no es válida');
+  return versionBase !== maquina.version;
+};
+
+export const verificarVersionBase = (maquina: MaquinaFlota, versionBase: unknown) => {
+  if (versionDesactualizada(maquina, versionBase)) throw maquinaModificada(maquina);
+};
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// UUID que genera el cliente para una acción hecha sin señal: se repite en cada reintento (null si no viene)
+export const leerIdCliente = (valor: unknown): string | null => {
+  if (valor === undefined || valor === null) return null;
+  if (typeof valor !== 'string' || !UUID_REGEX.test(valor)) {
+    throw maquinaError('DATOS_INVALIDOS', 'El identificador de la acción no es válido');
+  }
+  return valor.toLowerCase();
+};
+
+// Desfase tolerado entre el reloj del teléfono y el del servidor
+const DESFASE_MAXIMO_MS = 5 * 60 * 1000;
+
+/**
+ * fechaAccion: cuándo hizo el jefe de turno la acción, si la hizo sin señal y se envía después. Pasadas 72 h ya no se
+ * aplica (la app la descarta antes; esto es el respaldo). undefined o null: la acción es de ahora
+ */
+export const verificarVigencia = (fechaAccion: unknown, ahora: Date = new Date()) => {
+  if (fechaAccion === undefined || fechaAccion === null) return;
+  const fecha = typeof fechaAccion === 'string' ? new Date(fechaAccion) : null;
+  if (!fecha || Number.isNaN(fecha.getTime()) || fecha.getTime() > ahora.getTime() + DESFASE_MAXIMO_MS) {
+    throw maquinaError('DATOS_INVALIDOS', 'La fecha de la acción no es válida');
+  }
+  if (accionVencida(fecha, ahora)) throw maquinaError('ACCION_VENCIDA');
+};
+
+// Otro jefe de turno cambió los mismos campos que este quería cambiar. queCambio: p. ej. "la patente y el año"
+export const camposModificados = (maquina: MaquinaFlota, queCambio: string) =>
+  maquinaError(
+    'MAQUINA_MODIFICADA',
+    `${maquina.nombre} fue modificada${maquina.actualizadoPor ? ` por ${maquina.actualizadoPor}` : ''} (cambió ${queCambio})`,
+  );
+
+// El jefe de turno eligió al operador viéndolo en una máquina (maquinaBase: su id, o null sin máquina). Si otro jefe de
+// turno lo movió mientras tanto, moverlo ahora sorprendería a ese otro: es conflicto. undefined = el cliente no la envía
+export const verificarMaquinaDelOperador = (operador: OperadorAsignable | null | undefined, maquinaBase: unknown) => {
+  if (!operador || maquinaBase === undefined) return;
+  if ((operador.maquinaAsignada?.idMaquina ?? null) === (maquinaBase ?? null)) return;
+  const donde = operador.maquinaAsignada ? `asignado a ${operador.maquinaAsignada.nombre}` : 'dejado sin máquina';
+  throw maquinaError('MAQUINA_MODIFICADA', `${operador.nombre} fue ${donde}`);
+};
+
+// Guarda la acción; si otra se guardó entre la validación y el guardado, se responde igual que a una versionBase vieja
+export const guardarSinPisar = async <T>(maquinaRepo: MaquinaRepositoryPort, guardar: () => Promise<T>): Promise<T> => {
+  try {
+    return await guardar();
+  } catch (error) {
+    if (!(error instanceof MaquinaModificadaError)) throw error;
+    const actual = await maquinaRepo.findFlotaById(error.idMaquina);
+    throw actual ? maquinaModificada(actual) : maquinaError('MAQUINA_NO_ENCONTRADA');
+  }
 };

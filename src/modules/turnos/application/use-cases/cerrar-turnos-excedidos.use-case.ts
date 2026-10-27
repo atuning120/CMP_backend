@@ -19,7 +19,9 @@ export class CerrarTurnosExcedidosUseCase {
     const cerrados: Turno[] = [];
     for (const turno of excedidos) {
       turno.cerrarAutomaticamente();
-      cerrados.push(await this.turnoRepo.save(turno));
+      // Si el operador o un jefe de turno lo cerró justo ahora, se respeta ese cierre
+      const cerrado = await this.turnoRepo.cerrar(turno, false);
+      if (cerrado) cerrados.push(cerrado);
     }
     return cerrados;
   }
