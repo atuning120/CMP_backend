@@ -12,6 +12,7 @@ import { TrackingModule } from './modules/tracking/tracking.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HistorialModule } from './modules/historial/historial.module';
+import { ReportesModule } from './modules/reportes/reportes.module';
 import { HealthController } from './health.controller';
 import { leerDbPassword } from './shared/infrastructure/config/secretos';
 
@@ -40,6 +41,7 @@ import { leerDbPassword } from './shared/infrastructure/config/secretos';
     UsuariosModule,
     AuthModule,
     HistorialModule,
+    ReportesModule,
   ],
   controllers: [HealthController],
   providers: [],

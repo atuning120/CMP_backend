@@ -298,6 +298,21 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `REPORTE_TURNO` | Reporte del turno: instrucciones al iniciar, novedades al cerrar o novedad durante el turno | `tipo` ∈ `INICIO`, `FIN`, `NOVEDAD`; `estado_sincronizacion` (`SINCRONIZADO`, `PENDIENTE`, `ERROR_SINCRONIZACION`); `id_cliente` UNIQUE |
 | `EVIDENCIA` | Foto adjunta a un reporte | `url_blob` NOT NULL (clave en el almacenamiento, p. ej. `turno-25/<uuid>.jpg`); `id_cliente` UNIQUE |
 
+### Reportes (schema `reportes`, dashboards de Metabase)
+
+Metabase lee solo este schema con el usuario `metabase_lector` (migración `016`); las views leen las tablas de la app con los permisos de su dueño, así que Metabase nunca ve `OPERADOR`, `USUARIO`, etc. Guía de Metabase: [`metabase.md`](metabase.md).
+
+| Tabla / view | Propósito | Restricciones |
+|---|---|---|
+| `carga` | Excel del estado de pago (EP) subido para un mes | `periodo` = primer día del mes; `fecha_desde`/`fecha_hasta` = rango real del EP (p. ej. 25-05 al 25-06); un solo `vigente` por `periodo`; el archivo original no se guarda (trae datos personales), solo nombre y `hash_sha256` |
+| `carga_registro` | Filas de la hoja "Base de datos" del Excel (horas por equipo) | `equipo` = código interno (`MAQUINA.nombre`); `fila` = fila del Excel |
+| `carga_horas_app` | Horas de la app de las jornadas del EP, congeladas al confirmar la carga | mismas columnas que `v_horas_app`; sin FK a `TURNO` a propósito |
+| `equivalencia_area` | Textos de "Actividad" del Excel que no son "Area NN" (p. ej. `tacho`) → `AREA` | `texto` en minúsculas |
+| `v_horas_app` / `v_estados_app` | Horas por turno y área / tiempo por estado operacional, en vivo | las horas de un turno con varias áreas se reparten según el tiempo en cada una; `jornada` = día del EP (migración `017`): en el Excel la jornada D empieza con el turno de noche de la tarde del día D-1, así que un turno que empieza a las 12:00 o después cuenta para el día siguiente |
+| `v_horas_excel` / `v_horas_app_ep` | Lado Excel y lado App de las cargas vigentes (mismas columnas) | |
+| `v_comparacion` | Excel contra App por equipo y jornada | `estado` ∈ `COINCIDE` (≤ 0,5 h), `DIFIERE`, `SOLO_EXCEL`, `SOLO_APP` |
+| `v_horometros_excel` / `v_cargas` | Horómetros del Excel que no cuadran / cargas vigentes con etiqueta para el filtro | horómetros encadenados por horómetro inicial (no por fecha: el turno de noche de la jornada D va antes que el de día) |
+
 ## Relaciones (foreign keys)
 
 | FK | Desde | Hacia | ON DELETE |
@@ -346,6 +361,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `ALERTA`, `ATENCION_ALERTA` | `alertas` |
 | `TURNO`, `TURNO_UBICACION`, `TURNO_ESTADO`, `ESTADO_OPERACIONAL` | `turnos` |
 | `REPORTE_TURNO`, `EVIDENCIA` | `evidencias` |
+| schema `reportes` | `reportes` (carga del Excel y token de los dashboards) |
 
 ## Reglas de negocio sobre los datos
 
