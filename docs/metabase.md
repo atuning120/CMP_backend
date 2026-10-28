@@ -105,10 +105,21 @@ credenciales que Metabase guarda; si se pierde hay que volver a ingresar la cont
 
 ## 5. Embedding
 
-1. **Admin → Settings → Embedding → Static embedding**: activarlo y copiar la *Embedding secret key*. Va como secret
-   en `cmp-backend` (`METABASE_SECRET_KEY`), junto con `METABASE_SITE_URL`; nunca en el Frontend.
-2. En cada dashboard: **Compartir → Embed → Static embedding** → configurar parámetros → **Publish**.
-   - Filtro de período EP: **Locked** (lo fija la web según el mes elegido).
+1. **Admin → Settings → Embedding → Incrustación para invitados** (static embedding): activarla y copiar la clave de
+   incrustación. Va en `cmp-backend`, nunca en el Frontend:
+
+   | Variable | Valor |
+   |---|---|
+   | `METABASE_SITE_URL` | URL pública de `cmp-metabase` |
+   | `METABASE_SECRET_KEY` | la clave de incrustación (como secret) |
+   | `METABASE_DASHBOARD_OPERACION` | id del dashboard Operación: el número de su URL (`/dashboard/2-operacion` → `2`) |
+   | `METABASE_DASHBOARD_ESTADO_PAGO` | id del dashboard Estado de pago |
+
+   Sin ellas, `GET /dashboards/:tipo` responde 503 `METABASE_NO_CONFIGURADO`.
+2. En cada dashboard: **Compartir → Incrustar → Incrustación para invitados** → configurar parámetros → **Publicar**.
+   - Estado de pago: un filtro **Número** llamado exactamente `id_carga`, conectado a la columna `id_carga` de cada
+     gráfico, en modo **Bloqueado**. La web lo fija con la carga vigente del mes elegido (`PARAMETRO_CARGA` en
+     `obtener-dashboard.use-case.ts`).
    - Filtros de equipo, categoría o fecha que el usuario puede tocar: **Editable**.
    Publicar de nuevo después de cambiar los parámetros. Los gráficos se pueden editar sin volver a publicar.
 
@@ -117,8 +128,13 @@ credenciales que Metabase guarda; si se pierde hay que volver a ingresar la cont
 | Dashboard | Fuente | Filtros |
 |---|---|---|
 | **Operación** (en vivo, no depende del Excel) | `v_horas_app`, `v_estados_app` | Fecha (rango), categoría, equipo |
-| **Estado de pago**, pestañas *Excel* y *Comparación* | `v_horas_excel`, `v_horas_app_ep`, `v_comparacion`, `v_horometros_excel` | Período (`periodo`, locked), categoría, equipo |
+| **Estado de pago**, pestañas *Excel* y *Comparación* | `v_horas_excel`, `v_horas_app_ep`, `v_comparacion`, `v_horometros_excel` | `id_carga` (bloqueado), categoría, equipo |
 
 `v_horas_app`, `v_horas_excel` y `v_horas_app_ep` tienen las mismas columnas (`equipo`, `categoria`, `fecha`,
-`hora_inicio`, `horas`, `area`): un gráfico armado sobre una se replica en la otra cambiando solo la fuente. Sumar
-siempre `horas`, no los horómetros (en `v_horas_app` se repiten si el turno pasó por varias áreas).
+`hora_inicio`, `horas`, `area`, `jornada`): un gráfico armado sobre una se replica en la otra cambiando solo la fuente.
+Sumar siempre `horas`, no los horómetros (en `v_horas_app` se repiten si el turno pasó por varias áreas). Para
+comparar por día usar `jornada`, no `fecha`: en el Excel el turno de noche de la tarde anterior ya es de la jornada
+siguiente.
+
+La carga del Excel la hace la web (ADMIN y JEFE_TURNO) con `POST /dashboards/cargas/previsualizar` y
+`POST /dashboards/cargas`; del archivo solo se lee la hoja "Base de datos".

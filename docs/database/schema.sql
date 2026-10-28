@@ -316,7 +316,7 @@ CREATE TABLE REFRESH_TOKEN (
 
 CREATE INDEX idx_refresh_token_usuario ON REFRESH_TOKEN(id_usuario);
 
--- Reportes para Metabase (migración 016): carga mensual del Excel del EP del contratista y views que lee el dashboard.
+-- Reportes para Metabase (migraciones 016 y 017): carga mensual del Excel del EP del contratista y views que lee el dashboard.
 -- Los usuarios de Postgres de Metabase (metabase_app, metabase_lector) se crean con la migración 016, no aquí.
 -- 1. Schema `reportes`: todo lo que lee Metabase vive aquí. Su usuario solo ve este schema, nunca las tablas de la app
 --    (OPERADOR, USUARIO, etc.): las views de abajo leen la app con los permisos de su dueño.
@@ -384,13 +384,15 @@ CREATE TABLE IF NOT EXISTS reportes.carga_horas_app (
     horas             NUMERIC(10,2) NOT NULL,
     id_area           INT,
     area              VARCHAR(100),
-    conflicto         BOOLEAN NOT NULL DEFAULT FALSE
+    conflicto         BOOLEAN NOT NULL DEFAULT FALSE,
+    jornada           DATE NOT NULL -- día del EP (ver v_horas_app)
 );
 CREATE INDEX IF NOT EXISTS ix_carga_horas_app_carga ON reportes.carga_horas_app (id_carga, equipo, fecha);
 
 -- 4. Views
--- Horas de la app en vivo: una fila por turno cerrado y área. Si el turno pasó por varias áreas, sus horas de
--- horómetro se reparten según el tiempo en cada una (sumar `horas`, no los horómetros, que se repiten por área)
+-- Horas de la app en vivo: una fila por turno cerrado y área (las horas se reparten según el tiempo en cada área;
+-- sumar `horas`, no los horómetros). jornada = día del EP: en el Excel la jornada D empieza con el turno de noche
+-- de la tarde del día D-1, así que un turno que empieza a las 12:00 o después cuenta para el día siguiente
 CREATE OR REPLACE VIEW reportes.v_horas_app AS
 WITH turnos AS (
     SELECT t.id_turno, t.id_maquina, t.fecha_turno, t.hora_inicio, t.hora_termino,
@@ -421,7 +423,9 @@ SELECT tu.id_turno,
        ROUND(tu.horas * COALESCE(r.fraccion, 1), 2) AS horas,
        r.id_area,
        a.nombre AS area,
-       tu.conflicto
+       tu.conflicto,
+       CASE WHEN (tu.hora_inicio AT TIME ZONE 'America/Santiago')::time >= TIME '12:00'
+            THEN tu.fecha_turno + 1 ELSE tu.fecha_turno END AS jornada
 FROM turnos tu
 JOIN public.maquina m ON m.id_maquina = tu.id_maquina
 LEFT JOIN reparto r ON r.id_turno = tu.id_turno
@@ -478,7 +482,8 @@ SELECT c.id_carga,
        r.horas,
        r.actividad,
        a.id_area,
-       a.nombre AS area
+       a.nombre AS area,
+       r.fecha AS jornada
 FROM reportes.carga_registro r
 JOIN reportes.carga c ON c.id_carga = r.id_carga AND c.vigente
 LEFT JOIN public.maquina mq ON UPPER(mq.nombre) = UPPER(r.equipo)
@@ -508,28 +513,29 @@ SELECT c.id_carga,
        s.horas,
        s.id_area,
        s.area,
-       s.conflicto
+       s.conflicto,
+       s.jornada
 FROM reportes.carga_horas_app s
 JOIN reportes.carga c ON c.id_carga = s.id_carga AND c.vigente;
 
--- Excel contra App por equipo y día. Estado: COINCIDE (diferencia de hasta 0,5 h), DIFIERE, SOLO_EXCEL, SOLO_APP
+-- Excel contra App por equipo y jornada. Estado: COINCIDE (diferencia de hasta 0,5 h), DIFIERE, SOLO_EXCEL, SOLO_APP
 CREATE OR REPLACE VIEW reportes.v_comparacion AS
 WITH excel AS (
-    SELECT id_carga, UPPER(equipo) AS equipo, MAX(categoria) AS categoria, fecha,
+    SELECT id_carga, UPPER(equipo) AS equipo, MAX(categoria) AS categoria, jornada,
            SUM(horas) AS horas, COUNT(*) AS registros
     FROM reportes.v_horas_excel
-    GROUP BY id_carga, UPPER(equipo), fecha
+    GROUP BY id_carga, UPPER(equipo), jornada
 ), app AS (
-    SELECT id_carga, UPPER(equipo) AS equipo, MAX(categoria) AS categoria, fecha,
+    SELECT id_carga, UPPER(equipo) AS equipo, MAX(categoria) AS categoria, jornada,
            SUM(horas) AS horas, COUNT(DISTINCT id_turno) AS turnos
     FROM reportes.v_horas_app_ep
-    GROUP BY id_carga, UPPER(equipo), fecha
+    GROUP BY id_carga, UPPER(equipo), jornada
 )
 SELECT c.id_carga,
        c.periodo,
        COALESCE(e.equipo, a.equipo) AS equipo,
        COALESCE(e.categoria, a.categoria) AS categoria,
-       COALESCE(e.fecha, a.fecha) AS fecha,
+       COALESCE(e.jornada, a.jornada) AS jornada,
        e.horas AS horas_excel,
        a.horas AS horas_app,
        COALESCE(e.horas, 0) - COALESCE(a.horas, 0) AS diferencia,
@@ -542,21 +548,19 @@ SELECT c.id_carga,
            ELSE 'DIFIERE'
        END AS estado
 FROM excel e
-FULL JOIN app a ON a.id_carga = e.id_carga AND a.equipo = e.equipo AND a.fecha = e.fecha
+FULL JOIN app a ON a.id_carga = e.id_carga AND a.equipo = e.equipo AND a.jornada = e.jornada
 JOIN reportes.carga c ON c.id_carga = COALESCE(e.id_carga, a.id_carga);
 
--- Horómetros del Excel que no cuadran: el registro empieza en otro valor que donde terminó el anterior del mismo
--- equipo, o termina antes de empezar
+-- Horómetros del Excel que no cuadran, encadenados por horómetro inicial (la fecha y la hora no sirven para ordenar:
+-- el turno de noche de la jornada D es anterior al de día)
 CREATE OR REPLACE VIEW reportes.v_horometros_excel AS
 SELECT *
 FROM (
     SELECT id_carga, periodo, id_registro, fila, equipo, categoria, fecha, hora_inicio,
            horometro_inicial, horometro_final,
-           LAG(horometro_final) OVER (PARTITION BY id_carga, UPPER(equipo) ORDER BY fecha, hora_inicio, fila)
-               AS horometro_final_anterior,
-           horometro_inicial - LAG(horometro_final) OVER (PARTITION BY id_carga, UPPER(equipo)
-                                                           ORDER BY fecha, hora_inicio, fila) AS salto
+           LAG(horometro_final) OVER w AS horometro_final_anterior,
+           horometro_inicial - LAG(horometro_final) OVER w AS salto
     FROM reportes.v_horas_excel
+    WINDOW w AS (PARTITION BY id_carga, UPPER(equipo) ORDER BY horometro_inicial, fecha, hora_inicio, fila)
 ) h
 WHERE salto <> 0 OR horometro_final < horometro_inicial;
-
