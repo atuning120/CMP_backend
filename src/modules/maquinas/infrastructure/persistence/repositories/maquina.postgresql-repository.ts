@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
-import { esEstadoMaquina, MaquinaModificadaError, operaEnEstado } from '../../../domain/repositories/maquina.repository.port';
+import { esEstadoMaquina, ESTADOS_CON_REGRESO, MaquinaModificadaError } from '../../../domain/repositories/maquina.repository.port';
 import type {
   AccionBitacora,
   CambiosMaquina,
@@ -400,8 +400,8 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       numero_chasis: cambios.numeroChasis,
       es_contratista: cambios.esContratista,
       estado: cambios.estado,
-      // De vuelta en operación ya no hay regreso pendiente
-      regreso_estimado: cambios.estado && operaEnEstado(cambios.estado) ? null : cambios.regresoEstimado,
+      // En un estado sin regreso (de vuelta en operación, fuera de servicio) ya no hay regreso pendiente
+      regreso_estimado: cambios.estado && !ESTADOS_CON_REGRESO.includes(cambios.estado) ? null : cambios.regresoEstimado,
     };
     // Solo las columnas que cambian (undefined = no se toca; null sí se guarda)
     const set = Object.fromEntries(Object.entries(columnas).filter(([, valor]) => valor !== undefined));

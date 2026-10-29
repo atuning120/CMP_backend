@@ -326,6 +326,7 @@ describe('EditarMaquinaUseCase', () => {
     expect(await codigoDe(editar.execute({ ...base, estado: 'EN_MANTENIMIENTO', regresoEstimado: 'mañana' }))).toBe('DATOS_INVALIDOS');
     const futura = new Date(Date.now() + 3600_000).toISOString();
     expect(await codigoDe(editar.execute({ ...base, estado: 'EN_RESERVA', regresoEstimado: futura }))).toBe('DATOS_INVALIDOS');
+    expect(await codigoDe(editar.execute({ ...base, estado: 'BAJA', regresoEstimado: futura }))).toBe('DATOS_INVALIDOS');
   });
 
   it('reprogramar el regreso sin cambiar de estado queda como edición', async () => {
