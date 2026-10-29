@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { esEstadoMaquina, MAQUINA_REPOSITORY } from '../../domain/repositories/maquina.repository.port';
+import { esEstadoMaquina, ESTADOS_CON_REGRESO, MAQUINA_REPOSITORY } from '../../domain/repositories/maquina.repository.port';
 import type {
   AccionBitacora,
   EstadoMaquina,
@@ -37,7 +37,7 @@ export interface ReemplazarMaquinaDto {
   // Cómo queda la saliente: EN_MANTENIMIENTO (vuelve tras la reparación) o BAJA. Ausente: si ya estaba en uno de
   // esos estados lo conserva; si no, BAJA
   estadoSaliente?: unknown;
-  regresoEstimado?: unknown; // ISO; cuándo se espera que la saliente vuelva a operar
+  regresoEstimado?: unknown; // ISO; cuándo se espera que la saliente vuelva a operar (solo en mantenimiento)
   motivo?: unknown;
   observacion?: unknown;
   versionBase?: unknown; // versión de la saliente que vio el jefe de turno
@@ -92,6 +92,9 @@ export class ReemplazarMaquinaUseCase {
     // El reemplazo saca a la saliente de operación (en mantenimiento o fuera de servicio) en el mismo paso
     const estadoSaliente = leerEstadoSaliente(dto.estadoSaliente, saliente.estado);
     const regresoEstimado = leerRegresoEstimado(dto.regresoEstimado) ?? null;
+    if (regresoEstimado && !ESTADOS_CON_REGRESO.includes(estadoSaliente)) {
+      throw maquinaError('DATOS_INVALIDOS', 'Solo una máquina en mantenimiento tiene fecha estimada de regreso');
+    }
     // Ya tiene un respaldo: primero se devuelve ese (si no, se perdería a qué estado vuelve)
     if (saliente.respaldo) {
       throw maquinaError('DATOS_INVALIDOS', `${saliente.nombre} ya está cubierta por ${saliente.respaldo.nombre}`);

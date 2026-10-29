@@ -103,8 +103,8 @@ export const esEstadoMaquina = (valor: unknown): valor is EstadoMaquina => ESTAD
 // ni pasarla a ellos con un turno en curso. "Bajo observación" sí opera, vigilada
 export const ESTADOS_SIN_OPERAR: readonly EstadoMaquina[] = ['EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA'];
 export const operaEnEstado = (estado: string | null) => !ESTADOS_SIN_OPERAR.includes(estado as EstadoMaquina);
-// Estados con fecha estimada de regreso (una reparación de 40 h, una falla mayor)
-export const ESTADOS_CON_REGRESO: readonly EstadoMaquina[] = ['EN_MANTENIMIENTO', 'BAJA'];
+// Estados con fecha estimada de regreso: solo una reparación (40 h). Fuera de servicio no tiene fecha conocida
+export const ESTADOS_CON_REGRESO: readonly EstadoMaquina[] = ['EN_MANTENIMIENTO'];
 // Estado de la máquina que sale en un reemplazo
 export type EstadoSaliente = 'EN_MANTENIMIENTO' | 'BAJA';
 
@@ -179,7 +179,7 @@ export interface MaquinaRepositoryPort {
   existePatente(patente: string, exceptoId?: number): Promise<boolean>;
   tieneTurnoEnCurso(idMaquina: number): Promise<boolean>;
   // Los cambios y sus registros en la bitácora se guardan en una misma transacción
-  // Al volver a un estado operativo se borra el regreso estimado
+  // Al pasar a un estado sin regreso (operativo, en reserva, fuera de servicio) se borra el regreso estimado
   // Toda acción que se guarda sube la versión de las máquinas que toca (también la que pierde a su operador).
   // Si una máquina validada (version) ya cambió, lanza MaquinaModificadaError sin guardar nada
   actualizar(idMaquina: number, version: number, cambios: CambiosMaquina, acciones: AccionBitacora[]): Promise<void>;

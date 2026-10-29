@@ -3,8 +3,8 @@ import { CARGA_EP_REPOSITORY } from '../../domain/repositories/carga-ep.reposito
 import type { CargaEp, CargaEpRepositoryPort } from '../../domain/repositories/carga-ep.repository.port';
 import { reporteError } from '../reporte.errors';
 
-// Todos los roles del panel web ven los dashboards (el VISOR solo mira); solo ADMIN y JEFE_TURNO cargan el Excel
-export const ROLES_DASHBOARD = ['ADMIN', 'JEFE_TURNO', 'VISOR'];
+// Los dashboards los ven y el Excel lo cargan solo ADMIN y JEFE_TURNO (el VISOR no tiene acceso)
+export const ROLES_DASHBOARD = ['ADMIN', 'JEFE_TURNO'];
 
 export const exigirRolDashboard = (rol: string) => {
   if (!ROLES_DASHBOARD.includes(rol)) throw reporteError('SIN_PERMISO');

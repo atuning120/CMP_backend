@@ -10,7 +10,7 @@ export class EditarMaquinaRequestDto {
   esContratista?: boolean;
   idOperador?: number | null; // null deja la máquina sin operador
   estado?: 'ACTIVA' | 'BAJO_OBSERVACION' | 'EN_MANTENIMIENTO' | 'EN_RESERVA' | 'BAJA';
-  regresoEstimado?: string | null; // ISO; solo en mantenimiento o fuera de servicio
+  regresoEstimado?: string | null; // ISO; solo en mantenimiento
   motivo: string;
   observacion?: string | null;
   versionBase?: number; // versión de la máquina que vio el jefe de turno; si cambió, responde 409 MAQUINA_MODIFICADA

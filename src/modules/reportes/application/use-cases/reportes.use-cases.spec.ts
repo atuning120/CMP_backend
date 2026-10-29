@@ -168,16 +168,18 @@ describe('Carga del Excel del estado de pago', () => {
 describe('Dashboards', () => {
   const ahora = new Date('2026-07-02T15:00:00.000Z');
 
-  it('todos los roles web ven los dashboards; el operador no', async () => {
+  it('solo ADMIN y JEFE_TURNO ven los dashboards; el visor y el operador no', async () => {
     const { listar, dashboard } = crear(null);
-    await expect(listar.execute('VISOR')).resolves.toEqual([cargaJunio]);
+    await expect(listar.execute('JEFE_TURNO')).resolves.toEqual([cargaJunio]);
+    expect(await codigoDe(listar.execute('VISOR'))).toBe('SIN_PERMISO');
+    expect(await codigoDe(dashboard.execute({ rol: 'VISOR', tipo: 'OPERACION' }, ahora))).toBe('SIN_PERMISO');
     expect(await codigoDe(listar.execute('OPERADOR'))).toBe('SIN_PERMISO');
     expect(await codigoDe(dashboard.execute({ rol: 'OPERADOR', tipo: 'OPERACION' }, ahora))).toBe('SIN_PERMISO');
   });
 
   it('operación va sin filtros bloqueados; estado de pago bloquea la carga vigente del mes', async () => {
     const { dashboard, firmador, cargaRepo } = crear(null, cargaJunio);
-    await expect(dashboard.execute({ rol: 'VISOR', tipo: 'OPERACION' }, ahora)).resolves.toMatchObject({ carga: null });
+    await expect(dashboard.execute({ rol: 'JEFE_TURNO', tipo: 'OPERACION' }, ahora)).resolves.toMatchObject({ carga: null });
     expect(firmador.firmar).toHaveBeenLastCalledWith('OPERACION', {}, ahora);
 
     const estadoPago = await dashboard.execute({ rol: 'ADMIN', tipo: 'ESTADO_PAGO', periodo: '2026-06' }, ahora);
