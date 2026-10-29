@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Headers, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Headers, HttpCode, HttpStatus, Req, Res, UseGuards } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { LimiteIntentosGuard } from '../../../infrastructure/limite-intentos';
 import { LoginUseCase } from '../../../application/use-cases/login.use-case';
 import { LoginRequestDto } from '../dtos/login.request.dto';
@@ -12,6 +13,7 @@ import { RefreshTokenRequestDto } from '../dtos/refresh-token.request.dto';
 import { RefrescarSesionUseCase } from '../../../application/use-cases/refrescar-sesion.use-case';
 import { CerrarSesionUseCase } from '../../../application/use-cases/cerrar-sesion.use-case';
 import { RefrescarSesionWebUseCase } from '../../../application/use-cases/refrescar-sesion-web.use-case';
+import { borrarCookieSesion, leerCookieSesion, responderSesionWeb, usaCookie } from '../sesion-web.cookie';
 
 // Login y registro llevan límite de intentos (ver limite-intentos.ts); refresh y logout no: el refresh token es
 // aleatorio de 48 bytes (no se puede adivinar) y la app los reintenta seguido cuando vuelve la señal
@@ -51,32 +53,40 @@ export class AuthController {
     return this.refrescarSesionUseCase.execute(body?.refreshToken);
   }
 
-  // Renueva la sesión del panel web (misma rotación; acepta los roles con acceso web y no los de la app)
+  // Renueva la sesión del panel web (misma rotación; acepta los roles con acceso web y no los de la app).
+  // Con X-Sesion-Web el token sale de la cookie; el del cuerpo queda para las sesiones guardadas antes de la cookie
   @Post('refresh/web')
   @HttpCode(HttpStatus.OK)
-  async refreshWeb(@Body() body: RefreshTokenRequestDto) {
-    return this.refrescarSesionWebUseCase.execute(body?.refreshToken);
+  async refreshWeb(@Body() body: RefreshTokenRequestDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const refreshToken = usaCookie(req) ? (leerCookieSesion(req) ?? body?.refreshToken) : body?.refreshToken;
+    return responderSesionWeb(req, res, await this.refrescarSesionWebUseCase.execute(refreshToken));
   }
 
-  // Revoca el refresh token del dispositivo o del navegador
+  // Revoca el refresh token del dispositivo (cuerpo) o del navegador (cookie, que además se borra)
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async logout(@Body() body: RefreshTokenRequestDto) {
-    await this.cerrarSesionUseCase.execute(body?.refreshToken);
+  async logout(@Body() body: RefreshTokenRequestDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    if (!usaCookie(req)) return this.cerrarSesionUseCase.execute(body?.refreshToken);
+    await this.cerrarSesionUseCase.execute(leerCookieSesion(req) ?? body?.refreshToken);
+    borrarCookieSesion(req, res);
   }
 
   @Post('login/web')
   @UseGuards(LimiteIntentosGuard)
   @HttpCode(HttpStatus.OK)
-  async loginWeb(@Body() body: LoginWebRequestDto) {
-    return this.loginWebUseCase.execute(body);
+  async loginWeb(@Body() body: LoginWebRequestDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return responderSesionWeb(req, res, await this.loginWebUseCase.execute(body));
   }
 
-  // Login del panel web con email y contraseña; responde { accessToken, refreshToken, refreshTokenExpiraEn, rol }
+  // Login del panel web con email y contraseña; responde { accessToken, refreshTokenExpiraEn, rol } (+ refreshToken sin cookie)
   @Post('login/web/credenciales')
   @UseGuards(LimiteIntentosGuard)
   @HttpCode(HttpStatus.OK)
-  async loginWebCredenciales(@Body() body: LoginWebCredencialesRequestDto) {
-    return this.loginWebCredencialesUseCase.execute(body);
+  async loginWebCredenciales(
+    @Body() body: LoginWebCredencialesRequestDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return responderSesionWeb(req, res, await this.loginWebCredencialesUseCase.execute(body));
   }
 }
