@@ -37,4 +37,22 @@ describe('FirmadorDashboardMetabase', () => {
     expect(firmador({ ...configurado, METABASE_DASHBOARD_OPERACION: 'abc' }).firmar('OPERACION', {}, ahora)).toBeNull();
     expect(firmador({ ...configurado, METABASE_DASHBOARD_ESTADO_PAGO: '' }).firmar('ESTADO_PAGO', {}, ahora)).toBeNull();
   });
+
+  describe('disponible', () => {
+    const responder = (respuesta: Promise<Response>) => jest.spyOn(globalThis, 'fetch').mockReturnValueOnce(respuesta);
+    afterEach(() => jest.restoreAllMocks());
+
+    it('true solo si /api/health responde status ok', async () => {
+      const espia = responder(Promise.resolve(Response.json({ status: 'ok' })));
+      await expect(firmador(configurado).disponible()).resolves.toBe(true);
+      expect(espia.mock.calls[0][0]).toBe('https://cmp-metabase.example.io/api/health');
+
+      responder(Promise.resolve(Response.json({ status: 'starting' })));
+      await expect(firmador(configurado).disponible()).resolves.toBe(false);
+      responder(Promise.resolve(Response.json({ error: 'Failed to forward request' }, { status: 502 })));
+      await expect(firmador(configurado).disponible()).resolves.toBe(false);
+      responder(Promise.reject(new Error('timeout')));
+      await expect(firmador(configurado).disponible()).resolves.toBe(false);
+    });
+  });
 });

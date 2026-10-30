@@ -11,7 +11,8 @@ export type ReporteErrorCode =
   | 'CARGA_SIMULTANEA'
   | 'CARGA_NO_ENCONTRADA'
   | 'DASHBOARD_INVALIDO'
-  | 'METABASE_NO_CONFIGURADO';
+  | 'METABASE_NO_CONFIGURADO'
+  | 'METABASE_NO_DISPONIBLE';
 
 export const reporteError = (code: ReporteErrorCode, errores?: ErrorFilaEp[]) => {
   switch (code) {
@@ -39,5 +40,7 @@ export const reporteError = (code: ReporteErrorCode, errores?: ErrorFilaEp[]) =>
       return new BadRequestException({ statusCode: 400, code, message: 'El dashboard debe ser operacion o estado-pago' });
     case 'METABASE_NO_CONFIGURADO':
       return new ServiceUnavailableException({ statusCode: 503, code, message: 'Los dashboards no están configurados' });
+    case 'METABASE_NO_DISPONIBLE':
+      return new ServiceUnavailableException({ statusCode: 503, code, message: 'El servidor de dashboards se está iniciando. Intenta nuevamente en un minuto' });
   }
 };

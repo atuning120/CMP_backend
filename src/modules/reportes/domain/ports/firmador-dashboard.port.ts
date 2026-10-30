@@ -13,4 +13,6 @@ export interface DashboardEmbebido {
 export interface FirmadorDashboardPort {
   // null si Metabase o ese dashboard no están configurados
   firmar(tipo: TipoDashboard, parametros: Record<string, string | number>, ahora: Date): DashboardEmbebido | null;
+  // false si Metabase no responde sano (está arrancando o caído): el iframe mostraría el error del proxy de Azure
+  disponible(): Promise<boolean>;
 }

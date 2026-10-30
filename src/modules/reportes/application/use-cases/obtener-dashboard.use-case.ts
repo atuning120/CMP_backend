@@ -44,6 +44,7 @@ export class ObtenerDashboardUseCase {
 
     const embebido = this.firmador.firmar(tipo, parametros, ahora);
     if (!embebido) throw reporteError('METABASE_NO_CONFIGURADO');
+    if (!(await this.firmador.disponible())) throw reporteError('METABASE_NO_DISPONIBLE');
     return { ...embebido, carga };
   }
 }
