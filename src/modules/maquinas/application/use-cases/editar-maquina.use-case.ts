@@ -139,7 +139,7 @@ export class EditarMaquinaUseCase {
 
     const regreso = leerRegresoEstimado(dto.regresoEstimado);
     if (regreso && !ESTADOS_CON_REGRESO.includes(despues.estado)) {
-      throw maquinaError('DATOS_INVALIDOS', 'Solo una máquina en mantenimiento tiene fecha estimada de regreso');
+      throw maquinaError('DATOS_INVALIDOS', 'Solo una máquina en mantenimiento o fuera de servicio tiene fecha estimada de regreso');
     }
     // Al volver a operar el regreso se borra solo (lo hace el repositorio)
     const regresoAntes = actual.regresoEstimado?.getTime() ?? null;

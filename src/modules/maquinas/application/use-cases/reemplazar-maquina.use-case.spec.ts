@@ -159,21 +159,21 @@ describe('ReemplazarMaquinaUseCase', () => {
     });
   });
 
-  it('fuera de servicio no lleva regreso estimado', async () => {
-    const { maquinaRepo, reemplazar } = crear();
-    maquinaRepo.findFlotaById.mockImplementation(async (id: number) => (id === 3 ? maquina(3, 'BD-01') : respaldo));
-    const regreso = new Date(Date.now() + 40 * 3600_000).toISOString();
-    expect(await codigoDe(reemplazar.execute({ ...base, idMaquinaEntrante: 9, estadoSaliente: 'BAJA', regresoEstimado: regreso }))).toBe(
-      'DATOS_INVALIDOS',
-    );
-    expect(maquinaRepo.reemplazar).not.toHaveBeenCalled();
-  });
-
   it('sin estado indicado, una operativa queda fuera de servicio', async () => {
     const { maquinaRepo, reemplazar } = crear();
     maquinaRepo.findFlotaById.mockImplementation(async (id: number) => (id === 3 ? maquina(3, 'BD-01') : respaldo));
     await reemplazar.execute({ ...base, idMaquinaEntrante: 9 });
     expect(maquinaRepo.reemplazar.mock.calls[0][0].estadoSaliente).toBe('BAJA');
+  });
+
+  it('sin estado ni regreso indicados, una saliente ya fuera de operación conserva ambos', async () => {
+    const { maquinaRepo, reemplazar } = crear();
+    const regreso = new Date(Date.now() + 40 * 3600_000);
+    maquinaRepo.findFlotaById.mockImplementation(async (id: number) =>
+      id === 3 ? maquina(3, 'BD-01', { estado: 'EN_MANTENIMIENTO', regresoEstimado: regreso }) : respaldo,
+    );
+    await reemplazar.execute({ ...base, idMaquinaEntrante: 9 });
+    expect(maquinaRepo.reemplazar.mock.calls[0][0]).toMatchObject({ estadoSaliente: 'EN_MANTENIMIENTO', regresoEstimado: regreso });
   });
 
   it('el respaldo tiene que poder trabajar y no estar cubriendo a otra; la saliente no puede tener ya un respaldo', async () => {
