@@ -47,6 +47,7 @@ const crear = (lectura: LecturaExcelEp | null, existente: CargaEp | null = null)
       url: `https://mb/embed/dashboard/token?${JSON.stringify(parametros)}`,
       expiraEn: new Date(ahora.getTime() + 3600_000),
     })),
+    disponible: jest.fn(async (): Promise<boolean> => true),
   } satisfies FirmadorDashboardPort;
   return {
     lector,
@@ -188,12 +189,14 @@ describe('Dashboards', () => {
     expect(estadoPago).toMatchObject({ carga: cargaJunio, expiraEn: new Date('2026-07-02T16:00:00.000Z') });
   });
 
-  it('errores: tipo desconocido, mes sin carga y Metabase sin configurar', async () => {
+  it('errores: tipo desconocido, mes sin carga, Metabase sin configurar o arrancando', async () => {
     const { dashboard, firmador } = crear(null, null);
     expect(await codigoDe(dashboard.execute({ rol: 'ADMIN', tipo: 'OTRO' }, ahora))).toBe('DASHBOARD_INVALIDO');
     expect(await codigoDe(dashboard.execute({ rol: 'ADMIN', tipo: 'ESTADO_PAGO' }, ahora))).toBe('PERIODO_INVALIDO');
     expect(await codigoDe(dashboard.execute({ rol: 'ADMIN', tipo: 'ESTADO_PAGO', periodo: '2026-06' }, ahora))).toBe('CARGA_NO_ENCONTRADA');
     firmador.firmar.mockReturnValueOnce(null as never);
     expect(await codigoDe(dashboard.execute({ rol: 'ADMIN', tipo: 'OPERACION' }, ahora))).toBe('METABASE_NO_CONFIGURADO');
+    firmador.disponible.mockResolvedValueOnce(false);
+    expect(await codigoDe(dashboard.execute({ rol: 'ADMIN', tipo: 'OPERACION' }, ahora))).toBe('METABASE_NO_DISPONIBLE');
   });
 });
