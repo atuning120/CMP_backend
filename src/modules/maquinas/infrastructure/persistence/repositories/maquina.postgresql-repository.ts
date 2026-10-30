@@ -400,7 +400,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       numero_chasis: cambios.numeroChasis,
       es_contratista: cambios.esContratista,
       estado: cambios.estado,
-      // En un estado sin regreso (de vuelta en operación, fuera de servicio) ya no hay regreso pendiente
+      // En un estado sin regreso (de vuelta en operación, en reserva) ya no hay regreso pendiente
       regreso_estimado: cambios.estado && !ESTADOS_CON_REGRESO.includes(cambios.estado) ? null : cambios.regresoEstimado,
     };
     // Solo las columnas que cambian (undefined = no se toca; null sí se guarda)
