@@ -42,10 +42,19 @@ describe('LoginWebCredencialesUseCase', () => {
     expect(jwt.sign).toHaveBeenCalledWith({ sub: 9, rol });
   });
 
-  it('rechaza a un operador con SIN_ACCESO_WEB', async () => {
-    const { useCase } = await crear({ rol: 'OPERADOR' });
+  it('un operador entra como VISOR, con un token sin idOperador', async () => {
+    const { jwt, useCase } = await crear({ rol: 'OPERADOR' });
 
-    expect(await codigoDe(useCase.execute({ email: 'op@cmp.cl', password: PASSWORD }))).toBe('SIN_ACCESO_WEB');
+    const sesion = await useCase.execute({ email: 'op@cmp.cl', password: PASSWORD });
+
+    expect(sesion.rol).toBe('VISOR');
+    expect(jwt.sign).toHaveBeenCalledWith({ sub: 9, rol: 'VISOR' });
+  });
+
+  it('rechaza con SIN_ACCESO_WEB un rol sin acceso al panel', async () => {
+    const { useCase } = await crear({ rol: 'OTRO' });
+
+    expect(await codigoDe(useCase.execute({ email: 'x@cmp.cl', password: PASSWORD }))).toBe('SIN_ACCESO_WEB');
   });
 
   it('no revela si la cuenta existe: usuario inexistente, sin contraseña o contraseña incorrecta', async () => {
