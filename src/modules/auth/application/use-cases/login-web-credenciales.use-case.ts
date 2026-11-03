@@ -5,8 +5,14 @@ import type { UsuarioRepositoryPort } from '../../../usuarios/domain/repositorie
 import { LoginWebCredencialesRequestDto } from '../../interface/http/dtos/login-web-credenciales.request.dto';
 import { EmisorSesionService, SesionWebResponse } from '../services/emisor-sesion.service';
 
-// Roles que pueden usar el panel web; los operadores solo usan la app móvil
+// Roles del panel web
 export const ROLES_WEB = ['ADMIN', 'JEFE_TURNO', 'VISOR'];
+
+/**
+ * Rol con que un usuario usa el panel web, o null si no tiene acceso. Un OPERADOR entra como VISOR: su token web
+ * no lleva idOperador, así que solo ve lo que ve un visor y no puede usar los endpoints del turno (esos son de la app).
+ */
+export const rolEnPanelWeb = (rol: string): string | null => (rol === 'OPERADOR' ? 'VISOR' : ROLES_WEB.includes(rol) ? rol : null);
 
 export type LoginWebErrorCode = 'DATOS_INCOMPLETOS' | 'CREDENCIALES_INVALIDAS' | 'SIN_ACCESO_WEB';
 
@@ -48,10 +54,11 @@ export class LoginWebCredencialesUseCase {
     }
 
     // El rol solo se informa a quien ya demostró conocer la contraseña
-    if (!ROLES_WEB.includes(usuario.rol)) {
+    const rol = rolEnPanelWeb(usuario.rol);
+    if (!rol) {
       throw loginWebError('SIN_ACCESO_WEB');
     }
 
-    return this.emisorSesion.emitirWeb(usuario);
+    return this.emisorSesion.emitirWeb({ idUsuario: usuario.idUsuario, rol });
   }
 }

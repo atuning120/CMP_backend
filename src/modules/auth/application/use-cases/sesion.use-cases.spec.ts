@@ -123,8 +123,15 @@ describe('RefrescarSesionWebUseCase', () => {
     expect(sign).toHaveBeenCalledWith({ sub: 7, rol });
   });
 
-  it('un operador no puede renovar una sesión web: se cierran sus sesiones', async () => {
-    const { refrescarWeb, refreshTokenRepo } = crear({});
+  it('un operador renueva su sesión web como VISOR, sin idOperador', async () => {
+    const { refrescarWeb, sign } = crear({});
+
+    await expect(refrescarWeb.execute(TOKEN, AHORA)).resolves.toMatchObject({ rol: 'VISOR' });
+    expect(sign).toHaveBeenCalledWith({ sub: 7, rol: 'VISOR' });
+  });
+
+  it('un rol sin acceso al panel no puede renovar una sesión web: se cierran sus sesiones', async () => {
+    const { refrescarWeb, refreshTokenRepo } = crear({}, { idUsuario: 7, rol: 'OTRO', idOperador: null });
 
     expect(await codigoDe(refrescarWeb.execute(TOKEN, AHORA))).toBe('SESION_INVALIDA');
     expect(refreshTokenRepo.revocarTodosDelUsuario.mock.calls).toEqual([[7, AHORA]]);
