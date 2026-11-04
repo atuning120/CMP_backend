@@ -5,7 +5,8 @@
 -- 3. Índice para leer la última posición de cada máquina.
 -- 4. Mientras llegan los LL301, la app móvil hace de GPS: un dispositivo virtual por máquina (modelo APP_MOVIL,
 --    IMEI '9' + id_maquina con ceros a la izquierda, 15 dígitos; p. ej. la máquina 12 es 900000000000012) asignado
---    a su máquina. Volver a ejecutar el bloque 4 después de crear máquinas nuevas.
+--    a su máquina. Las máquinas nuevas ya no necesitan este bloque: el Backend registra su GPS virtual con la primera
+--    posición (TrackingPostgresqlRepository.guardar).
 -- Aplicar una vez en bases creadas antes de este cambio (p. ej. Aiven). schema.sql ya incluye 1 a 3. Es idempotente.
 
 -- 1. Secuencia de id_history (continúa después del mayor id existente)

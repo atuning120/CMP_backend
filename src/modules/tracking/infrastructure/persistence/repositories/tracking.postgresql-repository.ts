@@ -33,7 +33,37 @@ const COLUMNAS_POSICION = `id_maquina, "timestamp" AS fecha_hora, ST_Y(ubicacion
 export class TrackingPostgresqlRepository implements TrackingRepositoryPort {
   constructor(private readonly dataSource: DataSource) {}
 
+  /**
+   * Mientras llegan los LL301, la app móvil hace de GPS con un IMEI virtual por máquina ('9' + id_maquina en 14
+   * dígitos). Se registra con la primera posición, así sirve para cualquier máquina sin pasos manuales. Un IMEI que no
+   * corresponde a una máquina existente se ignora, y un GPS que ya tuvo asignación se respeta aunque esté cerrada.
+   */
+  private async registrarGpsVirtuales(imeis: string[]): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        `INSERT INTO dispositivo_gps (imei, modelo, estado)
+         SELECT '9' || LPAD(m.id_maquina::text, 14, '0'), 'APP_MOVIL', 'ACTIVO'
+         FROM maquina m
+         WHERE '9' || LPAD(m.id_maquina::text, 14, '0') = ANY($1::text[])
+         ON CONFLICT (imei) DO NOTHING`,
+        [imeis],
+      );
+      // Fecha fija en el pasado: una posición guardada sin señal puede llegar con una fecha anterior al registro
+      await manager.query(
+        `INSERT INTO asignacion_gps (id_gps, id_maquina, vigente_desde)
+         SELECT d.id_gps, m.id_maquina, TIMESTAMPTZ '2026-01-01 00:00:00+00'
+         FROM maquina m
+         JOIN dispositivo_gps d ON d.imei = '9' || LPAD(m.id_maquina::text, 14, '0')
+         WHERE d.imei = ANY($1::text[])
+           AND d.modelo = 'APP_MOVIL'
+           AND NOT EXISTS (SELECT 1 FROM asignacion_gps a WHERE a.id_gps = d.id_gps)`,
+        [imeis],
+      );
+    });
+  }
+
   async guardar(posiciones: PosicionDispositivo[]): Promise<PosicionMaquina[]> {
+    await this.registrarGpsVirtuales([...new Set(posiciones.map((p) => p.imei))]);
     const filas = posiciones.map((p) => ({
       imei: p.imei,
       fecha_hora: p.fechaHora.toISOString(),
