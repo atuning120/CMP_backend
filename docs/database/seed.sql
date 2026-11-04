@@ -192,54 +192,36 @@ INSERT INTO dispositivo_gps (imei, modelo, numero_sim, estado) VALUES
 ('864201040001019', 'Queclink GV58MG', '+56911000019', 'ACTIVO'),
 ('864201040001020', 'Teltonika TAT100', '+56911000020', 'ACTIVO');
 
--- Inserción de 20 registros sintéticos para la tabla ESTADO_OPERACIONAL
-INSERT INTO estado_operacional (nombre, categoria, es_productivo, activo) VALUES
-('Efectivo / Carguío y Excavación', 'PRODUCTIVO', TRUE, TRUE),
-('Efectivo / Empuje y Nivelación', 'PRODUCTIVO', TRUE, TRUE),
-('Efectivo / Traslado de Material', 'PRODUCTIVO', TRUE, TRUE),
-('Efectivo / Peinado de Talud y Zanjado', 'PRODUCTIVO', TRUE, TRUE),
-('Efectivo / Limpieza de Cancha y Pista', 'PRODUCTIVO', TRUE, TRUE),
-('Demora / Relevo y Cambio de Turno', 'DEMORA', FALSE, TRUE),
-('Demora / Colación y Descanso', 'DEMORA', FALSE, TRUE),
-('Demora / Abastecimiento de Combustible', 'DEMORA', FALSE, TRUE),
-('Demora / Traslado Interno Entre Zonas', 'DEMORA', FALSE, TRUE),
-('Demora / Inspección Pre-Uso (Pre-Start)', 'DEMORA', FALSE, TRUE),
-('Demora / Charla de Seguridad de 5 Minutos', 'DEMORA', FALSE, TRUE),
-('Demora / Espera de Camión / Transporte', 'DEMORA', FALSE, TRUE),
-('Demora / Limpieza Excesiva de Balde / Oruga', 'DEMORA', FALSE, TRUE),
-('Mantención / Falla Mecánica Inesperada', 'MANTENCION', FALSE, TRUE),
-('Mantención / Mantenimiento Programado', 'MANTENCION', FALSE, TRUE),
-('Mantención / Reparación de Neumático / Oruga', 'MANTENCION', FALSE, TRUE),
-('Mantención / Falla de Sistema Hidráulico', 'MANTENCION', FALSE, TRUE),
-('Mantención / Revisión y Diagnóstico GPS', 'MANTENCION', FALSE, TRUE),
-('Demora / Espera Despeje por Tronadura', 'DEMORA', FALSE, FALSE),
-('Mantención / Inmovilizado por Siniestro', 'MANTENCION', FALSE, FALSE);
-
--- Descripciones del catálogo (botón "i" del panel de cambio de estado)
-UPDATE estado_operacional e SET descripcion = d.descripcion
-FROM (VALUES
-  ('Efectivo / Carguío y Excavación', 'Carga de mineral o estéril en camiones, tolvas o trenes, y excavación de frentes. Es la actividad productiva principal del equipo.'),
-  ('Efectivo / Empuje y Nivelación', 'Empuje de material con hoja y nivelación de canchas, rampas o plataformas de trabajo.'),
-  ('Efectivo / Traslado de Material', 'Transporte de material con el propio equipo entre puntos de la faena (acopios, botaderos, tolvas).'),
-  ('Efectivo / Peinado de Talud y Zanjado', 'Perfilado de taludes y construcción de zanjas de drenaje o seguridad.'),
-  ('Efectivo / Limpieza de Cancha y Pista', 'Retiro de derrames y material suelto en canchas, pistas o bajo correas para mantener la operación.'),
-  ('Demora / Relevo y Cambio de Turno', 'Entrega del equipo entre operadores al cambio de turno: traspaso de novedades y revisión rápida.'),
-  ('Demora / Colación y Descanso', 'Pausa programada de colación o descanso del operador. El equipo queda detenido.'),
-  ('Demora / Abastecimiento de Combustible', 'Traslado a la estación y carga de petróleo del equipo.'),
-  ('Demora / Traslado Interno Entre Zonas', 'Desplazamiento del equipo sin carga entre áreas o zonas de trabajo, sin realizar labor productiva.'),
-  ('Demora / Inspección Pre-Uso (Pre-Start)', 'Checklist de seguridad y revisión del equipo antes de comenzar a operar (niveles, luces, frenos, fugas).'),
-  ('Demora / Charla de Seguridad de 5 Minutos', 'Charla de seguridad del inicio de turno o de una tarea específica.'),
-  ('Demora / Espera de Camión / Transporte', 'Equipo disponible y operativo, pero detenido esperando camiones, tolva o tren para cargar.'),
-  ('Demora / Limpieza Excesiva de Balde / Oruga', 'Detención para limpiar material adherido al balde, hoja u orugas que impide operar con normalidad.'),
-  ('Demora / Espera Despeje por Tronadura', 'Equipo retirado del área y detenido mientras se realiza una tronadura y se autoriza el reingreso.'),
-  ('Mantención / Falla Mecánica Inesperada', 'Detención por una avería mecánica no programada (motor, transmisión, frenos u otra).'),
-  ('Mantención / Mantenimiento Programado', 'Mantención preventiva planificada según pauta del fabricante o del área de mantenimiento.'),
-  ('Mantención / Reparación de Neumático / Oruga', 'Cambio o reparación de neumáticos u orugas dañados.'),
-  ('Mantención / Falla de Sistema Hidráulico', 'Detención por fuga o falla del sistema hidráulico (mangueras, cilindros, bombas).'),
-  ('Mantención / Revisión y Diagnóstico GPS', 'Revisión del dispositivo GPS o de telemetría del equipo.'),
-  ('Mantención / Inmovilizado por Siniestro', 'Equipo detenido tras un incidente o accidente, a la espera de investigación o reparación.')
-) AS d(nombre, descripcion)
-WHERE e.nombre = d.nombre AND e.descripcion IS NULL;
+-- Catálogo de estados operacionales (migración 018); la descripción se muestra en el botón "i" del panel de cambio de estado
+INSERT INTO estado_operacional (nombre, categoria, es_productivo, activo, descripcion) VALUES
+('Efectivo / Carga alimentación pila primaria', 'PRODUCTIVO', TRUE, TRUE, 'Carga de material para alimentar la pila primaria.'),
+('Efectivo / Rebaje de pila primaria', 'PRODUCTIVO', TRUE, TRUE, 'Rebaje y empuje de material de la pila primaria.'),
+('Efectivo / Rebaje de cono o acopio', 'PRODUCTIVO', TRUE, TRUE, 'Rebaje del cono de descarga o de un acopio de material.'),
+('Efectivo / Rebaje de piso o recuperación de pisos', 'PRODUCTIVO', TRUE, TRUE, 'Rebaje del piso de trabajo o recuperación de pisos con material acumulado.'),
+('Efectivo / Confección de plataforma y mejoras de piso', 'PRODUCTIVO', TRUE, TRUE, 'Construcción de plataformas de trabajo y mejora de pisos.'),
+('Efectivo / Mejora de caminos y piso', 'PRODUCTIVO', TRUE, TRUE, 'Mantención y mejora de caminos y pisos de tránsito.'),
+('Efectivo / Preparación de frente de carguío', 'PRODUCTIVO', TRUE, TRUE, 'Preparación y ordenamiento del frente donde se realiza el carguío.'),
+('Efectivo / Preparación de frente de acopio', 'PRODUCTIVO', TRUE, TRUE, 'Preparación del frente donde se acopia el material.'),
+('Efectivo / Carguío de tolvas', 'PRODUCTIVO', TRUE, TRUE, 'Carga de material en tolvas.'),
+('Efectivo / Carguío de camiones tolva', 'PRODUCTIVO', TRUE, TRUE, 'Carga de material en camiones tolva.'),
+('Efectivo / Excavaciones', 'PRODUCTIVO', TRUE, TRUE, 'Excavación de terreno o material.'),
+('Efectivo / Mejoramiento de talud', 'PRODUCTIVO', TRUE, TRUE, 'Perfilado y mejoramiento de taludes.'),
+('Efectivo / Confección de pretiles', 'PRODUCTIVO', TRUE, TRUE, 'Construcción de pretiles de seguridad.'),
+('Efectivo / Retiro de material', 'PRODUCTIVO', TRUE, TRUE, 'Retiro de material de un sector de trabajo.'),
+('Efectivo / Apoyo de instalación de cintas transportadoras', 'PRODUCTIVO', TRUE, TRUE, 'Apoyo con el equipo en la instalación de cintas transportadoras.'),
+('Demora / Relevo y cambio de turno', 'DEMORA', FALSE, TRUE, 'Entrega del equipo entre operadores al cambio de turno: traspaso de novedades y revisión rápida.'),
+('Demora / Colación', 'DEMORA', FALSE, TRUE, 'Pausa de colación del operador. El equipo queda detenido.'),
+('Demora / Espera de postura', 'DEMORA', FALSE, TRUE, 'Equipo detenido esperando que se le asigne o habilite la postura de trabajo.'),
+('Demora / Verificación en terreno', 'DEMORA', FALSE, TRUE, 'Equipo detenido mientras se verifican condiciones en terreno antes de operar.'),
+('Demora / Abastecimiento de combustible', 'DEMORA', FALSE, TRUE, 'Traslado a la estación y carga de petróleo del equipo.'),
+('Demora / Traslado interno entre zonas', 'DEMORA', FALSE, TRUE, 'Desplazamiento del equipo entre áreas o zonas de trabajo, sin realizar labor productiva.'),
+('Demora / Inspección pre-uso (checklist)', 'DEMORA', FALSE, TRUE, 'Checklist de seguridad y revisión del equipo antes de comenzar a operar (niveles, luces, frenos, fugas).'),
+('Demora / Charla de seguridad', 'DEMORA', FALSE, TRUE, 'Charla de seguridad del inicio de turno o de una tarea específica.'),
+('Demora / Espera de camión / transporte', 'DEMORA', FALSE, TRUE, 'Equipo disponible y operativo, pero detenido esperando camiones o transporte.'),
+('Mantención / Revisión y diagnóstico', 'MANTENCION', FALSE, TRUE, 'Revisión del equipo para diagnosticar una falla o anomalía.'),
+('Mantención / Mantenimiento programado', 'MANTENCION', FALSE, TRUE, 'Mantención preventiva planificada según pauta del fabricante o del área de mantenimiento.'),
+('Mantención / Mantenimiento rutinario', 'MANTENCION', FALSE, TRUE, 'Mantención de rutina del equipo (lubricación, ajustes, limpieza).'),
+('Mantención / Reparación correctiva', 'MANTENCION', FALSE, TRUE, 'Reparación de una falla o avería del equipo.');
 
 -- Inserción de 20 registros sintéticos para la tabla ASIGNACION_GPS
 INSERT INTO asignacion_gps (

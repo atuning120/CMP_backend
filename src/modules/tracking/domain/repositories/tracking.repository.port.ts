@@ -5,8 +5,9 @@ export const TRACKING_REPOSITORY = Symbol('TRACKING_REPOSITORY');
 export interface TrackingRepositoryPort {
   /**
    * Guarda en TRACKING_HISTORY las posiciones de dispositivos registrados que estaban asignados a una máquina en
-   * su fecha (ASIGNACION_GPS). Las de IMEI desconocido o sin asignación vigente se omiten, y una posición repetida
-   * (mismo dispositivo y fecha) no se duplica. Devuelve las guardadas con su máquina.
+   * su fecha (ASIGNACION_GPS). El GPS virtual de la app móvil se registra solo con su primera posición. Las de IMEI
+   * desconocido o sin asignación vigente se omiten, y una posición repetida (mismo dispositivo y fecha) no se duplica.
+   * Devuelve las guardadas con su máquina.
    */
   guardar(posiciones: PosicionDispositivo[]): Promise<PosicionMaquina[]>;
   // Última posición de cada máquina desde esa fecha
