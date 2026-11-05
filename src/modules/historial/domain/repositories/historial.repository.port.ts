@@ -11,7 +11,8 @@ export type TipoEventoHistorial =
   | 'DESHABILITAR'
   | 'CAMBIAR_ESTADO'
   | 'REEMPLAZAR'
-  | 'DEVOLVER';
+  | 'DEVOLVER'
+  | 'REGULARIZAR';
 
 // Foto subida desde la app; el archivo se pide a GET /evidencias/:id/archivo
 export interface EvidenciaHistorial {

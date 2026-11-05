@@ -18,6 +18,7 @@ interface FilaAlerta {
   hora_termino: Date | null;
   horometro_inicial: string | null;
   horometro_final: string | null;
+  horometro_siguiente: string | null;
   operador: string;
   id_maquina: number;
   maquina: string;
@@ -161,7 +162,7 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
         )
       )
       SELECT a.id, a.tipo, a.fecha, t.id_turno, t.estado, t.hora_inicio, t.hora_termino,
-             t.horometro_inicial, t.horometro_final,
+             t.horometro_inicial, t.horometro_final, siguiente.horometro_inicial AS horometro_siguiente,
              o.nombre || ' ' || o.apellido AS operador, m.id_maquina, m.nombre AS maquina,
              ubicacion.area, ubicacion.zona,
              a.inicio_jornada, a.turnos_jornada::int AS turnos_jornada, a.segundos_jornada,
@@ -182,6 +183,15 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
         ORDER BY tu.inicio DESC
         LIMIT 1
       ) ubicacion ON TRUE
+      -- Solo hace falta para regularizar el horómetro de un cierre automático
+      LEFT JOIN LATERAL (
+        SELECT s.horometro_inicial
+        FROM turno s
+        WHERE a.tipo = 'CIERRE_AUTOMATICO' AND t.horometro_final IS NULL
+          AND s.id_maquina = t.id_maquina AND (s.hora_inicio, s.id_turno) > (t.hora_inicio, t.id_turno)
+        ORDER BY s.hora_inicio, s.id_turno
+        LIMIT 1
+      ) siguiente ON TRUE
       -- Quién la atendió y las notas posteriores, de la primera a la última
       LEFT JOIN LATERAL (
         SELECT jsonb_agg(jsonb_build_object('usuario', u.nombre, 'fecha', x.fecha, 'comentario', x.comentario)
@@ -220,6 +230,7 @@ export class AlertaTurnoPostgresqlRepository implements AlertaTurnoRepositoryPor
         horaTermino: fila.hora_termino,
         horometroInicial: numero(fila.horometro_inicial),
         horometroFinal: numero(fila.horometro_final),
+        horometroSiguiente: numero(fila.horometro_siguiente),
       },
       area: fila.area,
       zona: fila.zona,

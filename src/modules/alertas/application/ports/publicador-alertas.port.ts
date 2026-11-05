@@ -12,6 +12,8 @@ export interface NovedadAlertas {
 export interface AtencionPublicada {
   idAlerta: string;
   atenciones: AtencionAlerta[];
+  // Si la atención viene de regularizar el horómetro: los paneles abiertos dejan de ofrecer la acción
+  horometroFinal?: number;
 }
 
 // Avisa en tiempo real de las alertas nuevas y de sus atenciones (el panel web las recibe por WebSocket)

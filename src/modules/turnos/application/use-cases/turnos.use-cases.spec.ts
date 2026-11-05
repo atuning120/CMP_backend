@@ -326,6 +326,18 @@ describe('FinalizarTurnoUseCase', () => {
     expect(repos.turnoRepo.save.mock.calls).toHaveLength(1);
   });
 
+  it('el cierre sin señal del operador que llega después de regularizar el horómetro conserva su lectura y marca el turno', async () => {
+    const repos = crearRepos();
+    const turno = turnoIniciadoHace(EXCEDIDO, { estadoActual: 'CERRADO_AUTO', fechaFin: new Date(), horometroFinal: 1006, horometroRegularizadoPor: 7 });
+    repos.turnoRepo.findById.mockResolvedValue(turno);
+    const finalizar = new FinalizarTurnoUseCase(repos.turnoRepo);
+
+    const cerrado = await finalizar.execute({ idOperador: ID_OPERADOR, idTurno: 1, horometroFinal: 1008 });
+
+    expect(cerrado).toMatchObject({ estadoActual: 'CERRADO_AUTO', horometroFinal: 1008, conflicto: true });
+    expect(cerrado.conflictoDetalle).toContain('Regularizado por el jefe de turno con horómetro 1006');
+  });
+
   it('si un jefe de turno cierra mientras tanto, gana su cierre y se adjunta el horómetro del operador', async () => {
     const repos = crearRepos();
     repos.turnoRepo.findById.mockResolvedValueOnce(turnoIniciadoHace(8));

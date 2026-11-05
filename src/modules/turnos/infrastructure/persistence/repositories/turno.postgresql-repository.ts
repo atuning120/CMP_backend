@@ -255,6 +255,7 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
       ormEntity.conflicto_detalle,
       ormEntity.cerrado_por ?? null,
       ormEntity.motivo_cierre ?? null,
+      ormEntity.horometro_regularizado_por ?? null,
     );
   }
 }

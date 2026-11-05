@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../../../../auth/infrastructure/guards/jwt-auth.gu
 import { CurrentUser } from '../../../../auth/interface/http/decorators/current-user.decorator';
 import { ListarAlertasUseCase } from '../../../application/use-cases/listar-alertas.use-case';
 import { AtenderAlertaUseCase } from '../../../application/use-cases/atender-alerta.use-case';
+import { RegularizarHorometroUseCase } from '../../../application/use-cases/regularizar-horometro.use-case';
 
 // Pestaña Alertas del jefe de turno: turnos de más de 10 h y cierres automáticos, del más reciente al más antiguo
 @Controller('alertas')
@@ -11,6 +12,7 @@ export class AlertasController {
   constructor(
     private readonly listarAlertasUseCase: ListarAlertasUseCase,
     private readonly atenderAlertaUseCase: AtenderAlertaUseCase,
+    private readonly regularizarHorometroUseCase: RegularizarHorometroUseCase,
   ) {}
 
   // ?tipo=TODO|EXTENDIDOS|CIERRES_AUTOMATICOS&estado=TODAS|PENDIENTES|ATENDIDAS&desde=<ISO>&hasta=<ISO>
@@ -46,6 +48,26 @@ export class AlertasController {
       autor: user,
       idCliente: body?.idCliente,
       atencionesVistas: body?.atencionesVistas,
+      fechaAccion: body?.fechaAccion,
+    });
+  }
+
+  // Informa el horómetro final de un turno que el sistema cerró sin él (solo alertas de cierre automático, A-<id_turno>).
+  // Responde { idAlerta, atenciones, horometroFinal }. idCliente (UUID) hace idempotente el reintento; fechaAccion:
+  // cuándo lo hizo, si fue sin señal y se envía después
+  @Post(':idAlerta/horometro-final')
+  @HttpCode(HttpStatus.CREATED)
+  async regularizarHorometro(
+    @Param('idAlerta') idAlerta: string,
+    @Body() body: { horometroFinal?: number; comentario?: string; idCliente?: string; fechaAccion?: string },
+    @CurrentUser() user: { idUsuario: number; rol: string },
+  ) {
+    return this.regularizarHorometroUseCase.execute({
+      idAlerta,
+      horometroFinal: body?.horometroFinal,
+      comentario: body?.comentario,
+      autor: user,
+      idCliente: body?.idCliente,
       fechaAccion: body?.fechaAccion,
     });
   }

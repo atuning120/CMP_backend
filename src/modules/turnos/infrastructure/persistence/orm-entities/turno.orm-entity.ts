@@ -48,4 +48,8 @@ export class TurnoOrmEntity {
   @Column('uuid', { name: 'id_cliente_cierre', nullable: true, unique: true })
   id_cliente_cierre: string | null;
 
+  // Jefe de turno que informó el horómetro final de un cierre automático (lo escribe el módulo alertas)
+  @Column('integer', { name: 'horometro_regularizado_por', nullable: true })
+  horometro_regularizado_por: number | null;
+
 }

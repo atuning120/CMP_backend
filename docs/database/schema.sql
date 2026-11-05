@@ -214,7 +214,9 @@ CREATE TABLE TURNO (
     cerrado_por       INT, -- jefe de turno que lo cerró por el operador
     motivo_cierre     VARCHAR(100),
     id_cliente_cierre UUID UNIQUE, -- cierre del jefe de turno desde la app (sin señal): un reintento no lo repite
+    horometro_regularizado_por INT, -- jefe de turno que informó el horómetro final de un cierre automático
     CONSTRAINT fk_turno_cerrado_por FOREIGN KEY (cerrado_por) REFERENCES USUARIO(id_usuario) ON DELETE SET NULL,
+    CONSTRAINT fk_turno_horometro_regularizado_por FOREIGN KEY (horometro_regularizado_por) REFERENCES USUARIO(id_usuario) ON DELETE SET NULL,
     CONSTRAINT fk_turno_operador FOREIGN KEY (id_operador) REFERENCES OPERADOR(id_operador),
     CONSTRAINT fk_turno_maquina FOREIGN KEY (id_maquina) REFERENCES MAQUINA(id_maquina)
 );
@@ -272,7 +274,7 @@ CREATE TABLE EVIDENCIA (
 CREATE TABLE BITACORA_JEFE_TURNO (
     id_bitacora     SERIAL PRIMARY KEY,
     accion          VARCHAR(20) NOT NULL CONSTRAINT bitacora_jefe_turno_accion_check
-                    CHECK (accion IN ('INCORPORAR', 'EDITAR', 'HABILITAR', 'DESHABILITAR', 'CAMBIAR_ESTADO', 'REEMPLAZAR', 'DEVOLVER')),
+                    CHECK (accion IN ('INCORPORAR', 'EDITAR', 'HABILITAR', 'DESHABILITAR', 'CAMBIAR_ESTADO', 'REEMPLAZAR', 'DEVOLVER', 'REGULARIZAR')),
     id_maquina      INT NOT NULL,
     id_usuario      INT NOT NULL, -- jefe de turno que realizó la acción (sale de la sesión)
     motivo          VARCHAR(100) NOT NULL,

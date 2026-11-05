@@ -7,6 +7,9 @@ import { DetectarAlertasNuevasUseCase } from './application/use-cases/detectar-a
 import { AtenderAlertaUseCase } from './application/use-cases/atender-alerta.use-case';
 import { AtencionAlertaPostgresqlRepository } from './infrastructure/persistence/repositories/atencion-alerta.postgresql-repository';
 import { ATENCION_ALERTA_REPOSITORY } from './domain/repositories/atencion-alerta.repository.port';
+import { RegularizarHorometroUseCase } from './application/use-cases/regularizar-horometro.use-case';
+import { RegularizacionHorometroPostgresqlRepository } from './infrastructure/persistence/repositories/regularizacion-horometro.postgresql-repository';
+import { REGULARIZACION_HOROMETRO_REPOSITORY } from './domain/repositories/regularizacion-horometro.repository.port';
 import { PUBLICADOR_ALERTAS } from './application/ports/publicador-alertas.port';
 import { AlertaTurnoPostgresqlRepository } from './infrastructure/persistence/repositories/alerta-turno.postgresql-repository';
 import { AlertasEnVivoScheduler } from './infrastructure/schedulers/alertas-en-vivo.scheduler';
@@ -27,6 +30,8 @@ import { ALERTA_TURNO_REPOSITORY } from './domain/repositories/alerta-turno.repo
     ListarAlertasUseCase,
     DetectarAlertasNuevasUseCase,
     AtenderAlertaUseCase,
+    { provide: REGULARIZACION_HOROMETRO_REPOSITORY, useClass: RegularizacionHorometroPostgresqlRepository },
+    RegularizarHorometroUseCase,
     AlertasGateway,
     { provide: PUBLICADOR_ALERTAS, useExisting: AlertasGateway },
     AlertasEnVivoScheduler,

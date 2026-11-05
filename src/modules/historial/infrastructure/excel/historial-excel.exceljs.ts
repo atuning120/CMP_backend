@@ -19,6 +19,7 @@ const TIPOS: Record<TipoEventoHistorial, { etiqueta: string; verbo: string }> = 
   CAMBIAR_ESTADO: { etiqueta: 'Cambio de estado', verbo: 'Cambió el estado de' },
   REEMPLAZAR: { etiqueta: 'Reemplazo', verbo: 'Reemplazó' },
   DEVOLVER: { etiqueta: 'Devolución', verbo: 'Devolvió a operación' },
+  REGULARIZAR: { etiqueta: 'Regularización de horómetro', verbo: 'Regularizó el horómetro de' },
 };
 
 const EVENTOS_DE_TURNO: TipoEventoHistorial[] = ['INICIO_TURNO', 'FIN_TURNO', 'CAMBIO_UBICACION', 'NOVEDAD'];
@@ -601,6 +602,9 @@ export class HistorialExcelExceljs implements HistorialExcelPort {
             break;
           case 'DEVOLVER':
             if (texto(detalle.respaldo)) partesTexto.push(`sale el respaldo ${String(detalle.respaldo)}`);
+            break;
+          case 'REGULARIZAR':
+            partesTexto.push(`${String(detalle.horometroInicial)} → ${String(detalle.horometroFinal)} h`);
             break;
           case 'HABILITAR':
           case 'DESHABILITAR':
