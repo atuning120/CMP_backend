@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { VerificadorSesionService } from '../../../auth/application/services/verificador-sesion.service';
 import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import type { OnGatewayInit } from '@nestjs/websockets';
 import type { Namespace } from 'socket.io';
@@ -19,10 +20,13 @@ export class AlertasGateway implements OnGatewayInit, PublicadorAlertasPort {
   @WebSocketServer()
   private readonly servidor: Namespace;
 
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly verificadorSesion: VerificadorSesionService,
+  ) {}
 
   afterInit(servidor: Namespace) {
-    servidor.use(autenticarSocket(this.jwtService, ROLES_ALERTAS));
+    servidor.use(autenticarSocket(this.jwtService, this.verificadorSesion, ROLES_ALERTAS));
   }
 
   publicar(novedad: NovedadAlertas) {

@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { sign } from 'jsonwebtoken';
 import request from 'supertest';
 import { JwtStrategy } from '../strategies/jwt.strategy';
+import { VerificadorSesionService } from '../../application/services/verificador-sesion.service';
 import { ZonaController } from '../../../geocercas/interface/http/controllers/zona.controller';
 import { UsuarioController } from '../../../usuarios/interface/http/controllers/usuario.controller';
 
@@ -12,7 +13,9 @@ import { UsuarioController } from '../../../usuarios/interface/http/controllers/
  * del JWT y que las respuestas sean las que esperan los clientes (401 = sesión vencida, 403 = sin permiso).
  */
 const SECRETO = 'secreto-de-prueba-del-guard-de-roles';
-const token = (rol: string) => `Bearer ${sign({ sub: 1, rol }, SECRETO, { expiresIn: '5m' })}`;
+// El usuario 99 fue desactivado después de recibir su token (que sigue sin vencer)
+const DESACTIVADO = 99;
+const token = (rol: string, sub = 1) => `Bearer ${sign({ sub, rol }, SECRETO, { expiresIn: '5m' })}`;
 
 describe('RolesGuard en una aplicación Nest', () => {
   let app: INestApplication;
@@ -20,7 +23,11 @@ describe('RolesGuard en una aplicación Nest', () => {
   beforeAll(async () => {
     const modulo = await Test.createTestingModule({
       controllers: [ZonaController, UsuarioController],
-      providers: [JwtStrategy, { provide: ConfigService, useValue: { get: () => SECRETO } }],
+      providers: [
+        JwtStrategy,
+        { provide: ConfigService, useValue: { get: () => SECRETO } },
+        { provide: VerificadorSesionService, useValue: { vigente: ({ sub }: { sub: number }) => Promise.resolve(sub !== DESACTIVADO) } },
+      ],
     })
       // Los use cases no importan aquí: solo responden algo si el guard deja pasar
       .useMocker(() => ({ execute: () => Promise.resolve([]), todas: () => Promise.resolve([]) }))
@@ -49,5 +56,10 @@ describe('RolesGuard en una aplicación Nest', () => {
   it('sin token o con un token inválido sigue respondiendo 401 (lo decide JwtAuthGuard antes que el rol)', async () => {
     await request(app.getHttpServer()).get('/usuarios').expect(401);
     await request(app.getHttpServer()).get('/usuarios').set('Authorization', `Bearer ${sign({ sub: 1, rol: 'ADMIN' }, 'otro-secreto')}`).expect(401);
+  });
+
+  it('un usuario desactivado recibe 401 SESION_INVALIDA aunque su token no haya vencido (el cliente renueva y el refresh lo rechaza)', async () => {
+    const respuesta = await request(app.getHttpServer()).get('/zonas').set('Authorization', token('ADMIN', DESACTIVADO)).expect(401);
+    expect(respuesta.body).toMatchObject({ code: 'SESION_INVALIDA' });
   });
 });
