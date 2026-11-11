@@ -14,6 +14,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../../../auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../../auth/infrastructure/guards/roles.guard';
+import { Roles } from '../../../../auth/interface/http/decorators/roles.decorator';
 import { CurrentUser } from '../../../../auth/interface/http/decorators/current-user.decorator';
 import { idOperadorDe } from '../../../../turnos/interface/http/controllers/usuario-autenticado';
 import type { UsuarioAutenticado } from '../../../../turnos/interface/http/controllers/usuario-autenticado';
@@ -48,7 +50,9 @@ const presentEvidencia = (evidencia: EvidenciaRegistro) => ({
 });
 
 @Controller()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+// Reportes y fotos los sube el operador desde la app
+@Roles('OPERADOR')
 export class EvidenciaController {
   constructor(
     private readonly crearReporteUseCase: CrearReporteUseCase,
@@ -92,7 +96,9 @@ export class EvidenciaController {
 
   // Una foto nunca cambia (su id es un UUID nuevo): el navegador la guarda y no la vuelve a pedir al reabrir el historial.
   // private: solo en el navegador de quien la pidió, nunca en un caché compartido
+  // Jefe de turno y administrador ven cualquiera (desde el historial); el operador, solo las suyas (lo revisa el use case)
   @Get('evidencias/:idCliente/archivo')
+  @Roles('JEFE_TURNO', 'ADMIN', 'OPERADOR')
   @Header('Cache-Control', 'private, max-age=31536000, immutable')
   async archivo(@Param('idCliente') idCliente: string, @CurrentUser() user: UsuarioAutenticado) {
     const { contenido, mimeType } = await this.obtenerArchivoEvidenciaUseCase.execute(idCliente, user);

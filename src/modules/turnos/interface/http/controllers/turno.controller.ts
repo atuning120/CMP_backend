@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Body, HttpCode, HttpStatus, Param, UseGuards } from '@nestjs/common';
 import { CerrarTurnoPorJefeUseCase } from '../../../application/use-cases/cerrar-turno-por-jefe.use-case';
 import { JwtAuthGuard } from '../../../../auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../../auth/infrastructure/guards/roles.guard';
+import { Roles } from '../../../../auth/interface/http/decorators/roles.decorator';
 import { CurrentUser } from '../../../../auth/interface/http/decorators/current-user.decorator';
 import { IniciarTurnoUseCase } from '../../../application/use-cases/iniciar-turno.use-case';
 import { FinalizarTurnoUseCase } from '../../../application/use-cases/finalizar-turno.use-case';
@@ -16,7 +18,9 @@ import { idOperadorDe, numeroOpcional } from './usuario-autenticado';
 import type { UsuarioAutenticado } from './usuario-autenticado';
 
 @Controller('turnos')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+// El turno lo gestiona el operador desde la app (idOperadorDe exige además el idOperador del JWT)
+@Roles('OPERADOR')
 export class TurnoController {
   constructor(
     private readonly iniciarTurnoUseCase: IniciarTurnoUseCase,
@@ -69,6 +73,7 @@ export class TurnoController {
 
   // Jefe de turno: cierra el turno en curso de la máquina :idMaquina (para sacarla de operación o reemplazarla)
   @Post('maquina/:idMaquina/cierre')
+  @Roles('JEFE_TURNO', 'ADMIN')
   @HttpCode(HttpStatus.OK)
   async cerrarPorJefe(
     @Param('idMaquina') idMaquina: string,

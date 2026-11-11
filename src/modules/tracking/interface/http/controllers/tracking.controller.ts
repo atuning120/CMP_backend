@@ -1,5 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../../auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../../auth/infrastructure/guards/roles.guard';
+import { Roles, TODOS_LOS_ROLES } from '../../../../auth/interface/http/decorators/roles.decorator';
 import { ApiKeyAdaptadorGuard } from '../../../infrastructure/guards/api-key-adaptador.guard';
 import { RegistrarPosicionesUseCase } from '../../../application/use-cases/registrar-posiciones.use-case';
 import { ObtenerUltimasPosicionesUseCase } from '../../../application/use-cases/obtener-ultimas-posiciones.use-case';
@@ -22,7 +24,8 @@ export class TrackingController {
 
   // Última posición GPS de cada máquina (mapa del panel web)
   @Get('ultimas')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...TODOS_LOS_ROLES)
   async ultimas() {
     return this.ultimasUseCase.execute();
   }

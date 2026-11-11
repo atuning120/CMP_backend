@@ -1,5 +1,7 @@
 import { Controller, Get, Query, StreamableFile, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../../auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../../auth/infrastructure/guards/roles.guard';
+import { Roles } from '../../../../auth/interface/http/decorators/roles.decorator';
 import { CurrentUser } from '../../../../auth/interface/http/decorators/current-user.decorator';
 import { ListarHistorialUseCase } from '../../../application/use-cases/listar-historial.use-case';
 import { ExportarHistorialUseCase } from '../../../application/use-cases/exportar-historial.use-case';
@@ -9,7 +11,8 @@ const TIPO_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 // Pestaña Historial del jefe de turno: acciones sobre la flota, inicios y cierres de turno y cambios de área/zona
 // de los operadores, del más reciente al más antiguo
 @Controller('historial')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('JEFE_TURNO', 'ADMIN')
 export class HistorialController {
   constructor(
     private readonly listarHistorialUseCase: ListarHistorialUseCase,

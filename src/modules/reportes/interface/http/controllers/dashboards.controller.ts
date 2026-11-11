@@ -1,6 +1,8 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../../../auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../../auth/infrastructure/guards/roles.guard';
+import { Roles } from '../../../../auth/interface/http/decorators/roles.decorator';
 import { CurrentUser } from '../../../../auth/interface/http/decorators/current-user.decorator';
 import type { UsuarioAutenticado } from '../../../../turnos/interface/http/controllers/usuario-autenticado';
 import { PrevisualizarCargaEpUseCase } from '../../../application/use-cases/previsualizar-carga-ep.use-case';
@@ -29,7 +31,8 @@ const subidaExcel = FileInterceptor('archivo', { limits: { fileSize: TAMANO_MAXI
 
 // Dashboards de Metabase embebidos en la web y carga mensual del Excel del estado de pago (EP) del contratista
 @Controller('dashboards')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('JEFE_TURNO', 'ADMIN')
 export class DashboardsController {
   constructor(
     private readonly previsualizarCargaEpUseCase: PrevisualizarCargaEpUseCase,
