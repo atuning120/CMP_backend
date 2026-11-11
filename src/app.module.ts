@@ -16,6 +16,7 @@ import { HistorialModule } from './modules/historial/historial.module';
 import { ReportesModule } from './modules/reportes/reportes.module';
 import { HealthController } from './health.controller';
 import { leerDbPassword } from './shared/infrastructure/config/secretos';
+import { leerSslDb } from './shared/infrastructure/config/ssl-db';
 import { ValidacionTiposPipe } from './shared/infrastructure/validacion/validacion-tipos.pipe';
 
 @Module({
@@ -29,7 +30,7 @@ import { ValidacionTiposPipe } from './shared/infrastructure/validacion/validaci
       username: process.env.DB_USER || 'cmp_user',
       password: leerDbPassword(process.env.DB_PASSWORD),
       database: process.env.DB_NAME || 'cmp_db',
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      ssl: leerSslDb(process.env.DB_SSL, process.env.DB_SSL_CA),
       autoLoadEntities: true,
       synchronize: false, // Las migraciones se encargarán del esquema, no sincronizar automático en dev/prod reales.
     }),
