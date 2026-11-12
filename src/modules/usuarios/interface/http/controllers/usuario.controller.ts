@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../../auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../../auth/infrastructure/guards/roles.guard';
+import { Roles } from '../../../../auth/interface/http/decorators/roles.decorator';
 import { CurrentUser } from '../../../../auth/interface/http/decorators/current-user.decorator';
 import { ListarUsuariosUseCase } from '../../../application/use-cases/listar-usuarios.use-case';
 import { CambiarRolUsuarioUseCase } from '../../../application/use-cases/cambiar-rol-usuario.use-case';
@@ -13,7 +15,8 @@ import { EditarUsuarioRequestDto } from '../dtos/editar-usuario.request.dto';
 
 // Administración de usuarios del panel web (solo ADMIN)
 @Controller('usuarios')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN')
 export class UsuarioController {
   constructor(
     private readonly listarUsuariosUseCase: ListarUsuariosUseCase,

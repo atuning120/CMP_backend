@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -15,6 +16,8 @@ import { HistorialModule } from './modules/historial/historial.module';
 import { ReportesModule } from './modules/reportes/reportes.module';
 import { HealthController } from './health.controller';
 import { leerDbPassword } from './shared/infrastructure/config/secretos';
+import { leerSslDb } from './shared/infrastructure/config/ssl-db';
+import { ValidacionTiposPipe } from './shared/infrastructure/validacion/validacion-tipos.pipe';
 
 @Module({
   imports: [
@@ -27,7 +30,7 @@ import { leerDbPassword } from './shared/infrastructure/config/secretos';
       username: process.env.DB_USER || 'cmp_user',
       password: leerDbPassword(process.env.DB_PASSWORD),
       database: process.env.DB_NAME || 'cmp_db',
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      ssl: leerSslDb(process.env.DB_SSL, process.env.DB_SSL_CA),
       autoLoadEntities: true,
       synchronize: false, // Las migraciones se encargarán del esquema, no sincronizar automático en dev/prod reales.
     }),
@@ -44,6 +47,7 @@ import { leerDbPassword } from './shared/infrastructure/config/secretos';
     ReportesModule,
   ],
   controllers: [HealthController],
-  providers: [],
+  // Como APP_PIPE (y no en main.ts) para que también rija en los tests e2e que levantan AppModule
+  providers: [{ provide: APP_PIPE, useClass: ValidacionTiposPipe }],
 })
 export class AppModule { }

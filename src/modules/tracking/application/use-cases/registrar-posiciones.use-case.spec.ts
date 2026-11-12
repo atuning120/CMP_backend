@@ -25,6 +25,8 @@ const crear = () => {
       posiciones.map((p) => ({ idMaquina: 12, fechaHora: p.fechaHora, latitud: p.latitud, longitud: p.longitud, velocidad: p.velocidad, rumbo: p.rumbo, bateria: p.bateria })),
     ),
     ultimasPorMaquina: jest.fn(async () => []),
+    recorrido: jest.fn(async () => []),
+    periodoDeTurno: jest.fn(async () => null),
   } satisfies TrackingRepositoryPort;
   const publicador = { publicar: jest.fn() } satisfies PublicadorPosicionesPort;
   return { trackingRepo, publicador, registrar: new RegistrarPosicionesUseCase(trackingRepo, publicador) };

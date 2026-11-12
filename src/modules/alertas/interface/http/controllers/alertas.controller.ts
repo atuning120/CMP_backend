@@ -1,12 +1,15 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../../auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../../auth/infrastructure/guards/roles.guard';
+import { Roles } from '../../../../auth/interface/http/decorators/roles.decorator';
 import { CurrentUser } from '../../../../auth/interface/http/decorators/current-user.decorator';
 import { ListarAlertasUseCase } from '../../../application/use-cases/listar-alertas.use-case';
 import { AtenderAlertaUseCase } from '../../../application/use-cases/atender-alerta.use-case';
 
 // Pestaña Alertas del jefe de turno: turnos de más de 10 h y cierres automáticos, del más reciente al más antiguo
 @Controller('alertas')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('JEFE_TURNO', 'ADMIN')
 export class AlertasController {
   constructor(
     private readonly listarAlertasUseCase: ListarAlertasUseCase,

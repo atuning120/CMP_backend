@@ -1,5 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../../auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../../auth/infrastructure/guards/roles.guard';
+import { Roles, TODOS_LOS_ROLES } from '../../../../auth/interface/http/decorators/roles.decorator';
 import { CurrentUser } from '../../../../auth/interface/http/decorators/current-user.decorator';
 import { ListarMaquinasActivasUseCase } from '../../../application/use-cases/listar-maquinas-activas.use-case';
 import { ListarFlotaUseCase } from '../../../application/use-cases/listar-flota.use-case';
@@ -15,7 +17,9 @@ import { ListarOperadoresAsignablesUseCase } from '../../../application/use-case
 import { EditarMaquinaRequestDto } from '../dtos/editar-maquina.request.dto';
 
 @Controller('maquinas')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+// Gestión de la flota (jefe de turno y administrador); las lecturas de catálogo las abre cada ruta
+@Roles('JEFE_TURNO', 'ADMIN')
 export class MaquinaController {
   constructor(
     private readonly listarMaquinasActivasUseCase: ListarMaquinasActivasUseCase,
@@ -29,25 +33,31 @@ export class MaquinaController {
     private readonly devolverMaquinaUseCase: DevolverMaquinaUseCase,
   ) {}
 
+  // Selector de máquina al iniciar turno (operador)
   @Get()
+  @Roles(...TODOS_LOS_ROLES)
   async listarActivas() {
     return this.listarMaquinasActivasUseCase.execute();
   }
 
-  // Vista del jefe de turno: todas las máquinas (también BAJA), filtradas por ?busqueda=
+  // Vista del jefe de turno: todas las máquinas (también BAJA), filtradas por ?busqueda=. También la usa el mapa web
+  // de cualquier rol (VISOR incluido)
   @Get('flota')
+  @Roles(...TODOS_LOS_ROLES)
   async listarFlota(@Query('busqueda') busqueda?: string) {
     return this.listarFlotaUseCase.execute(typeof busqueda === 'string' ? busqueda : undefined);
   }
 
   // Opciones del selector "Tipo de máquina" al incorporar una máquina
   @Get('tipos')
+  @Roles(...TODOS_LOS_ROLES)
   async listarTipos() {
     return this.listarTiposMaquinaUseCase.execute();
   }
 
   // Opciones del selector "Marca" al incorporar una máquina
   @Get('marcas')
+  @Roles(...TODOS_LOS_ROLES)
   async listarMarcas() {
     return this.listarMarcasMaquinaUseCase.execute();
   }

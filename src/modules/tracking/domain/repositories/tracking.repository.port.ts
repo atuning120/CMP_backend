@@ -1,4 +1,11 @@
-import type { PosicionDispositivo, PosicionMaquina } from '../entities/posicion-gps';
+import type { PosicionDispositivo, PosicionMaquina, PuntoRecorrido } from '../entities/posicion-gps';
+
+// Máquina y horario de un turno; fin null = sigue en curso
+export interface PeriodoTurno {
+  idMaquina: number;
+  inicio: Date;
+  fin: Date | null;
+}
 
 export const TRACKING_REPOSITORY = Symbol('TRACKING_REPOSITORY');
 
@@ -12,4 +19,8 @@ export interface TrackingRepositoryPort {
   guardar(posiciones: PosicionDispositivo[]): Promise<PosicionMaquina[]>;
   // Última posición de cada máquina desde esa fecha
   ultimasPorMaquina(desde: Date): Promise<PosicionMaquina[]>;
+  // Posiciones de la máquina en [desde, hasta), de la más antigua a la más nueva, como máximo `limite`
+  recorrido(idMaquina: number, desde: Date, hasta: Date, limite: number): Promise<PuntoRecorrido[]>;
+  // null si el turno no existe
+  periodoDeTurno(idTurno: number): Promise<PeriodoTurno | null>;
 }

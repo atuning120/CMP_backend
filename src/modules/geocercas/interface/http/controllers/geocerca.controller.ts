@@ -1,5 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../../auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../../auth/infrastructure/guards/roles.guard';
+import { Roles, TODOS_LOS_ROLES } from '../../../../auth/interface/http/decorators/roles.decorator';
 import { CurrentUser } from '../../../../auth/interface/http/decorators/current-user.decorator';
 import { ObtenerMapaGeocercasUseCase } from '../../../application/use-cases/obtener-mapa-geocercas.use-case';
 import { GestionarGeocercasUseCase } from '../../../application/use-cases/gestionar-geocercas.use-case';
@@ -7,7 +9,8 @@ import type { Autor, GeocercaDto } from '../../../application/use-cases/gestiona
 
 // Mapa de geocercas del panel web. Leer: cualquier usuario con sesión; escribir: solo ADMIN
 @Controller('geocercas')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN')
 export class GeocercaController {
   constructor(
     private readonly obtenerMapaUseCase: ObtenerMapaGeocercasUseCase,
@@ -15,6 +18,7 @@ export class GeocercaController {
   ) {}
 
   @Get('mapa')
+  @Roles(...TODOS_LOS_ROLES)
   async mapa() {
     return this.obtenerMapaUseCase.execute();
   }

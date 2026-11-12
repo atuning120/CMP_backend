@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import type { PosicionDispositivo, PosicionMaquina } from '../../../domain/entities/posicion-gps';
-import type { TrackingRepositoryPort } from '../../../domain/repositories/tracking.repository.port';
+import type { PosicionDispositivo, PosicionMaquina, PuntoRecorrido } from '../../../domain/entities/posicion-gps';
+import type { PeriodoTurno, TrackingRepositoryPort } from '../../../domain/repositories/tracking.repository.port';
 
 interface FilaPosicion {
   id_maquina: number;
@@ -113,5 +113,26 @@ export class TrackingPostgresqlRepository implements TrackingRepositoryPort {
       [desde],
     );
     return filas.map(aPosicion);
+  }
+
+  // Usa el índice (id_maquina, timestamp)
+  async recorrido(idMaquina: number, desde: Date, hasta: Date, limite: number): Promise<PuntoRecorrido[]> {
+    const filas: { fecha_hora: Date; latitud: number; longitud: number; velocidad: string | null }[] = await this.dataSource.query(
+      `SELECT "timestamp" AS fecha_hora, ST_Y(ubicacion) AS latitud, ST_X(ubicacion) AS longitud, velocidad
+       FROM tracking_history
+       WHERE id_maquina = $1 AND "timestamp" >= $2 AND "timestamp" < $3 AND ubicacion IS NOT NULL
+       ORDER BY "timestamp"
+       LIMIT $4`,
+      [idMaquina, desde, hasta, limite],
+    );
+    return filas.map((f) => ({ fechaHora: f.fecha_hora, latitud: f.latitud, longitud: f.longitud, velocidad: numero(f.velocidad) }));
+  }
+
+  async periodoDeTurno(idTurno: number): Promise<PeriodoTurno | null> {
+    const [fila]: { id_maquina: number; hora_inicio: Date; hora_termino: Date | null }[] = await this.dataSource.query(
+      'SELECT id_maquina, hora_inicio, hora_termino FROM turno WHERE id_turno = $1',
+      [idTurno],
+    );
+    return fila ? { idMaquina: fila.id_maquina, inicio: fila.hora_inicio, fin: fila.hora_termino } : null;
   }
 }

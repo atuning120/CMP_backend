@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { TrackingController } from './interface/http/controllers/tracking.controller';
 import { RegistrarPosicionesUseCase } from './application/use-cases/registrar-posiciones.use-case';
 import { ObtenerUltimasPosicionesUseCase } from './application/use-cases/obtener-ultimas-posiciones.use-case';
+import { ObtenerRecorridoUseCase } from './application/use-cases/obtener-recorrido.use-case';
 import { PUBLICADOR_POSICIONES } from './application/ports/publicador-posiciones.port';
 import { TRACKING_REPOSITORY } from './domain/repositories/tracking.repository.port';
 import { ApiKeyAdaptadorGuard } from './infrastructure/guards/api-key-adaptador.guard';
@@ -20,6 +21,7 @@ import { TrackingGateway } from './infrastructure/websocket/tracking.gateway';
     ApiKeyAdaptadorGuard,
     RegistrarPosicionesUseCase,
     ObtenerUltimasPosicionesUseCase,
+    ObtenerRecorridoUseCase,
   ],
 })
 export class TrackingModule {}

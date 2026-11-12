@@ -12,6 +12,14 @@ export interface PosicionDispositivo {
   tramaHex: string | null;
 }
 
+// Un punto del recorrido de una máquina (lo que dibuja el mapa: la línea y la hora de cada punto)
+export interface PuntoRecorrido {
+  fechaHora: Date;
+  latitud: number;
+  longitud: number;
+  velocidad: number | null; // km/h
+}
+
 // Posición ya asociada a la máquina en la que estaba instalado el dispositivo en ese momento
 export interface PosicionMaquina {
   idMaquina: number;
