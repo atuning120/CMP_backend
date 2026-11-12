@@ -28,6 +28,8 @@ const MATRIZ: Record<string, string> = {
   'GET /zonas': TODOS,
   'GET /geocercas/mapa': TODOS,
   'GET /tracking/ultimas': TODOS,
+  'GET /tracking/maquinas/:idMaquina/recorrido': TODOS,
+  'GET /tracking/turnos/:idTurno/recorrido': TODOS,
   // Turno del operador (app)
   'GET /turnos/actual': 'OPERADOR',
   'POST /turnos/iniciar': 'OPERADOR',
