@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Repository, IsNull, LessThan, LessThanOrEqual, Not, EntityManager } from 'typeorm';
 import type { TurnoRepositoryPort } from '../../../domain/repositories/turno.repository.port';
 import { DURACION_MAXIMA_TURNO_HORAS, Turno, EstadoTurno } from '../../../domain/entities/turno.entity';
@@ -7,6 +8,7 @@ import { UbicacionTurno, UbicacionTurnoRegistro } from '../../../domain/entities
 import { TurnoOrmEntity } from '../orm-entities/turno.orm-entity';
 import { TurnoUbicacionOrmEntity } from '../orm-entities/turno-ubicacion.orm-entity';
 import { TurnoEstadoOrmEntity } from '../orm-entities/turno-estado.orm-entity';
+import { EVENTO_TURNOS_CAMBIARON } from '../../../../../shared/application/eventos-turnos';
 
 @Injectable()
 export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
@@ -15,18 +17,26 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
     private readonly ormRepository: Repository<TurnoOrmEntity>,
     @InjectRepository(TurnoUbicacionOrmEntity)
     private readonly ubicacionRepository: Repository<TurnoUbicacionOrmEntity>,
+    private readonly eventos: EventEmitter2,
   ) {}
 
+  // Después del commit (la revisión de alertas debe ver el cambio): las alertas se revisan al instante
+  private avisarCambio() {
+    this.eventos.emit(EVENTO_TURNOS_CAMBIARON);
+  }
+
   async save(turno: Turno): Promise<Turno> {
-    return this.ormRepository.manager.transaction(async (manager) => {
+    const guardado = await this.ormRepository.manager.transaction(async (manager) => {
       const saved = await this.saveWith(manager, turno);
       if (saved.hora_termino) await this.cerrarVigentes(manager, saved.id_turno, saved.hora_termino);
       return this.mapToDomain(saved);
     });
+    this.avisarCambio();
+    return guardado;
   }
 
   async cerrar(turno: Turno, admiteCierreAutomatico: boolean, idClienteCierre: string | null = null): Promise<Turno | null> {
-    return this.ormRepository.manager.transaction(async (manager) => {
+    const cerrado = await this.ormRepository.manager.transaction(async (manager) => {
       // La condición va en el mismo UPDATE: un segundo cierre concurrente espera al primero y ya no la cumple
       const sigueAbierto = admiteCierreAutomatico
         ? "(hora_termino IS NULL OR (estado = 'CERRADO_AUTO' AND horometro_final IS NULL))"
@@ -51,6 +61,8 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
       if (turno.fechaFin) await this.cerrarVigentes(manager, turno.id!, turno.fechaFin);
       return turno;
     });
+    if (cerrado) this.avisarCambio();
+    return cerrado;
   }
 
   // Al cerrar el turno se cierran también su ubicación y su estado operacional vigentes
@@ -60,7 +72,7 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
   }
 
   async iniciar(turno: Turno, ubicacion: UbicacionTurno): Promise<Turno> {
-    return this.ormRepository.manager.transaction(async (manager) => {
+    const iniciado = await this.ormRepository.manager.transaction(async (manager) => {
       const saved = await this.saveWith(manager, turno);
       await manager.save(
         manager.create(TurnoUbicacionOrmEntity, {
@@ -73,6 +85,8 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
       );
       return this.mapToDomain(saved);
     });
+    this.avisarCambio();
+    return iniciado;
   }
 
   async findUbicacionVigente(idTurno: number): Promise<UbicacionTurno | null> {

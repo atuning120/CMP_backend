@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { IsNull, LessThanOrEqual, Repository } from 'typeorm';
 import type {
   CategoriaEstado,
@@ -9,6 +10,7 @@ import type {
 } from '../../../domain/repositories/turno-estado.repository.port';
 import { EstadoOperacionalOrmEntity } from '../orm-entities/estado-operacional.orm-entity';
 import { TurnoEstadoOrmEntity } from '../orm-entities/turno-estado.orm-entity';
+import { EVENTO_TURNOS_CAMBIARON } from '../../../../../shared/application/eventos-turnos';
 
 @Injectable()
 export class TurnoEstadoPostgresqlRepository implements TurnoEstadoRepositoryPort {
@@ -17,6 +19,7 @@ export class TurnoEstadoPostgresqlRepository implements TurnoEstadoRepositoryPor
     private readonly catalogoRepo: Repository<EstadoOperacionalOrmEntity>,
     @InjectRepository(TurnoEstadoOrmEntity)
     private readonly turnoEstadoRepo: Repository<TurnoEstadoOrmEntity>,
+    private readonly eventos: EventEmitter2,
   ) {}
 
   async findCatalogoActivo(): Promise<EstadoOperacionalResumen[]> {
@@ -47,7 +50,7 @@ export class TurnoEstadoPostgresqlRepository implements TurnoEstadoRepositoryPor
     comentario: string | null;
     idCliente: string;
   }): Promise<TurnoEstadoRegistro> {
-    return this.turnoEstadoRepo.manager.transaction(async (manager) => {
+    const registro = await this.turnoEstadoRepo.manager.transaction(async (manager) => {
       await manager.update(
         TurnoEstadoOrmEntity,
         { id_turno: data.idTurno, fin: IsNull(), inicio: LessThanOrEqual(data.inicio) },
@@ -65,6 +68,9 @@ export class TurnoEstadoPostgresqlRepository implements TurnoEstadoRepositoryPor
       );
       return this.mapRegistro(guardado);
     });
+    // Después del commit: una mantención o falla se avisa al instante como alerta (la revisión debe ver el cambio)
+    this.eventos.emit(EVENTO_TURNOS_CAMBIARON);
+    return registro;
   }
 
   private mapEstado(estado: EstadoOperacionalOrmEntity): EstadoOperacionalResumen {
