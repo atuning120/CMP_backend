@@ -2,9 +2,11 @@ import type { AlertaTurno, AtencionAlerta } from '../../domain/repositories/aler
 
 export const PUBLICADOR_ALERTAS = Symbol('PUBLICADOR_ALERTAS');
 
-// Alertas que aparecieron desde la revisión anterior y el contador de operadores con más de 10 h ahora mismo
+// Alertas que aparecieron desde la revisión anterior, las ya conocidas que cambiaron de estado (p. ej. la máquina
+// salió de la falla o el turno se cerró: dejan de estar activas) y el contador de lo que requiere acción ahora
 export interface NovedadAlertas {
   nuevas: AlertaTurno[];
+  actualizadas: AlertaTurno[];
   activas: number;
 }
 
