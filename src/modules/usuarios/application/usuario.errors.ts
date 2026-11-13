@@ -21,7 +21,9 @@ export type UsuarioErrorCode =
   | 'PROPIO_ACCESO'
   | 'ADMIN_PRINCIPAL'
   | 'ADMIN_PRINCIPAL_SOLO_PROPIO'
-  | 'EMAIL_PRINCIPAL_FIJO';
+  | 'EMAIL_PRINCIPAL_FIJO'
+  | 'SIN_PERMISO_RECORRIDO'
+  | 'RECORRIDO_INVALIDO';
 
 // Código estable para el cliente + mensaje en español, como el resto de los módulos
 export const usuarioError = (code: UsuarioErrorCode) => {
@@ -66,6 +68,10 @@ export const usuarioError = (code: UsuarioErrorCode) => {
       return new ConflictException({ statusCode: 409, code, message: 'El administrador principal no se puede desactivar ni cambiar de rol' });
     case 'ADMIN_PRINCIPAL_SOLO_PROPIO':
       return new ForbiddenException({ statusCode: 403, code, message: 'Solo el administrador principal puede editar su propia cuenta' });
+    case 'SIN_PERMISO_RECORRIDO':
+      return new ForbiddenException({ statusCode: 403, code, message: 'Los recorridos guiados son del panel web' });
+    case 'RECORRIDO_INVALIDO':
+      return new BadRequestException({ statusCode: 400, code, message: 'El recorrido indicado no es válido' });
     case 'EMAIL_PRINCIPAL_FIJO':
       return new ConflictException({
         statusCode: 409,

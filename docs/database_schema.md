@@ -24,6 +24,7 @@ erDiagram
         string proveedor_auth "GOOGLE o CREDENCIALES"
         boolean activo
         int id_operador FK "nullable"
+        string_array recorridos_vistos "recorridos guiados web hechos u omitidos"
         timestamptz creado_en
     }
     REFRESH_TOKEN {

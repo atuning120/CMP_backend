@@ -25,6 +25,7 @@ CREATE TABLE USUARIO (
     activo          BOOLEAN NOT NULL DEFAULT TRUE,
     id_operador     INT UNIQUE NULL,
     entra_oid       VARCHAR(64) NULL, -- id de la cuenta Microsoft (claim oid) si entra con Microsoft
+    recorridos_vistos TEXT[] NOT NULL DEFAULT '{}', -- recorridos guiados del panel web ya hechos u omitidos (p. ej. 'web.visor.v1')
     creado_en       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_usuario_operador FOREIGN KEY (id_operador) REFERENCES OPERADOR(id_operador) ON DELETE SET NULL
 );

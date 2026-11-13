@@ -54,6 +54,9 @@ const MATRIZ: Record<string, string> = {
   'POST /dashboards/cargas/previsualizar': GESTION,
   'POST /dashboards/cargas': GESTION,
   'GET /dashboards/:tipo': GESTION,
+  // Datos propios del usuario en el panel web (recorrido guiado del primer ingreso)
+  'GET /perfil/recorridos': 'ADMIN,JEFE_TURNO,VISOR',
+  'PUT /perfil/recorridos/:recorrido': 'ADMIN,JEFE_TURNO,VISOR',
   // Administración
   'GET /usuarios': 'ADMIN',
   'POST /usuarios': 'ADMIN',
