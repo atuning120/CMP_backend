@@ -71,6 +71,35 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # Mismo chequeo que el adaptador y el Frontend. A diferencia de ellos, el despliegue no lo espera: una vulnerabilidad
+  # publicada hoy en una dependencia no debe frenar un arreglo urgente en el piloto. Se ataja en el PR
+  seguridad:
+    name: Seguridad de dependencias y secretos
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Historial completo: gitleaks revisa también commits anteriores del PR
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Vulnerabilidades altas o críticas en dependencias de producción (las de multer y body-parser llegaron así)
+      - name: Auditoría de dependencias
+        run: pnpm audit --prod --audit-level high
+
+      # Secretos (claves, tokens, contraseñas) en el código o en el historial. Imagen oficial con versión fija.
+      # Falsos positivos revisados: .gitleaksignore
+      - name: Buscar secretos (gitleaks)
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/repo" ghcr.io/gitleaks/gitleaks:v8.24.3 git /repo --redact --no-banner
+
   desplegar:
     name: Desplegar en Azure
     needs: verificar
@@ -130,7 +159,7 @@ jobs:
           az containerapp update -g "$GRUPO" -n "$APP" --image "$IMAGEN@$DIGEST" -o none --only-show-errors
           echo "Desplegado ${GITHUB_SHA::7} ($DIGEST)" >> "$GITHUB_STEP_SUMMARY"
 
-      # Con mínimo 0 réplicas el primer request despierta el contenedor: se reintenta hasta ~3 minutos
+      # Si el mínimo de réplicas vuelve a 0, el primer request despierta el contenedor: se reintenta hasta ~3 minutos
       - name: Verificar /health
         run: |
           URL="https://$(az containerapp show -g "$GRUPO" -n "$APP" --query properties.configuration.ingress.fqdn -o tsv --only-show-errors)/health"

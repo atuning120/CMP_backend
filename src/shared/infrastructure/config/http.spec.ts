@@ -26,7 +26,8 @@ describe('configurarHttp', () => {
   beforeAll(async () => {
     const modulo = await Test.createTestingModule({ controllers: [PruebaController] }).compile();
     app = modulo.createNestApplication<NestExpressApplication>();
-    configurarHttp(app, WEB);
+    // El registro de requests tiene su propio spec (observabilidad/registro-requests.spec.ts): aquí, en silencio
+    configurarHttp(app, WEB, { log: jest.fn(), warn: jest.fn(), error: jest.fn() });
     await app.init();
   });
 

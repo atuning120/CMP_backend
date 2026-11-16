@@ -1,0 +1,6 @@
+# Falsos positivos revisados a mano (gitleaks escanea todo el historial, así que el commit queda para siempre).
+# Cada línea es el fingerprint que imprime `gitleaks git -v`: ignora solo ese hallazgo, no el archivo ni la regla.
+
+# Badge de CircleCI del README de la plantilla de `nest new`: el token es del repo público nestjs/nest, viene igual en
+# todos los proyectos generados con Nest y no da acceso a nada nuestro
+42d2d49c435a2e4c59d23f264ce5027b6748e128:README.md:generic-api-key:5

@@ -1,16 +1,20 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import compression from 'compression';
 import helmet from 'helmet';
+import { registrarRequests, type RegistroHttp } from '../observabilidad/registro-requests';
 import { opcionesCors } from './cors';
 
 /**
  * Middleware HTTP de la aplicación. Vive aquí (y no en main.ts) para que los tests levanten exactamente lo mismo.
  * Nada de esto pasa por Socket.IO, que atiende /socket.io antes que Express.
+ * registroRequests: dónde escribir la línea de cada request (los tests pasan uno propio).
  */
-export function configurarHttp(app: NestExpressApplication, origenesWeb: string | undefined): void {
+export function configurarHttp(app: NestExpressApplication, origenesWeb: string | undefined, registroRequests?: RegistroHttp): void {
   // Detrás del ingress de Azure: req.ip toma la IP del cliente desde X-Forwarded-For (un solo proxy de confianza,
   // así un X-Forwarded-For inventado por el cliente no cambia la IP). La usa el límite de intentos de login
   app.set('trust proxy', 1);
+  // Primero, para que la duración incluya todo el procesamiento (ver registro-requests.ts)
+  app.use(registrarRequests(registroRequests));
   // Headers de seguridad. La API solo responde JSON y archivos, nunca HTML: la CSP no permite cargar ni ejecutar
   // nada y nadie puede embeberla en un iframe. Quita además X-Powered-By (no anuncia que es Express). El panel
   // pide todo con fetch en modo CORS, así que Cross-Origin-Resource-Policy (same-origin) no le afecta
