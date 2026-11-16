@@ -13,8 +13,12 @@ RUN pnpm build && pnpm prune --prod
 # ---- Runtime: solo dist y dependencias de producción ----
 FROM node:24-alpine
 WORKDIR /app
+# Commit de la imagen (lo pasa el pipeline): Application Insights lo registra como versión, así cada error dice qué
+# versión lo produjo. Vacío si se construye sin él (job docker de los PR, build local)
+ARG GIT_SHA=""
 ENV NODE_ENV=production \
-    PORT=3000
+    PORT=3000 \
+    VERSION_APP=$GIT_SHA
 
 COPY --from=build --chown=node:node /app/package.json ./
 COPY --from=build --chown=node:node /app/node_modules ./node_modules

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -18,6 +18,8 @@ import { HealthController } from './health.controller';
 import { leerDbPassword } from './shared/infrastructure/config/secretos';
 import { leerSslDb } from './shared/infrastructure/config/ssl-db';
 import { ValidacionTiposPipe } from './shared/infrastructure/validacion/validacion-tipos.pipe';
+import { FiltroExcepciones } from './shared/infrastructure/observabilidad/filtro-excepciones';
+import { TrazaRequestInterceptor } from './shared/infrastructure/observabilidad/traza-request.interceptor';
 
 @Module({
   imports: [
@@ -47,7 +49,12 @@ import { ValidacionTiposPipe } from './shared/infrastructure/validacion/validaci
     ReportesModule,
   ],
   controllers: [HealthController],
-  // Como APP_PIPE (y no en main.ts) para que también rija en los tests e2e que levantan AppModule
-  providers: [{ provide: APP_PIPE, useClass: ValidacionTiposPipe }],
+  providers: [
+    // Application Insights (init en instrument.ts): excepciones no controladas y la ruta y el usuario de cada request
+    { provide: APP_FILTER, useClass: FiltroExcepciones },
+    { provide: APP_INTERCEPTOR, useClass: TrazaRequestInterceptor },
+    // Como APP_PIPE (y no en main.ts) para que también rija en los tests e2e que levantan AppModule
+    { provide: APP_PIPE, useClass: ValidacionTiposPipe },
+  ],
 })
 export class AppModule { }

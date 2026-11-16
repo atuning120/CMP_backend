@@ -1,5 +1,7 @@
 # Scripts de instalación de dependencias nativas. Ninguna se necesita en producción:
-# @parcel/watcher es del modo watch de Nest y unrs-resolver del linter.
+# @parcel/watcher es del modo watch de Nest, unrs-resolver del linter y protobufjs (lo trae
+# @azure/monitor-opentelemetry) solo instala su CLI de compilación de .proto.
 allowBuilds:
   '@parcel/watcher': false
+  protobufjs: false
   unrs-resolver: false
