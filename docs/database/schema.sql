@@ -440,7 +440,7 @@ SELECT te.id_turno_estado,
        m.nombre AS equipo,
        m.tipo_maquina AS categoria,
        t.fecha_turno AS fecha,
-       eo.nombre AS estado,
+       regexp_replace(eo.nombre, '^[^/]+/\s*', '')::VARCHAR(100) AS estado, -- sin "Demora / ": ya está en categoria_estado (020)
        eo.categoria AS categoria_estado,
        eo.es_productivo,
        te.inicio,

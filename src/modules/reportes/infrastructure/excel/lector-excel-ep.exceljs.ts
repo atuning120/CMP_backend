@@ -35,7 +35,10 @@ const normalizar = (texto: string) =>
 const valorDe = (valor: CellValue): string | number | boolean | Date | null => {
   if (valor === null || valor === undefined) return null;
   if (valor instanceof Date || typeof valor !== 'object') return valor as string | number | boolean | Date;
-  if ('result' in valor) return valorDe(valor.result as CellValue);
+  if ('result' in valor && valor.result !== undefined) return valorDe(valor.result as CellValue);
+  // exceljs descarta el resultado cuando es 0 (<f>H7-G7</f><v>0</v> llega como { formula }), y Excel siempre guarda el
+  // resultado calculado: una fórmula sin resultado es un 0 (ej. "Diferencia" con horómetro inicial = final)
+  if ('formula' in valor || 'sharedFormula' in valor) return 0;
   if ('richText' in valor) return valor.richText.map((parte) => parte.text).join('');
   if ('text' in valor) return String(valor.text);
   return null; // error de fórmula (#N/A, #REF!...)

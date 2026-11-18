@@ -25,9 +25,14 @@ export function ignorarRequest(metodo: string | undefined, url: string | undefin
   );
 }
 
-// Las llamadas del propio SDK a Azure Monitor (su configuración remota) no son dependencias de la aplicación
+// Las llamadas del propio SDK no son dependencias de la aplicación: su configuración remota en Azure Monitor y el
+// servicio de metadatos de las VM de Azure (169.254.169.254), que consulta al arrancar para identificar el servidor.
+// En Container Apps ese servicio no existe: la conexión rechazada aparecía como excepción en cada reinicio
+const IP_METADATOS_AZURE = '169.254.169.254';
+
 export function ignorarLlamadaSaliente(host: string | null | undefined): boolean {
-  return /(^|\.)(monitor\.azure\.com|applicationinsights\.azure\.com)$/i.test(host ?? '');
+  const nombre = (host ?? '').split(':')[0];
+  return nombre === IP_METADATOS_AZURE || /(^|\.)(monitor\.azure\.com|applicationinsights\.azure\.com)$/i.test(nombre);
 }
 
 // Nombre y versión con que el Backend aparece en Application Insights (cloud_RoleName y la versión de la app). Van

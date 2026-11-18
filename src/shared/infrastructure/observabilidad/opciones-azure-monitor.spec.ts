@@ -43,6 +43,10 @@ describe('opciones de Application Insights', () => {
     ['settings.sdk.monitor.azure.com', true],
     ['chilecentral.livediagnostics.monitor.azure.com', true],
     ['chilecentral-0.in.applicationinsights.azure.com', true],
+    // Servicio de metadatos de las VM de Azure: en Container Apps la conexión se rechaza (era una excepción falsa)
+    ['169.254.169.254', true],
+    ['169.254.169.254:80', true],
+    ['settings.sdk.monitor.azure.com:443', true],
     ['cmpevidencias2026.blob.core.windows.net', false],
     ['notmonitor.azure.com.ejemplo.cl', false],
     [undefined, false],

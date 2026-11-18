@@ -57,6 +57,18 @@ describe('LectorExcelEpExceljs', () => {
     ]);
   });
 
+  it('acepta "Diferencia" en 0 aunque sea una fórmula (exceljs pierde el resultado 0)', async () => {
+    const libro = new Workbook();
+    const hoja = libro.addWorksheet('Base de datos');
+    hoja.addRow(['Equipo', 'Fecha', 'Horometro Inicial', 'Horometro Final', 'Diferencia']);
+    hoja.addRow([3239, '25/05/2026', 100, 100, { formula: 'D2-C2', result: 0 }]);
+    hoja.addRow([3239, '26/05/2026', 100, 100, { sharedFormula: 'E2', result: 0 }]);
+    hoja.addRow([3239, '27/05/2026', 100, 100, 0]);
+    const lectura = await lector.leer(Buffer.from(await libro.xlsx.writeBuffer()));
+    expect(lectura?.errores).toEqual([]);
+    expect(lectura?.registros.map((r) => r.horas)).toEqual([0, 0, 0]);
+  });
+
   it('avisa si falta la hoja o sus columnas obligatorias', async () => {
     const sinHoja = new Workbook();
     sinHoja.addWorksheet('Carátula EP').addRow(['CONTRATO']);
