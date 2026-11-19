@@ -26,7 +26,7 @@ export interface EquipoCargaEp {
   equipo: string;
   registros: number;
   horas: number;
-  enFlota: boolean; // existe una máquina con ese código interno
+  enFlota: boolean; // existe una máquina con ese código interno (si no, puede ser un código mal escrito)
 }
 
 export interface ResumenCargaEp {
@@ -40,7 +40,6 @@ export interface ResumenCargaEp {
   totalErrores: number;
   horas: number;
   equipos: EquipoCargaEp[];
-  actividadesSinArea: string[];
   cargaExistente: CargaEp | null; // la que se reemplazaría al confirmar
 }
 
@@ -119,10 +118,8 @@ export const leerCargaEp = async (
     actual.horas += r.horas;
     porEquipo.set(clave, actual);
   }
-  const actividades = [...new Set(registros.map((r) => r.actividad).filter((a): a is string => !!a))];
-  const [conocidos, actividadesSinArea, cargaExistente] = await Promise.all([
+  const [conocidos, cargaExistente] = await Promise.all([
     porEquipo.size ? repo.equiposConocidos([...porEquipo.values()].map((e) => e.equipo)) : Promise.resolve([]),
-    actividades.length ? repo.actividadesSinArea(actividades) : Promise.resolve([]),
     repo.buscarVigente(periodo),
   ]);
   const enFlota = new Set(conocidos.map((c) => c.toUpperCase()));
@@ -140,7 +137,6 @@ export const leerCargaEp = async (
     equipos: [...porEquipo.entries()]
       .map(([clave, e]) => ({ ...e, horas: redondear(e.horas), enFlota: enFlota.has(clave) }))
       .sort((a, b) => b.horas - a.horas),
-    actividadesSinArea: actividadesSinArea.sort(),
     cargaExistente,
   };
 };

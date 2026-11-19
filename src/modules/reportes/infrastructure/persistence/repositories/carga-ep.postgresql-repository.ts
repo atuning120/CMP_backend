@@ -58,23 +58,6 @@ export class CargaEpPostgresqlRepository implements CargaEpRepositoryPort {
     return filas.map((f) => f.nombre);
   }
 
-  // Misma regla que la view reportes.v_horas_excel: equivalencia_area o, si dice "Area NN", el área con ese número
-  async actividadesSinArea(textos: string[]): Promise<string[]> {
-    const filas: { texto: string }[] = await this.dataSource.query(
-      `
-      SELECT t AS texto
-      FROM unnest($1::text[]) AS t
-      WHERE NOT EXISTS (
-              SELECT 1 FROM reportes.equivalencia_area e WHERE e.texto = LOWER(TRIM(t)) AND e.id_area IS NOT NULL)
-        AND NOT EXISTS (
-              SELECT 1 FROM area ar
-              WHERE COALESCE(NULLIF(ar.codigo, ''), SUBSTRING(ar.nombre FROM '(\\d+)')) = SUBSTRING(t FROM '^\\s*[ÁáAa]rea\\s+(\\d+)'))
-      `,
-      [textos],
-    );
-    return filas.map((f) => f.texto);
-  }
-
   async reemplazar(nueva: NuevaCargaEp): Promise<CargaEp | null> {
     let idCarga: number;
     try {
@@ -91,9 +74,10 @@ export class CargaEpPostgresqlRepository implements CargaEpRepositoryPort {
         const r = nueva.registros;
         await manager.query(
           `INSERT INTO reportes.carga_registro
-             (id_carga, fila, equipo, categoria, codigo_report, fecha, hora_inicio, horometro_inicial, horometro_final, horas, actividad)
+             (id_carga, fila, equipo, categoria, codigo_report, fecha, hora_inicio, horometro_inicial, horometro_final, horas, area,
+              id_excel)
            SELECT $1, * FROM unnest($2::int[], $3::text[], $4::text[], $5::text[], $6::date[], $7::time[], $8::numeric[],
-                                    $9::numeric[], $10::numeric[], $11::text[])`,
+                                    $9::numeric[], $10::numeric[], $11::text[], $12::int[])`,
           [
             id_carga,
             r.map((x) => x.fila),
@@ -105,22 +89,11 @@ export class CargaEpPostgresqlRepository implements CargaEpRepositoryPort {
             r.map((x) => x.horometroInicial),
             r.map((x) => x.horometroFinal),
             r.map((x) => x.horas),
-            r.map((x) => x.actividad),
+            r.map((x) => x.area),
+            r.map((x) => x.idExcel),
           ],
         );
 
-        // Horas de la app del rango, congeladas: el EP de un mes pasado no cambia si después llegan turnos sin señal.
-        // Por jornada, como el Excel: el turno de noche del día anterior al rango ya es parte del EP
-        await manager.query(
-          `INSERT INTO reportes.carga_horas_app
-             (id_carga, id_turno, id_maquina, equipo, categoria, fecha, hora_inicio, horometro_inicial, horometro_final,
-              horas, id_area, area, conflicto, jornada)
-           SELECT $1, id_turno, id_maquina, equipo, categoria, fecha, hora_inicio, horometro_inicial, horometro_final,
-                  horas, id_area, area, conflicto, jornada
-           FROM reportes.v_horas_app
-           WHERE jornada BETWEEN $2::date AND $3::date`,
-          [id_carga, nueva.fechaDesde, nueva.fechaHasta],
-        );
         return id_carga;
       });
     } catch (error) {

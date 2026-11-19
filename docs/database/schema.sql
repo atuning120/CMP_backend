@@ -317,16 +317,16 @@ CREATE TABLE REFRESH_TOKEN (
 
 CREATE INDEX idx_refresh_token_usuario ON REFRESH_TOKEN(id_usuario);
 
--- Reportes para Metabase (migraciones 016 y 017): carga mensual del Excel del EP del contratista y views que lee el dashboard.
--- Los usuarios de Postgres de Metabase (metabase_app, metabase_lector) se crean con la migración 016, no aquí.
+-- Reportes para Metabase (migraciones 016, 017 y 020 a 022): carga mensual del Excel del EP del contratista y views que
+-- leen los dashboards. Los usuarios de Postgres de Metabase (metabase_app, metabase_lector) se crean con la migración
+-- 016, no aquí; la 021 deja a metabase_lector viendo solo las views.
 -- 1. Schema `reportes`: todo lo que lee Metabase vive aquí. Su usuario solo ve este schema, nunca las tablas de la app
 --    (OPERADOR, USUARIO, etc.): las views de abajo leen la app con los permisos de su dueño.
 -- 2. Cargas del Excel: una por período EP (el EP de junio cubre p. ej. del 25-05 al 25-06), solo una vigente por mes.
 --    Del Excel se guarda únicamente la hoja "Base de datos" (horas por equipo); las hojas con personas, tarifas y
 --    montos nunca llegan a la base.
--- 3. Al confirmar una carga, el Backend congela las horas de la app de ese rango (CARGA_HORAS_APP): el dashboard de un
---    EP pasado no cambia aunque después lleguen turnos sincronizados sin señal.
--- 4. Views con las mismas columnas para App y Excel, más la comparación por equipo y día.
+-- 3. Views: la app en vivo (dashboard de operación) y el Excel por sí solo (dashboard de estado de pago, que ya no se
+--    compara con la app).
 -- 1. Schema
 CREATE SCHEMA IF NOT EXISTS reportes;
 
@@ -352,45 +352,20 @@ CREATE TABLE IF NOT EXISTS reportes.carga_registro (
     id_registro       SERIAL PRIMARY KEY,
     id_carga          INT NOT NULL REFERENCES reportes.carga(id_carga) ON DELETE CASCADE,
     fila              INT NOT NULL,         -- fila en el Excel, para rastrear un dato raro hasta el archivo
-    equipo            VARCHAR(50) NOT NULL, -- código interno (MAQUINA.nombre)
-    categoria         VARCHAR(50),
+    equipo            VARCHAR(50) NOT NULL, -- columna "N° Interno": código interno (MAQUINA.nombre)
+    categoria         VARCHAR(50),          -- columna "Equipo": Bulldozer, Cargador Frontal...
     codigo_report     VARCHAR(30),
     fecha             DATE NOT NULL,
     hora_inicio       TIME,
     horometro_inicial NUMERIC(10,2),
     horometro_final   NUMERIC(10,2),
     horas             NUMERIC(10,2) NOT NULL, -- columna "Diferencia"
-    actividad         VARCHAR(100)          -- "Area 84", "Tacho", ...
+    area              VARCHAR(100),         -- columna "Area", tal como la escribe el contratista: "Area 84", "Tacho"...
+    id_excel          INT                   -- columna "ID"
 );
 CREATE INDEX IF NOT EXISTS ix_carga_registro_carga ON reportes.carga_registro (id_carga, equipo, fecha);
 
--- Textos de "Actividad" que no se resuelven solos ("Tacho", "Pila Primaria"...). "Area NN" se cruza sin esto
-CREATE TABLE IF NOT EXISTS reportes.equivalencia_area (
-    texto       VARCHAR(100) PRIMARY KEY, -- en minúsculas y sin espacios en los extremos
-    id_area     INT REFERENCES public.area(id_area) ON DELETE SET NULL,
-    comentario  TEXT
-);
-
--- 3. Horas de la app congeladas al confirmar la carga (mismas columnas que v_horas_app)
-CREATE TABLE IF NOT EXISTS reportes.carga_horas_app (
-    id_carga          INT NOT NULL REFERENCES reportes.carga(id_carga) ON DELETE CASCADE,
-    id_turno          INT NOT NULL,
-    id_maquina        INT NOT NULL,
-    equipo            VARCHAR(100) NOT NULL,
-    categoria         VARCHAR(50),
-    fecha             DATE NOT NULL,
-    hora_inicio       TIME,
-    horometro_inicial NUMERIC(10,2),
-    horometro_final   NUMERIC(10,2),
-    horas             NUMERIC(10,2) NOT NULL,
-    id_area           INT,
-    area              VARCHAR(100),
-    conflicto         BOOLEAN NOT NULL DEFAULT FALSE,
-    jornada           DATE NOT NULL -- día del EP (ver v_horas_app)
-);
-CREATE INDEX IF NOT EXISTS ix_carga_horas_app_carga ON reportes.carga_horas_app (id_carga, equipo, fecha);
-
--- 4. Views
+-- 3. Views
 -- Horas de la app en vivo: una fila por turno cerrado y área (las horas se reparten según el tiempo en cada área;
 -- sumar `horas`, no los horómetros). jornada = día del EP: en el Excel la jornada D empieza con el turno de noche
 -- de la tarde del día D-1, así que un turno que empieza a las 12:00 o después cuenta para el día siguiente
@@ -465,103 +440,56 @@ SELECT c.id_carga,
 FROM reportes.carga c
 WHERE c.vigente;
 
--- Horas del Excel de las cargas vigentes. El área sale de equivalencia_area o, si dice "Area NN", del área con ese
--- código (o con ese número en el nombre)
+-- Filas del Excel de las cargas vigentes con la misma estructura que la hoja "Base de datos" del EP (mismos nombres y
+-- orden de columnas), más "Turno" (Día de 06:00 a 16:59, Noche el resto) e id_carga (filtro bloqueado del dashboard).
+-- En SQL los nombres van entre comillas dobles: "N° Interno"
 CREATE OR REPLACE VIEW reportes.v_horas_excel AS
-SELECT c.id_carga,
-       c.periodo,
-       r.id_registro,
-       r.fila,
-       mq.id_maquina,
-       r.equipo,
-       r.categoria,
-       r.codigo_report,
-       r.fecha,
-       r.hora_inicio,
-       r.horometro_inicial,
-       r.horometro_final,
-       r.horas,
-       r.actividad,
-       a.id_area,
-       a.nombre AS area,
-       r.fecha AS jornada
+SELECT r.id_excel          AS "ID",
+       r.categoria         AS "Equipo",
+       r.equipo            AS "N° Interno",
+       r.codigo_report     AS "Codigo Report",
+       r.fecha             AS "Fecha",
+       r.hora_inicio       AS "Hora Inicio",
+       r.horometro_inicial AS "Horometro Inicial",
+       r.horometro_final   AS "Horometro Final",
+       r.horas             AS "Diferencia",
+       r.area              AS "Area",
+       CASE
+           WHEN r.hora_inicio IS NULL THEN NULL
+           WHEN r.hora_inicio >= TIME '06:00' AND r.hora_inicio < TIME '17:00' THEN 'Día'
+           ELSE 'Noche'
+       END::VARCHAR(5)     AS "Turno",
+       c.id_carga
 FROM reportes.carga_registro r
 JOIN reportes.carga c ON c.id_carga = r.id_carga AND c.vigente
-LEFT JOIN public.maquina mq ON UPPER(mq.nombre) = UPPER(r.equipo)
-LEFT JOIN reportes.equivalencia_area eq ON eq.texto = LOWER(TRIM(r.actividad))
-LEFT JOIN LATERAL (
-    SELECT ar.id_area
-    FROM public.area ar
-    WHERE COALESCE(NULLIF(ar.codigo, ''), SUBSTRING(ar.nombre FROM '(\d+)'))
-          = SUBSTRING(r.actividad FROM '^\s*[ÁáAa]rea\s+(\d+)')
-    ORDER BY ar.id_area
-    LIMIT 1
-) num ON TRUE
-LEFT JOIN public.area a ON a.id_area = COALESCE(eq.id_area, num.id_area);
+ORDER BY c.id_carga, r.fila; -- mismo orden que el Excel al explorar la tabla en Metabase
 
--- Horas de la app congeladas de las cargas vigentes (el lado "App" del dashboard del EP)
-CREATE OR REPLACE VIEW reportes.v_horas_app_ep AS
-SELECT c.id_carga,
-       c.periodo,
-       s.id_turno,
-       s.id_maquina,
-       s.equipo,
-       s.categoria,
-       s.fecha,
-       s.hora_inicio,
-       s.horometro_inicial,
-       s.horometro_final,
-       s.horas,
-       s.id_area,
-       s.area,
-       s.conflicto,
-       s.jornada
-FROM reportes.carga_horas_app s
-JOIN reportes.carga c ON c.id_carga = s.id_carga AND c.vigente;
-
--- Excel contra App por equipo y jornada. Estado: COINCIDE (diferencia de hasta 0,5 h), DIFIERE, SOLO_EXCEL, SOLO_APP
-CREATE OR REPLACE VIEW reportes.v_comparacion AS
-WITH excel AS (
-    SELECT id_carga, UPPER(equipo) AS equipo, MAX(categoria) AS categoria, jornada,
-           SUM(horas) AS horas, COUNT(*) AS registros
-    FROM reportes.v_horas_excel
-    GROUP BY id_carga, UPPER(equipo), jornada
-), app AS (
-    SELECT id_carga, UPPER(equipo) AS equipo, MAX(categoria) AS categoria, jornada,
-           SUM(horas) AS horas, COUNT(DISTINCT id_turno) AS turnos
-    FROM reportes.v_horas_app_ep
-    GROUP BY id_carga, UPPER(equipo), jornada
-)
-SELECT c.id_carga,
-       c.periodo,
-       COALESCE(e.equipo, a.equipo) AS equipo,
-       COALESCE(e.categoria, a.categoria) AS categoria,
-       COALESCE(e.jornada, a.jornada) AS jornada,
-       e.horas AS horas_excel,
-       a.horas AS horas_app,
-       COALESCE(e.horas, 0) - COALESCE(a.horas, 0) AS diferencia,
-       COALESCE(e.registros, 0) AS registros_excel,
-       COALESCE(a.turnos, 0) AS turnos_app,
-       CASE
-           WHEN a.equipo IS NULL THEN 'SOLO_EXCEL'
-           WHEN e.equipo IS NULL THEN 'SOLO_APP'
-           WHEN ABS(e.horas - a.horas) <= 0.5 THEN 'COINCIDE'
-           ELSE 'DIFIERE'
-       END AS estado
-FROM excel e
-FULL JOIN app a ON a.id_carga = e.id_carga AND a.equipo = e.equipo AND a.jornada = e.jornada
-JOIN reportes.carga c ON c.id_carga = COALESCE(e.id_carga, a.id_carga);
-
--- Horómetros del Excel que no cuadran, encadenados por horómetro inicial (la fecha y la hora no sirven para ordenar:
--- el turno de noche de la jornada D es anterior al de día)
+-- Registros cuyo horómetro inicial no calza con el final del registro anterior del mismo equipo, o que terminan antes
+-- de empezar. Encadenados por horómetro inicial: el turno de noche de la jornada D va antes que el de día
 CREATE OR REPLACE VIEW reportes.v_horometros_excel AS
-SELECT *
+SELECT "ID", "Equipo", "N° Interno", "Fecha", "Hora Inicio", "Turno", "Area",
+       "Horometro Inicial", "Horometro Final", "Horometro Final Anterior", "Salto", id_carga
 FROM (
-    SELECT id_carga, periodo, id_registro, fila, equipo, categoria, fecha, hora_inicio,
-           horometro_inicial, horometro_final,
-           LAG(horometro_final) OVER w AS horometro_final_anterior,
-           horometro_inicial - LAG(horometro_final) OVER w AS salto
-    FROM reportes.v_horas_excel
-    WINDOW w AS (PARTITION BY id_carga, UPPER(equipo) ORDER BY horometro_inicial, fecha, hora_inicio, fila)
+    SELECT r.id_excel          AS "ID",
+           r.categoria         AS "Equipo",
+           r.equipo            AS "N° Interno",
+           r.fecha             AS "Fecha",
+           r.hora_inicio       AS "Hora Inicio",
+           CASE
+               WHEN r.hora_inicio IS NULL THEN NULL
+               WHEN r.hora_inicio >= TIME '06:00' AND r.hora_inicio < TIME '17:00' THEN 'Día'
+               ELSE 'Noche'
+           END::VARCHAR(5)     AS "Turno",
+           r.area              AS "Area",
+           r.horometro_inicial AS "Horometro Inicial",
+           r.horometro_final   AS "Horometro Final",
+           LAG(r.horometro_final) OVER w AS "Horometro Final Anterior",
+           r.horometro_inicial - LAG(r.horometro_final) OVER w AS "Salto",
+           c.id_carga,
+           r.fila
+    FROM reportes.carga_registro r
+    JOIN reportes.carga c ON c.id_carga = r.id_carga AND c.vigente
+    WINDOW w AS (PARTITION BY c.id_carga, UPPER(r.equipo) ORDER BY r.horometro_inicial, r.fecha, r.hora_inicio, r.fila)
 ) h
-WHERE salto <> 0 OR horometro_final < horometro_inicial;
+WHERE "Salto" <> 0 OR "Horometro Final" < "Horometro Inicial"
+ORDER BY id_carga, fila;

@@ -11,8 +11,8 @@ export type VistaPreviaCargaEp = Omit<ResumenCargaEp, 'registros' | 'hashSha256'
   puedeConfirmar: boolean; // sin errores y con al menos una fila
 };
 
-// Lo que se guardaría al confirmar, para revisarlo antes: filas válidas, errores por fila, horas por equipo, equipos
-// que no están en la flota y actividades sin área. No guarda nada
+// Lo que se guardaría al confirmar, para revisarlo antes: filas válidas, errores por fila, horas por equipo y equipos
+// que no están en la flota. No guarda nada
 @Injectable()
 export class PrevisualizarCargaEpUseCase {
   constructor(

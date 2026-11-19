@@ -10,23 +10,26 @@ const MAXIMO_HORAS_REGISTRO = 24;
 const DIA_MS = 24 * 60 * 60 * 1000;
 const EPOCA_EXCEL = Date.UTC(1899, 11, 30); // día 0 de las fechas seriales de Excel
 
-type Campo = 'equipo' | 'categoria' | 'codigoReport' | 'fecha' | 'horaInicio' | 'horometroInicial' | 'horometroFinal' | 'horas' | 'actividad';
+type Campo = 'id' | 'equipo' | 'categoria' | 'codigoReport' | 'fecha' | 'horaInicio' | 'horometroInicial' | 'horometroFinal' | 'horas' | 'area';
 
-// Encabezados aceptados (sin tildes, en minúsculas) para cada campo
+// Encabezados aceptados (sin tildes, en minúsculas) para cada campo. Formato del EP desde el #08 (oct 2026):
+// "N° Interno" es el código de la máquina, "Equipo" es el tipo (Bulldozer, Cargador Frontal...) y "Area" es el texto
+// del contratista ("Area 55", "Tacho", "Api. 3001")
 const ENCABEZADOS: Record<Campo, string[]> = {
-  equipo: ['equipo'],
-  categoria: ['categoria'],
+  id: ['id'],
+  equipo: ['n° interno', 'nº interno', 'n interno', 'no interno', 'n. interno', 'numero interno'],
+  categoria: ['equipo'],
   codigoReport: ['codigo report', 'codigo reporte'],
   fecha: ['fecha'],
   horaInicio: ['hora inicio'],
   horometroInicial: ['horometro inicial'],
   horometroFinal: ['horometro final'],
   horas: ['diferencia', 'horas'],
-  actividad: ['actividad'],
+  area: ['area'],
 };
 const OBLIGATORIOS: Campo[] = ['equipo', 'fecha', 'horas'];
 
-const LARGO_MAXIMO: Partial<Record<Campo, number>> = { equipo: 50, categoria: 50, codigoReport: 30, actividad: 100 };
+const LARGO_MAXIMO: Partial<Record<Campo, number>> = { equipo: 50, categoria: 50, codigoReport: 30, area: 100 };
 
 const normalizar = (texto: string) =>
   texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -126,19 +129,21 @@ const leerFila = (fila: Row, columnas: Partial<Record<Campo, number>>): { regist
   // Filas en blanco y la de totales al final de la hoja (solo trae la suma de "Diferencia")
   if (!equipo && valorFecha === null) return { vacia: true };
 
-  if (!equipo) return { error: 'Falta el equipo' };
+  if (!equipo) return { error: 'Falta el N° Interno del equipo' };
   const dia = fecha(valorFecha);
   if (!dia) return { error: 'La fecha no es válida' };
   const horas = numero(valor('horas'));
   if (horas === null || horas === undefined) return { error: 'Falta la diferencia (horas) o no es un número' };
   if (horas < 0 || horas > MAXIMO_HORAS_REGISTRO) return { error: `Las horas deben estar entre 0 y ${MAXIMO_HORAS_REGISTRO}` };
+  const idExcel = numero(valor('id'));
+  if (idExcel === undefined || (idExcel !== null && !Number.isSafeInteger(idExcel))) return { error: 'El ID no es un número entero' };
   const horometroInicial = numero(valor('horometroInicial'));
   const horometroFinal = numero(valor('horometroFinal'));
   if (horometroInicial === undefined || horometroFinal === undefined) return { error: 'El horómetro no es un número' };
   const horaInicio = hora(valor('horaInicio'));
   if (horaInicio === undefined) return { error: 'La hora de inicio no es válida' };
 
-  const campos = { equipo, categoria: texto(valor('categoria')), codigoReport: texto(valor('codigoReport')), actividad: texto(valor('actividad')) };
+  const campos = { equipo, categoria: texto(valor('categoria')), codigoReport: texto(valor('codigoReport')), area: texto(valor('area')) };
   for (const [campo, t] of Object.entries(campos)) {
     const maximo = LARGO_MAXIMO[campo as Campo];
     if (t && maximo && t.length > maximo) return { error: `El campo ${campo} supera los ${maximo} caracteres` };
@@ -147,6 +152,7 @@ const leerFila = (fila: Row, columnas: Partial<Record<Campo, number>>): { regist
   return {
     registro: {
       fila: fila.number,
+      idExcel,
       ...campos,
       fecha: dia,
       horaInicio,
@@ -173,7 +179,7 @@ export class LectorExcelEpExceljs implements LectorExcelEpPort {
     if (!encabezado) {
       return {
         registros: [],
-        errores: [{ fila: null, mensaje: 'La hoja "Base de datos" debe tener las columnas Equipo, Fecha y Diferencia' }],
+        errores: [{ fila: null, mensaje: 'La hoja "Base de datos" debe tener las columnas N° Interno, Fecha y Diferencia' }],
       };
     }
 

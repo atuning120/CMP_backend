@@ -12,7 +12,7 @@ export interface ConfirmarCargaEpDto extends SolicitudCargaEp {
   reemplazar?: boolean; // obligatorio si el mes ya tiene una carga
 }
 
-// Guarda el Excel del mes. Se rechaza entero si alguna fila tiene errores: un EP a medias daría comparaciones falsas
+// Guarda el Excel del mes. Se rechaza entero si alguna fila tiene errores: un EP a medias daría indicadores falsos
 @Injectable()
 export class ConfirmarCargaEpUseCase {
   constructor(
