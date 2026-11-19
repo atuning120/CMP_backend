@@ -301,17 +301,14 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 
 ### Reportes (schema `reportes`, dashboards de Metabase)
 
-Metabase lee solo este schema con el usuario `metabase_lector` (migración `016`); las views leen las tablas de la app con los permisos de su dueño, así que Metabase nunca ve `OPERADOR`, `USUARIO`, etc. Guía de Metabase: [`metabase.md`](metabase.md).
+Metabase lee solo las views de este schema con el usuario `metabase_lector` (migraciones `016` y `021`); las views leen las tablas de la app con los permisos de su dueño, así que Metabase nunca ve `OPERADOR`, `USUARIO`, etc. Guía de Metabase: [`metabase.md`](metabase.md).
 
 | Tabla / view | Propósito | Restricciones |
 |---|---|---|
 | `carga` | Excel del estado de pago (EP) subido para un mes | `periodo` = primer día del mes; `fecha_desde`/`fecha_hasta` = rango real del EP (p. ej. 25-05 al 25-06); un solo `vigente` por `periodo`; el archivo original no se guarda (trae datos personales), solo nombre y `hash_sha256` |
-| `carga_registro` | Filas de la hoja "Base de datos" del Excel (horas por equipo) | `equipo` = código interno (`MAQUINA.nombre`); `fila` = fila del Excel |
-| `carga_horas_app` | Horas de la app de las jornadas del EP, congeladas al confirmar la carga | mismas columnas que `v_horas_app`; sin FK a `TURNO` a propósito |
-| `equivalencia_area` | Textos de "Actividad" del Excel que no son "Area NN" (p. ej. `tacho`) → `AREA` | `texto` en minúsculas |
+| `carga_registro` | Filas de la hoja "Base de datos" del Excel (horas por equipo) | formato del EP desde el #08: `equipo` = "N° Interno" (código interno, `MAQUINA.nombre`), `categoria` = "Equipo" (tipo), `area` = "Area" (texto libre del contratista, no se cruza con `AREA`); `fila` = fila del Excel |
 | `v_horas_app` / `v_estados_app` | Horas por turno y área / tiempo por estado operacional, en vivo | las horas de un turno con varias áreas se reparten según el tiempo en cada una; `jornada` = día del EP (migración `017`): en el Excel la jornada D empieza con el turno de noche de la tarde del día D-1, así que un turno que empieza a las 12:00 o después cuenta para el día siguiente |
-| `v_horas_excel` / `v_horas_app_ep` | Lado Excel y lado App de las cargas vigentes (mismas columnas) | |
-| `v_comparacion` | Excel contra App por equipo y jornada | `estado` ∈ `COINCIDE` (≤ 0,5 h), `DIFIERE`, `SOLO_EXCEL`, `SOLO_APP` |
+| `v_horas_excel` | Filas del Excel de las cargas vigentes, solo con datos del Excel (la comparación con la app se eliminó en la migración `021`) | `turno` = Día (inicio de 06:00 a 16:59) o Noche |
 | `v_horometros_excel` / `v_cargas` | Horómetros del Excel que no cuadran / cargas vigentes con etiqueta para el filtro | horómetros encadenados por horómetro inicial (no por fecha: el turno de noche de la jornada D va antes que el de día) |
 
 ## Relaciones (foreign keys)

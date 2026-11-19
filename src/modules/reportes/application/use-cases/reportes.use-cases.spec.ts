@@ -6,8 +6,9 @@ import { ConfirmarCargaEpUseCase } from './confirmar-carga-ep.use-case';
 import { ListarCargasEpUseCase } from './listar-cargas-ep.use-case';
 import { ObtenerDashboardUseCase } from './obtener-dashboard.use-case';
 
-const registro = (fila: number, equipo: string, fecha: string, horas: number, actividad: string | null = 'Area 84'): RegistroEp => ({
+const registro = (fila: number, equipo: string, fecha: string, horas: number, area: string | null = 'Area 84'): RegistroEp => ({
   fila,
+  idExcel: fila - 1,
   equipo,
   categoria: 'Cargador Frontal',
   codigoReport: null,
@@ -16,7 +17,7 @@ const registro = (fila: number, equipo: string, fecha: string, horas: number, ac
   horometroInicial: null,
   horometroFinal: null,
   horas,
-  actividad,
+  area,
 });
 
 const cargaJunio: CargaEp = {
@@ -39,7 +40,6 @@ const crear = (lectura: LecturaExcelEp | null, existente: CargaEp | null = null)
     listarVigentes: jest.fn(async () => [cargaJunio]),
     buscarVigente: jest.fn(async () => existente),
     equiposConocidos: jest.fn(async (codigos: string[]) => codigos.filter((c) => c !== 'MA999')),
-    actividadesSinArea: jest.fn(async (textos: string[]) => textos.filter((t) => !t.startsWith('Area'))),
     reemplazar: jest.fn(async () => cargaJunio as CargaEp | null),
   } satisfies CargaEpRepositoryPort;
   const firmador = {
@@ -97,7 +97,7 @@ describe('Carga del Excel del estado de pago', () => {
     expect(lector.leer).not.toHaveBeenCalled();
   });
 
-  it('la vista previa resume horas por equipo, equipos fuera de la flota y actividades sin área', async () => {
+  it('la vista previa resume horas por equipo, y equipos fuera de la flota', async () => {
     const { previsualizar, cargaRepo } = crear(lecturaValida, cargaJunio);
     const vista = await previsualizar.execute(solicitud);
     expect(vista).toEqual({
@@ -112,7 +112,6 @@ describe('Carga del Excel del estado de pago', () => {
         { equipo: '3239', registros: 2, horas: 17.5, enFlota: true },
         { equipo: 'MA999', registros: 1, horas: 4, enFlota: false },
       ],
-      actividadesSinArea: ['Tacho'],
       cargaExistente: cargaJunio,
       filasValidas: 3,
       puedeConfirmar: true,

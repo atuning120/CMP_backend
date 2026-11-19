@@ -128,13 +128,20 @@ credenciales que Metabase guarda; si se pierde hay que volver a ingresar la cont
 | Dashboard | Fuente | Filtros |
 |---|---|---|
 | **Operación** (en vivo, no depende del Excel) | `v_horas_app`, `v_estados_app` | Fecha (rango), categoría, equipo |
-| **Estado de pago**, pestañas *Excel* y *Comparación* | `v_horas_excel`, `v_horas_app_ep`, `v_comparacion`, `v_horometros_excel` | `id_carga` (bloqueado), categoría, equipo |
+| **Estado de pago** (solo el Excel del contratista, no se compara con la app) | `v_horas_excel`, `v_horometros_excel` | `id_carga` (bloqueado), categoría, equipo, área, turno |
 
-`v_horas_app`, `v_horas_excel` y `v_horas_app_ep` tienen las mismas columnas (`equipo`, `categoria`, `fecha`,
-`hora_inicio`, `horas`, `area`, `jornada`): un gráfico armado sobre una se replica en la otra cambiando solo la fuente.
-Sumar siempre `horas`, no los horómetros (en `v_horas_app` se repiten si el turno pasó por varias áreas). Para
-comparar por día usar `jornada`, no `fecha`: en el Excel el turno de noche de la tarde anterior ya es de la jornada
-siguiente.
+Desde la migración 021 Metabase solo ve las views (`v_cargas`, `v_horas_excel`, `v_horometros_excel`, `v_horas_app`,
+`v_estados_app`), no las tablas base. Sumar siempre `horas`, no los horómetros (en `v_horas_app` se repiten si el turno
+pasó por varias áreas).
+
+Columnas del Excel (formato del EP desde el #08): `equipo` = "N° Interno" (código de la máquina), `categoria` =
+"Equipo" (Bulldozer, Cargador Frontal...), `area` = "Area" tal como la escribe el contratista ("Area 55", "Tacho",
+"Otros"), `fecha` = jornada del EP, `turno` = Día (inicio de 06:00 a 16:59) o Noche. `v_horometros_excel` lista los
+registros cuyo horómetro inicial no calza con el final del registro anterior del mismo equipo (`salto`).
+
+Tarjetas sugeridas del dashboard de estado de pago: horas totales y registros (números), horas por equipo y por
+categoría (barras), horas por área (barras), horas por fecha (línea o barras apiladas por categoría), Día vs Noche,
+registros con 0 horas por equipo y la tabla de saltos de horómetro.
 
 La carga del Excel la hace la web (ADMIN y JEFE_TURNO) con `POST /dashboards/cargas/previsualizar` y
 `POST /dashboards/cargas`; del archivo solo se lee la hoja "Base de datos".
