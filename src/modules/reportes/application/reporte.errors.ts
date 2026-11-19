@@ -10,6 +10,7 @@ export type ReporteErrorCode =
   | 'CARGA_EXISTENTE'
   | 'CARGA_SIMULTANEA'
   | 'CARGA_NO_ENCONTRADA'
+  | 'USUARIO_SIN_CUENTA_REPORTES'
   | 'DASHBOARD_INVALIDO'
   | 'METABASE_NO_CONFIGURADO'
   | 'METABASE_NO_DISPONIBLE';
@@ -36,6 +37,12 @@ export const reporteError = (code: ReporteErrorCode, errores?: ErrorFilaEp[]) =>
       return new ConflictException({ statusCode: 409, code, message: 'Otra persona cargó ese mes al mismo tiempo. Revisa y vuelve a intentarlo' });
     case 'CARGA_NO_ENCONTRADA':
       return new NotFoundException({ statusCode: 404, code, message: 'Ese mes no tiene un estado de pago cargado' });
+    case 'USUARIO_SIN_CUENTA_REPORTES':
+      return new ConflictException({
+        statusCode: 409,
+        code,
+        message: 'Tu usuario no existe en la base de los dashboards: pide que lo creen allá con el mismo correo',
+      });
     case 'DASHBOARD_INVALIDO':
       return new BadRequestException({ statusCode: 400, code, message: 'El dashboard debe ser operacion o estado-pago' });
     case 'METABASE_NO_CONFIGURADO':

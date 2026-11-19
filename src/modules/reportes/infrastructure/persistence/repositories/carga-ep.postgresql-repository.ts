@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { ConexionReportes } from '../conexion-reportes';
 import type { CargaEp, CargaEpRepositoryPort, NuevaCargaEp } from '../../../domain/repositories/carga-ep.repository.port';
 
 interface FilaCarga {
@@ -37,31 +37,48 @@ const esCargaDuplicada = (error: unknown) => {
   return (e?.code ?? e?.driverError?.code) === '23505';
 };
 
+// Las cargas van en la base de reportes (ConexionReportes, que puede no ser la principal); la flota y los usuarios de
+// la sesión, en la principal
 @Injectable()
 export class CargaEpPostgresqlRepository implements CargaEpRepositoryPort {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(private readonly conexion: ConexionReportes) {}
 
   async listarVigentes(): Promise<CargaEp[]> {
-    const filas: FilaCarga[] = await this.dataSource.query(`${SELECT_CARGA} WHERE c.vigente ORDER BY c.periodo DESC`);
+    const dataSource = await this.conexion.dataSource();
+    const filas: FilaCarga[] = await dataSource.query(`${SELECT_CARGA} WHERE c.vigente ORDER BY c.periodo DESC`);
     return filas.map(aCarga);
   }
 
   async buscarVigente(periodo: string): Promise<CargaEp | null> {
-    const [fila]: FilaCarga[] = await this.dataSource.query(`${SELECT_CARGA} WHERE c.vigente AND c.periodo = $1::date`, [`${periodo}-01`]);
+    const dataSource = await this.conexion.dataSource();
+    const [fila]: FilaCarga[] = await dataSource.query(`${SELECT_CARGA} WHERE c.vigente AND c.periodo = $1::date`, [`${periodo}-01`]);
     return fila ? aCarga(fila) : null;
   }
 
   async equiposConocidos(codigos: string[]): Promise<string[]> {
-    const filas: { nombre: string }[] = await this.dataSource.query(`SELECT nombre FROM maquina WHERE UPPER(nombre) = ANY($1::text[])`, [
+    const filas: { nombre: string }[] = await this.conexion.principal.query(`SELECT nombre FROM maquina WHERE UPPER(nombre) = ANY($1::text[])`, [
       codigos.map((c) => c.toUpperCase()),
     ]);
     return filas.map((f) => f.nombre);
   }
 
+  async usuarioDeCarga(idUsuario: number): Promise<number | null> {
+    if (!this.conexion.separada) return idUsuario;
+    const [usuario]: { email: string }[] = await this.conexion.principal.query(`SELECT email FROM usuario WHERE id_usuario = $1`, [idUsuario]);
+    if (!usuario) return null;
+    const dataSource = await this.conexion.dataSource();
+    const [enReportes]: { id_usuario: number }[] = await dataSource.query(
+      `SELECT id_usuario FROM usuario WHERE LOWER(email) = LOWER($1) ORDER BY id_usuario LIMIT 1`,
+      [usuario.email],
+    );
+    return enReportes?.id_usuario ?? null;
+  }
+
   async reemplazar(nueva: NuevaCargaEp): Promise<CargaEp | null> {
+    const dataSource = await this.conexion.dataSource();
     let idCarga: number;
     try {
-      idCarga = await this.dataSource.transaction(async (manager) => {
+      idCarga = await dataSource.transaction(async (manager) => {
         await manager.query(`UPDATE reportes.carga SET vigente = FALSE WHERE periodo = $1::date AND vigente`, [`${nueva.periodo}-01`]);
         const [{ id_carga }]: { id_carga: number }[] = await manager.query(
           `INSERT INTO reportes.carga (periodo, fecha_desde, fecha_hasta, archivo, hash_sha256, filas, subido_por)
@@ -101,7 +118,7 @@ export class CargaEpPostgresqlRepository implements CargaEpRepositoryPort {
       throw error;
     }
 
-    const [fila]: FilaCarga[] = await this.dataSource.query(`${SELECT_CARGA} WHERE c.id_carga = $1`, [idCarga]);
+    const [fila]: FilaCarga[] = await dataSource.query(`${SELECT_CARGA} WHERE c.id_carga = $1`, [idCarga]);
     return aCarga(fila);
   }
 }

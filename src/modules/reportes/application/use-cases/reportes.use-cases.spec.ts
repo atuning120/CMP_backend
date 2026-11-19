@@ -40,6 +40,7 @@ const crear = (lectura: LecturaExcelEp | null, existente: CargaEp | null = null)
     listarVigentes: jest.fn(async () => [cargaJunio]),
     buscarVigente: jest.fn(async () => existente),
     equiposConocidos: jest.fn(async (codigos: string[]) => codigos.filter((c) => c !== 'MA999')),
+    usuarioDeCarga: jest.fn(async (idUsuario: number): Promise<number | null> => idUsuario),
     reemplazar: jest.fn(async () => cargaJunio as CargaEp | null),
   } satisfies CargaEpRepositoryPort;
   const firmador = {
@@ -151,6 +152,19 @@ describe('Carga del Excel del estado de pago', () => {
 
     cargaRepo.reemplazar.mockResolvedValueOnce(null);
     expect(await codigoDe(confirmar.execute({ ...solicitud, idUsuario: 3, reemplazar: true }))).toBe('CARGA_SIMULTANEA');
+  });
+
+  it('con la base de reportes separada, la carga queda a nombre del usuario de esa base (o se rechaza si no existe)', async () => {
+    const { confirmar, cargaRepo } = crear(lecturaValida);
+    cargaRepo.usuarioDeCarga.mockResolvedValueOnce(41);
+    await confirmar.execute({ ...solicitud, idUsuario: 3 });
+    expect(cargaRepo.usuarioDeCarga).toHaveBeenCalledWith(3);
+    expect(cargaRepo.reemplazar).toHaveBeenCalledWith(expect.objectContaining({ idUsuario: 41 }));
+
+    cargaRepo.reemplazar.mockClear();
+    cargaRepo.usuarioDeCarga.mockResolvedValueOnce(null);
+    expect(await codigoDe(confirmar.execute({ ...solicitud, idUsuario: 3 }))).toBe('USUARIO_SIN_CUENTA_REPORTES');
+    expect(cargaRepo.reemplazar).not.toHaveBeenCalled();
   });
 
   it('un Excel sin filas no se confirma', async () => {

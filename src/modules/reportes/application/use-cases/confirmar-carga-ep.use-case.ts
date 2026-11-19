@@ -29,6 +29,8 @@ export class ConfirmarCargaEpUseCase {
       throw reporteError('EXCEL_CON_ERRORES', [{ fila: null, mensaje: 'La hoja "Base de datos" no tiene filas' }]);
     }
     if (resumen.cargaExistente && !dto.reemplazar) throw reporteError('CARGA_EXISTENTE');
+    const idUsuario = await this.cargaRepo.usuarioDeCarga(dto.idUsuario);
+    if (idUsuario === null) throw reporteError('USUARIO_SIN_CUENTA_REPORTES');
 
     const carga = await this.cargaRepo.reemplazar({
       periodo: resumen.periodo,
@@ -36,7 +38,7 @@ export class ConfirmarCargaEpUseCase {
       fechaHasta: resumen.fechaHasta,
       archivo: resumen.archivo,
       hashSha256: resumen.hashSha256,
-      idUsuario: dto.idUsuario,
+      idUsuario,
       registros: resumen.registros,
     });
     if (!carga) throw reporteError('CARGA_SIMULTANEA');
