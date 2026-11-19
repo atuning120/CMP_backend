@@ -441,7 +441,7 @@ FROM reportes.carga c
 WHERE c.vigente;
 
 -- Filas del Excel de las cargas vigentes con la misma estructura que la hoja "Base de datos" del EP (mismos nombres y
--- orden de columnas), más "Turno" (Día de 06:00 a 16:59, Noche el resto) e id_carga (filtro bloqueado del dashboard).
+-- orden de columnas), más "Turno" (Día si empieza de 08:00 a 19:59, Noche de 20:00 a 07:59) e id_carga (filtro bloqueado del dashboard).
 -- En SQL los nombres van entre comillas dobles: "N° Interno"
 CREATE OR REPLACE VIEW reportes.v_horas_excel AS
 SELECT r.id_excel          AS "ID",
@@ -456,7 +456,7 @@ SELECT r.id_excel          AS "ID",
        r.area              AS "Area",
        CASE
            WHEN r.hora_inicio IS NULL THEN NULL
-           WHEN r.hora_inicio >= TIME '06:00' AND r.hora_inicio < TIME '17:00' THEN 'Día'
+           WHEN r.hora_inicio >= TIME '08:00' AND r.hora_inicio < TIME '20:00' THEN 'Día'
            ELSE 'Noche'
        END::VARCHAR(5)     AS "Turno",
        c.id_carga
@@ -477,7 +477,7 @@ FROM (
            r.hora_inicio       AS "Hora Inicio",
            CASE
                WHEN r.hora_inicio IS NULL THEN NULL
-               WHEN r.hora_inicio >= TIME '06:00' AND r.hora_inicio < TIME '17:00' THEN 'Día'
+               WHEN r.hora_inicio >= TIME '08:00' AND r.hora_inicio < TIME '20:00' THEN 'Día'
                ELSE 'Noche'
            END::VARCHAR(5)     AS "Turno",
            r.area              AS "Area",

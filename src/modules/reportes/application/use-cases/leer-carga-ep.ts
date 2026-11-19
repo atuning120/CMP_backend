@@ -61,7 +61,7 @@ const diaUtc = (valor: unknown): number | null => {
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 
-// El EP no calza con el mes calendario (el de junio va del 25-05 al 25-06), pero tiene que cruzar ese mes
+// El EP no calza con el mes calendario (el de octubre 2026 va del 25-09 al 26-10), pero tiene que cruzar ese mes
 const leerRango = (desde: unknown, hasta: unknown, periodo: string) => {
   const ini = diaUtc(desde);
   const fin = diaUtc(hasta);

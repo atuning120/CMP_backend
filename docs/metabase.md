@@ -123,7 +123,26 @@ credenciales que Metabase guarda; si se pierde hay que volver a ingresar la cont
    - Filtros de equipo, categoría o fecha que el usuario puede tocar: **Editable**.
    Publicar de nuevo después de cambiar los parámetros. Los gráficos se pueden editar sin volver a publicar.
 
-## 6. Dashboards previstos
+## 6. Base separada para las cargas del EP (temporal)
+
+Mientras Metabase lee la base de desarrollo (Aiven) para diseñar los dashboards, `cmp-backend` guarda las cargas del
+Excel del EP en esa misma base, para que la web de producción y Metabase vean las mismas cargas. Solo el módulo de
+dashboards (`ConexionReportes`): el resto del Backend sigue en `cmp_db`.
+
+| Variable | Valor |
+|---|---|
+| `REPORTES_DB_HOST`, `REPORTES_DB_PORT`, `REPORTES_DB_NAME`, `REPORTES_DB_USER` | los de Aiven |
+| `REPORTES_DB_PASSWORD` | contraseña de Aiven (como secret) |
+| `REPORTES_DB_SSL` | `true` |
+| `REPORTES_DB_SSL_CA` | CA del proyecto de Aiven (`ca.pem`) en una línea con `\n`, como secret |
+
+- Quien sube el EP debe existir en Aiven con el mismo correo (la carga queda a nombre de ese usuario); si no, 409
+  `USUARIO_SIN_CUENTA_REPORTES`. El aviso "no está en la flota" se revisa contra `cmp_db`.
+- La base de Aiven debe tener las migraciones 021 y 022.
+- Para volver a la normalidad (antes del piloto): apuntar Metabase a `cmp_db` y quitar las `REPORTES_DB_*`. Las
+  cargas hechas en Aiven no pasan solas a `cmp_db`: volver a subir los EP.
+
+## 7. Dashboards previstos
 
 | Dashboard | Fuente | Filtros |
 |---|---|---|
@@ -137,7 +156,7 @@ pasó por varias áreas).
 `v_horas_excel` tiene la misma estructura que la hoja "Base de datos" del EP desde el #08 (migración 022): `ID`,
 `Equipo` (Bulldozer, Cargador Frontal...), `N° Interno` (código de la máquina), `Codigo Report`, `Fecha` (jornada del
 EP), `Hora Inicio`, `Horometro Inicial`, `Horometro Final`, `Diferencia` (horas), `Area` (texto del contratista: "Area
-55", "Tacho", "Otros"), y al final `Turno` (Día si empieza de 06:00 a 16:59, Noche el resto) e `id_carga` (el filtro
+55", "Tacho", "Otros"), y al final `Turno` (Día si empieza de 08:00 a 19:59, Noche de 20:00 a 07:59) e `id_carga` (el filtro
 bloqueado). `v_horometros_excel` usa los mismos nombres y agrega `Horometro Final Anterior` y `Salto`: lista los
 registros cuyo horómetro inicial no calza con el final del registro anterior del mismo equipo. En preguntas SQL los
 nombres van entre comillas dobles: `SELECT "N° Interno", SUM("Diferencia") FROM reportes.v_horas_excel ...`.

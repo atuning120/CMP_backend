@@ -1,7 +1,9 @@
 -- v_horas_excel con la misma estructura que la hoja "Base de datos" del EP: mismas columnas, mismos nombres y mismo
 -- orden (ID, Equipo, N° Interno, Codigo Report, Fecha, Hora Inicio, Horometro Inicial, Horometro Final, Diferencia,
--- Area). Al final van dos columnas que no están en el Excel: "Turno" (Día de 06:00 a 16:59, Noche el resto) e
--- id_carga (el filtro bloqueado del dashboard: la web elige el EP con él).
+-- Area). Al final van dos columnas que no están en el Excel: "Turno" según la hora de inicio (Día de 08:00 a 19:59,
+-- Noche de 20:00 a 07:59) e id_carga (el filtro bloqueado del dashboard: la web elige el EP con él).
+-- Versión del 2026-11-19: el turno de día va de 08:00 a 20:00 (antes 06:00 a 17:00). Si la aplicaste antes, vuelve a
+-- ejecutarla entera: es idempotente y solo recrea las views.
 -- 1. carga_registro guarda la columna "ID" del Excel (id_excel). Las cargas subidas antes quedan con ID vacío: volver
 --    a subirlas para tenerlo.
 -- 2. v_horas_excel y v_horometros_excel se vuelven a crear (cambian los nombres de columna) con los nombres del Excel.
@@ -32,7 +34,7 @@ SELECT r.id_excel          AS "ID",
        r.area              AS "Area",
        CASE
            WHEN r.hora_inicio IS NULL THEN NULL
-           WHEN r.hora_inicio >= TIME '06:00' AND r.hora_inicio < TIME '17:00' THEN 'Día'
+           WHEN r.hora_inicio >= TIME '08:00' AND r.hora_inicio < TIME '20:00' THEN 'Día'
            ELSE 'Noche'
        END::VARCHAR(5)     AS "Turno",
        c.id_carga
@@ -53,7 +55,7 @@ FROM (
            r.hora_inicio       AS "Hora Inicio",
            CASE
                WHEN r.hora_inicio IS NULL THEN NULL
-               WHEN r.hora_inicio >= TIME '06:00' AND r.hora_inicio < TIME '17:00' THEN 'Día'
+               WHEN r.hora_inicio >= TIME '08:00' AND r.hora_inicio < TIME '20:00' THEN 'Día'
                ELSE 'Noche'
            END::VARCHAR(5)     AS "Turno",
            r.area              AS "Area",

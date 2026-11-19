@@ -19,7 +19,7 @@ export interface RegistroEp {
 export interface CargaEp {
   idCarga: number;
   periodo: string; // YYYY-MM
-  fechaDesde: string; // YYYY-MM-DD: rango que cubre el EP (p. ej. del 25-05 al 25-06)
+  fechaDesde: string; // YYYY-MM-DD: rango que cubre el EP (p. ej. del 25-09 al 26-10)
   fechaHasta: string;
   archivo: string;
   filas: number;
@@ -43,6 +43,9 @@ export interface CargaEpRepositoryPort {
   buscarVigente(periodo: string): Promise<CargaEp | null>;
   // De los códigos recibidos, los que existen como máquina (comparados sin distinguir mayúsculas)
   equiposConocidos(codigos: string[]): Promise<string[]>;
+  // Id con que el usuario de la sesión queda como autor de la carga. Si las cargas viven en otra base (temporal, ver
+  // ConexionReportes) es el usuario de esa base con el mismo correo; null si allá no existe
+  usuarioDeCarga(idUsuario: number): Promise<number | null>;
   // En una transacción: deja la carga vigente del mes como reemplazada y guarda la nueva con sus filas. null si otra
   // carga del mismo mes se confirmó al mismo tiempo
   reemplazar(nueva: NuevaCargaEp): Promise<CargaEp | null>;
