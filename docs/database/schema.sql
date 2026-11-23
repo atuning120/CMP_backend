@@ -317,6 +317,20 @@ CREATE TABLE REFRESH_TOKEN (
 
 CREATE INDEX idx_refresh_token_usuario ON REFRESH_TOKEN(id_usuario);
 
+-- Historial de versiones de la app móvil para la página pública de descarga (migración 023). Archivos en el
+-- contenedor privado "apk" de Azure Blob Storage
+CREATE TABLE VERSION_APP (
+    id_version_app  SERIAL PRIMARY KEY,
+    version         VARCHAR(20) NOT NULL UNIQUE CHECK (version ~ '^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$'), -- "1.4.0", el version de app.json
+    notas           TEXT NOT NULL DEFAULT '', -- novedades de la versión, se muestran en la página pública
+    archivo         VARCHAR(200) NOT NULL UNIQUE, -- nombre del blob en el contenedor "apk"
+    tamano_bytes    BIGINT NOT NULL CHECK (tamano_bytes > 0),
+    publicada       BOOLEAN NOT NULL DEFAULT TRUE, -- false: retirada
+    subida_por      INT NULL,
+    subida_en       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_version_app_usuario FOREIGN KEY (subida_por) REFERENCES USUARIO(id_usuario) ON DELETE SET NULL
+);
+
 -- Reportes para Metabase (migraciones 016, 017 y 020 a 022): carga mensual del Excel del EP del contratista y views que
 -- leen los dashboards. Los usuarios de Postgres de Metabase (metabase_app, metabase_lector) se crean con la migración
 -- 016, no aquí; la 021 deja a metabase_lector viendo solo las views.
@@ -441,7 +455,8 @@ FROM reportes.carga c
 WHERE c.vigente;
 
 -- Filas del Excel de las cargas vigentes con la misma estructura que la hoja "Base de datos" del EP (mismos nombres y
--- orden de columnas), más "Turno" (Día si empieza de 08:00 a 19:59, Noche de 20:00 a 07:59) e id_carga (filtro bloqueado del dashboard).
+-- orden de columnas), más "Horas Dia" y "Horas Noche" (la Diferencia repartida por reloj desde la hora de inicio, día de
+-- 08:00 a 20:00) e id_carga (filtro bloqueado del dashboard).
 -- En SQL los nombres van entre comillas dobles: "N° Interno"
 CREATE OR REPLACE VIEW reportes.v_horas_excel AS
 SELECT r.id_excel          AS "ID",
@@ -454,20 +469,33 @@ SELECT r.id_excel          AS "ID",
        r.horometro_final   AS "Horometro Final",
        r.horas             AS "Diferencia",
        r.area              AS "Area",
-       CASE
-           WHEN r.hora_inicio IS NULL THEN NULL
-           WHEN r.hora_inicio >= TIME '08:00' AND r.hora_inicio < TIME '20:00' THEN 'Día'
-           ELSE 'Noche'
-       END::VARCHAR(5)     AS "Turno",
+       ROUND(t.dia, 2)     AS "Horas Dia",
+       r.horas - ROUND(t.dia, 2) AS "Horas Noche", -- así Horas Dia + Horas Noche = Diferencia siempre
        c.id_carga
 FROM reportes.carga_registro r
 JOIN reportes.carga c ON c.id_carga = r.id_carga AND c.vigente
+-- inicio: hora de inicio en horas (18:30 → 18.5); resto: Diferencia sin los días completos (cada día completo suma 12 y 12)
+CROSS JOIN LATERAL (
+    SELECT EXTRACT(EPOCH FROM r.hora_inicio)::NUMERIC / 3600 AS inicio,
+           r.horas - 24 * FLOOR(r.horas / 24)                AS resto
+) h
+-- dia: horas de [inicio, inicio + Diferencia] que caen de 08:00 a 20:00, de ese día (8 a 20) o del siguiente (32 a 44).
+-- Sin hora de inicio no se puede repartir (NULL); con Diferencia 0 o negativa todo va al turno de la hora de inicio
+CROSS JOIN LATERAL (
+    SELECT CASE
+               WHEN r.hora_inicio IS NULL THEN NULL
+               WHEN r.horas <= 0 THEN CASE WHEN h.inicio >= 8 AND h.inicio < 20 THEN r.horas ELSE 0 END
+               ELSE 12 * FLOOR(r.horas / 24)
+                    + GREATEST(0, LEAST(h.inicio + h.resto, 20) - GREATEST(h.inicio, 8))
+                    + GREATEST(0, LEAST(h.inicio + h.resto, 44) - GREATEST(h.inicio, 32))
+           END AS dia
+) t
 ORDER BY c.id_carga, r.fila; -- mismo orden que el Excel al explorar la tabla en Metabase
 
 -- Registros cuyo horómetro inicial no calza con el final del registro anterior del mismo equipo, o que terminan antes
 -- de empezar. Encadenados por horómetro inicial: el turno de noche de la jornada D va antes que el de día
 CREATE OR REPLACE VIEW reportes.v_horometros_excel AS
-SELECT "ID", "Equipo", "N° Interno", "Fecha", "Hora Inicio", "Turno", "Area",
+SELECT "ID", "Equipo", "N° Interno", "Fecha", "Hora Inicio", "Area",
        "Horometro Inicial", "Horometro Final", "Horometro Final Anterior", "Salto", id_carga
 FROM (
     SELECT r.id_excel          AS "ID",
@@ -475,11 +503,6 @@ FROM (
            r.equipo            AS "N° Interno",
            r.fecha             AS "Fecha",
            r.hora_inicio       AS "Hora Inicio",
-           CASE
-               WHEN r.hora_inicio IS NULL THEN NULL
-               WHEN r.hora_inicio >= TIME '08:00' AND r.hora_inicio < TIME '20:00' THEN 'Día'
-               ELSE 'Noche'
-           END::VARCHAR(5)     AS "Turno",
            r.area              AS "Area",
            r.horometro_inicial AS "Horometro Inicial",
            r.horometro_final   AS "Horometro Final",

@@ -35,6 +35,16 @@ erDiagram
         timestamptz expira_en
         timestamptz revocado_en "null si vigente"
     }
+    VERSION_APP {
+        int id_version_app PK
+        string version UK "1.4.0"
+        text notas
+        string archivo UK "blob en el contenedor apk"
+        bigint tamano_bytes
+        boolean publicada "false = retirada"
+        int subida_por FK
+        timestamptz subida_en
+    }
     OPERADOR {
         int id_operador PK
         string nombre
@@ -231,6 +241,7 @@ erDiagram
     USUARIO |o--o| OPERADOR : "se vincula a"
     USUARIO ||--o{ AUDITORIA_GEOCERCA : "realiza"
     USUARIO ||--o{ REFRESH_TOKEN : "mantiene sesiones"
+    USUARIO |o--o{ VERSION_APP : "publica"
     USUARIO |o--o{ AREA : "modifica"
     USUARIO |o--o{ ZONA_TRABAJO : "modifica"
     USUARIO |o--o{ ALERTA : "atiende"
@@ -277,6 +288,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `DISPOSITIVO_GPS` | Equipo de telemetría | `imei` UNIQUE |
 | `BITACORA_JEFE_TURNO` | Acciones del jefe de turno sobre la flota con motivo y observación; junto con `TURNO` forma el historial | `accion` ∈ `INCORPORAR`, `EDITAR`, `HABILITAR`, `DESHABILITAR`, `CAMBIAR_ESTADO`, `REEMPLAZAR`, `DEVOLVER`; `motivo` obligatorio; `detalle` JSONB |
 | `REFRESH_TOKEN` | Sesiones de la app móvil (un registro por emisión; se rotan en cada `/auth/refresh`) | `token_hash` UNIQUE (nunca se guarda el token en claro); `revocado_en` NULL = vigente |
+| `VERSION_APP` | Historial de versiones de la app móvil para la página pública de descarga (migración `023`); el archivo vive en el contenedor privado `apk` de Azure Blob | `version` UNIQUE con formato `N.N.N`; `archivo` UNIQUE; `publicada` = FALSE: retirada (no se muestra ni se descarga) |
 | `ESTADO_OPERACIONAL` | Catálogo de estados del turno (con `descripcion` para la app) | `categoria` ∈ `PRODUCTIVO`, `DEMORA`, `MANTENCION`; `activo` default `TRUE` |
 
 ### Maquinaria, telemetría y alertas
@@ -308,7 +320,7 @@ Metabase lee solo las views de este schema con el usuario `metabase_lector` (mig
 | `carga` | Excel del estado de pago (EP) subido para un mes | `periodo` = primer día del mes; `fecha_desde`/`fecha_hasta` = rango real del EP (p. ej. 25-05 al 25-06); un solo `vigente` por `periodo`; el archivo original no se guarda (trae datos personales), solo nombre y `hash_sha256` |
 | `carga_registro` | Filas de la hoja "Base de datos" del Excel (horas por equipo) | formato del EP desde el #08: `equipo` = "N° Interno" (código interno, `MAQUINA.nombre`), `categoria` = "Equipo" (tipo), `area` = "Area" (texto libre del contratista, no se cruza con `AREA`); `id_excel` = "ID"; `fila` = fila del Excel |
 | `v_horas_app` / `v_estados_app` | Horas por turno y área / tiempo por estado operacional, en vivo | las horas de un turno con varias áreas se reparten según el tiempo en cada una; `jornada` = día del EP (migración `017`): en el Excel la jornada D empieza con el turno de noche de la tarde del día D-1, así que un turno que empieza a las 12:00 o después cuenta para el día siguiente |
-| `v_horas_excel` | Filas del Excel de las cargas vigentes, con los mismos nombres y orden de columnas que la hoja "Base de datos" (migración `022`; la comparación con la app se eliminó en la `021`) | columnas entre comillas (`"N° Interno"`); al final `"Turno"` (Día si empieza de 08:00 a 19:59, Noche de 20:00 a 07:59) e `id_carga` |
+| `v_horas_excel` | Filas del Excel de las cargas vigentes, con los mismos nombres y orden de columnas que la hoja "Base de datos" (migración `022`; la comparación con la app se eliminó en la `021`) | columnas entre comillas (`"N° Interno"`); al final `"Horas Dia"` y `"Horas Noche"` (la Diferencia repartida por reloj desde la hora de inicio; suman la Diferencia) e `id_carga` |
 | `v_horometros_excel` / `v_cargas` | Horómetros del Excel que no cuadran / cargas vigentes con etiqueta para el filtro | horómetros encadenados por horómetro inicial (no por fecha: el turno de noche de la jornada D va antes que el de día) |
 
 ## Relaciones (foreign keys)
@@ -317,6 +329,7 @@ Metabase lee solo las views de este schema con el usuario `metabase_lector` (mig
 |---|---|---|---|
 | `fk_usuario_operador` | `USUARIO.id_operador` | `OPERADOR.id_operador` | SET NULL |
 | `fk_refresh_usuario` | `REFRESH_TOKEN.id_usuario` | `USUARIO.id_usuario` | CASCADE |
+| `fk_version_app_usuario` | `VERSION_APP.subida_por` | `USUARIO.id_usuario` | SET NULL |
 | `fk_area_usuario` | `AREA.modificado_por` | `USUARIO.id_usuario` | SET NULL |
 | `fk_zona_area` | `ZONA_TRABAJO.id_area` | `AREA.id_area` | CASCADE |
 | `fk_zona_usuario` | `ZONA_TRABAJO.modificado_por` | `USUARIO.id_usuario` | SET NULL |

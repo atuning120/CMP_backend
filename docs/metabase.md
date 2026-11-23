@@ -147,7 +147,7 @@ dashboards (`ConexionReportes`): el resto del Backend sigue en `cmp_db`.
 | Dashboard | Fuente | Filtros |
 |---|---|---|
 | **Operación** (en vivo, no depende del Excel) | `v_horas_app`, `v_estados_app` | Fecha (rango), categoría, equipo |
-| **Estado de pago** (solo el Excel del contratista, no se compara con la app) | `v_horas_excel`, `v_horometros_excel` | `id_carga` (bloqueado), categoría, equipo, área, turno |
+| **Estado de pago** (solo el Excel del contratista, no se compara con la app) | `v_horas_excel`, `v_horometros_excel` | `id_carga` (bloqueado), categoría, equipo, área |
 
 Desde la migración 021 Metabase solo ve las views (`v_cargas`, `v_horas_excel`, `v_horometros_excel`, `v_horas_app`,
 `v_estados_app`), no las tablas base. Sumar siempre `horas`, no los horómetros (en `v_horas_app` se repiten si el turno
@@ -156,13 +156,15 @@ pasó por varias áreas).
 `v_horas_excel` tiene la misma estructura que la hoja "Base de datos" del EP desde el #08 (migración 022): `ID`,
 `Equipo` (Bulldozer, Cargador Frontal...), `N° Interno` (código de la máquina), `Codigo Report`, `Fecha` (jornada del
 EP), `Hora Inicio`, `Horometro Inicial`, `Horometro Final`, `Diferencia` (horas), `Area` (texto del contratista: "Area
-55", "Tacho", "Otros"), y al final `Turno` (Día si empieza de 08:00 a 19:59, Noche de 20:00 a 07:59) e `id_carga` (el filtro
-bloqueado). `v_horometros_excel` usa los mismos nombres y agrega `Horometro Final Anterior` y `Salto`: lista los
+55", "Tacho", "Otros"), y al final `Horas Dia` y `Horas Noche` (la `Diferencia`
+repartida por reloj desde la hora de inicio, día de 08:00 a 20:00: 18:00 con 7 h = 2 h de día y 5 h de noche; siempre
+suman la `Diferencia`; sin hora de inicio quedan vacías) e `id_carga` (el filtro bloqueado). `Diferencia` son horas de
+horómetro, no la duración real del turno: el reparto es una aproximación. `v_horometros_excel` usa los mismos nombres y agrega `Horometro Final Anterior` y `Salto`: lista los
 registros cuyo horómetro inicial no calza con el final del registro anterior del mismo equipo. En preguntas SQL los
 nombres van entre comillas dobles: `SELECT "N° Interno", SUM("Diferencia") FROM reportes.v_horas_excel ...`.
 
 Tarjetas sugeridas del dashboard de estado de pago: horas totales y registros (números), horas por N° Interno y por
-Equipo (barras), horas por área (barras), horas por fecha (línea o barras apiladas por categoría), Día vs Noche,
+Equipo (barras), horas por área (barras), horas por fecha (línea o barras apiladas por categoría), Día vs Noche (suma de `Horas Dia` y `Horas Noche`),
 registros con 0 horas por equipo y la tabla de saltos de horómetro.
 
 La carga del Excel la hace la web (ADMIN y JEFE_TURNO) con `POST /dashboards/cargas/previsualizar` y
