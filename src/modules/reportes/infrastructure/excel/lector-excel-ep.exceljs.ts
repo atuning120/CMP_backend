@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Workbook } from 'exceljs';
 import type { CellValue, Row, Worksheet } from 'exceljs';
-import type { RegistroEp } from '../../domain/repositories/carga-ep.repository.port';
+import type { RegistroEp, TarifaEp, TipoTarifaEp } from '../../domain/repositories/carga-ep.repository.port';
 import type { ErrorFilaEp, LecturaExcelEp, LectorExcelEpPort } from '../../domain/ports/lector-excel-ep.port';
 
 const HOJA = 'base de datos';
@@ -30,6 +30,29 @@ const ENCABEZADOS: Record<Campo, string[]> = {
 const OBLIGATORIOS: Campo[] = ['equipo', 'fecha', 'horas'];
 
 const LARGO_MAXIMO: Partial<Record<Campo, number>> = { equipo: 50, categoria: 50, codigoReport: 30, area: 100 };
+
+// Hoja "EP #08 MLC": el número cambia con cada EP (el archivo "EP #08 MLC 10.2026.xlsx" trae la hoja "EP #08 MLC").
+// De ella solo se leen las tablas de tarifas (columnas A a F, bajo el encabezado ITEM | DESCRIPCION | ... | TOTAL)
+const HOJA_TARIFAS = /^ep\s*#\s*\d+/;
+const FILAS_PARA_BUSCAR_ENCABEZADO_TARIFAS = 30;
+type CampoTarifa = 'item' | 'descripcion' | 'unidad' | 'cantidad' | 'precioUnitario' | 'total';
+const ENCABEZADOS_TARIFA: Record<CampoTarifa, string[]> = {
+  item: ['item'],
+  descripcion: ['descripcion'],
+  unidad: ['unidad'],
+  cantidad: ['cantidad'],
+  precioUnitario: ['p. unitario', 'p.unitario', 'p unitario', 'precio unitario'],
+  total: ['total'],
+};
+const OBLIGATORIOS_TARIFA: CampoTarifa[] = ['item', 'descripcion', 'cantidad', 'total'];
+// Título de cada tabla (columna DESCRIPCION, con el número de sección en ITEM: "1 | TARIFAS GARANTIZADAS")
+const TABLAS_TARIFA: { titulo: string; tipo: TipoTarifaEp; nombre: string }[] = [
+  { titulo: 'tarifas garantizadas', tipo: 'GARANTIZADA', nombre: 'Tarifas garantizadas' },
+  { titulo: 'tarifas diferenciadas', tipo: 'DIFERENCIADA', nombre: 'Tarifas diferenciadas' },
+];
+const LARGO_MAXIMO_TARIFA = { item: 10, descripcion: 100, unidad: 20 };
+const ITEM_SECCION = /^\d+$/; // "1", "2": título de una tabla
+const ITEM_FILA = /^\d+(\.\d+)+$/; // "1.1", "2.4": fila de una tabla
 
 const normalizar = (texto: string) =>
   texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -105,18 +128,24 @@ const hora = (valor: ReturnType<typeof valorDe>): string | null | undefined => {
   return undefined;
 };
 
-const buscarEncabezado = (hoja: Worksheet): { fila: number; columnas: Partial<Record<Campo, number>> } | null => {
-  for (let n = 1; n <= Math.min(FILAS_PARA_BUSCAR_ENCABEZADO, hoja.rowCount); n++) {
-    const columnas: Partial<Record<Campo, number>> = {};
+// Primera fila (de las primeras `filas`) que tiene todos los encabezados obligatorios, con la columna de cada campo
+const buscarEncabezado = <C extends string>(
+  hoja: Worksheet,
+  encabezados: Record<C, string[]>,
+  obligatorios: C[],
+  filas: number,
+): { fila: number; columnas: Partial<Record<C, number>> } | null => {
+  for (let n = 1; n <= Math.min(filas, hoja.rowCount); n++) {
+    const columnas: Partial<Record<C, number>> = {};
     hoja.getRow(n).eachCell((celda, columna) => {
       const t = texto(valorDe(celda.value));
       if (!t) return;
       const encabezado = normalizar(t);
-      for (const campo of Object.keys(ENCABEZADOS) as Campo[]) {
-        if (columnas[campo] === undefined && ENCABEZADOS[campo].includes(encabezado)) columnas[campo] = columna;
+      for (const campo of Object.keys(encabezados) as C[]) {
+        if (columnas[campo] === undefined && encabezados[campo].includes(encabezado)) columnas[campo] = columna;
       }
     });
-    if (OBLIGATORIOS.every((campo) => columnas[campo] !== undefined)) return { fila: n, columnas };
+    if (obligatorios.every((campo) => columnas[campo] !== undefined)) return { fila: n, columnas };
   }
   return null;
 };
@@ -163,6 +192,104 @@ const leerFila = (fila: Row, columnas: Partial<Record<Campo, number>>): { regist
   };
 };
 
+const leerBaseDeDatos = (libro: Workbook): { registros: RegistroEp[]; errores: ErrorFilaEp[] } => {
+  const hoja = libro.worksheets.find((h) => normalizar(h.name) === HOJA);
+  if (!hoja) return { registros: [], errores: [{ fila: null, mensaje: 'No se encontró la hoja "Base de datos"' }] };
+  const encabezado = buscarEncabezado(hoja, ENCABEZADOS, OBLIGATORIOS, FILAS_PARA_BUSCAR_ENCABEZADO);
+  if (!encabezado) {
+    return {
+      registros: [],
+      errores: [{ fila: null, mensaje: 'La hoja "Base de datos" debe tener las columnas N° Interno, Fecha y Diferencia' }],
+    };
+  }
+
+  const registros: RegistroEp[] = [];
+  const errores: ErrorFilaEp[] = [];
+  for (let n = encabezado.fila + 1; n <= hoja.rowCount; n++) {
+    const resultado = leerFila(hoja.getRow(n), encabezado.columnas);
+    if (resultado.registro) registros.push(resultado.registro);
+    else if (resultado.error) errores.push({ fila: n, mensaje: resultado.error });
+  }
+  return { registros, errores };
+};
+
+const redondear = (n: number) => Math.round(n * 100) / 100;
+
+const leerFilaTarifa = (
+  fila: Row,
+  columnas: Partial<Record<CampoTarifa, number>>,
+  tipo: TipoTarifaEp,
+  item: string,
+): { tarifa?: TarifaEp; error?: string } => {
+  const valor = (campo: CampoTarifa) => (columnas[campo] ? valorDe(fila.getCell(columnas[campo]).value) : null);
+  const descripcion = texto(valor('descripcion'));
+  if (!descripcion) return { error: 'Falta la descripción' };
+  const unidad = texto(valor('unidad'));
+  for (const [campo, t] of Object.entries({ item, descripcion, unidad })) {
+    const maximo = LARGO_MAXIMO_TARIFA[campo as keyof typeof LARGO_MAXIMO_TARIFA];
+    if (t && t.length > maximo) return { error: `El campo ${campo} supera los ${maximo} caracteres` };
+  }
+  const cantidad = numero(valor('cantidad'));
+  if (cantidad === null || cantidad === undefined) return { error: 'Falta la cantidad o no es un número' };
+  const precioUnitario = numero(valor('precioUnitario'));
+  if (precioUnitario === undefined) return { error: 'El precio unitario no es un número' };
+  const total = numero(valor('total'));
+  if (total === undefined) return { error: 'El total no es un número' };
+  return {
+    tarifa: {
+      tipo,
+      fila: fila.number,
+      item,
+      descripcion,
+      unidad,
+      cantidad: redondear(cantidad),
+      precioUnitario: precioUnitario === null ? null : redondear(precioUnitario),
+      total: total === null ? null : redondear(total),
+    },
+  };
+};
+
+// Filas de las tablas "Tarifas garantizadas" y "Tarifas diferenciadas": las que siguen al título de la tabla con un
+// ITEM como "1.1", hasta el título de la siguiente sección ("3 | Camión aljibe"). Del resto de la hoja (otras
+// secciones, totales, firmas) no se lee nada
+const leerTarifas = (libro: Workbook): { tarifas: TarifaEp[]; errores: ErrorFilaEp[] } => {
+  const hoja = libro.worksheets.find((h) => HOJA_TARIFAS.test(normalizar(h.name)));
+  if (!hoja) {
+    return { tarifas: [], errores: [{ fila: null, mensaje: 'No se encontró la hoja del estado de pago ("EP #08 MLC", según el número del EP)' }] };
+  }
+  const error = (mensaje: string, fila?: number): ErrorFilaEp => ({
+    fila: null,
+    mensaje: fila ? `Hoja "${hoja.name}", fila ${fila}: ${mensaje}` : `Hoja "${hoja.name}": ${mensaje}`,
+  });
+  const encabezado = buscarEncabezado(hoja, ENCABEZADOS_TARIFA, OBLIGATORIOS_TARIFA, FILAS_PARA_BUSCAR_ENCABEZADO_TARIFAS);
+  if (!encabezado) return { tarifas: [], errores: [error('debe tener las columnas Item, Descripcion, Cantidad y Total')] };
+  const { columnas } = encabezado;
+  const celda = (n: number, campo: CampoTarifa) => texto(valorDe(hoja.getRow(n).getCell(columnas[campo]!).value));
+
+  const tarifas: TarifaEp[] = [];
+  const errores: ErrorFilaEp[] = [];
+  for (const tabla of TABLAS_TARIFA) {
+    let n = encabezado.fila + 1;
+    while (n <= hoja.rowCount && normalizar(celda(n, 'descripcion') ?? '') !== tabla.titulo) n++;
+    if (n > hoja.rowCount) {
+      errores.push(error(`no tiene la tabla "${tabla.nombre}"`));
+      continue;
+    }
+    const [tarifasAntes, erroresAntes] = [tarifas.length, errores.length];
+    for (n++; n <= hoja.rowCount; n++) {
+      const item = celda(n, 'item');
+      const descripcion = normalizar(celda(n, 'descripcion') ?? '');
+      if ((item && ITEM_SECCION.test(item)) || TABLAS_TARIFA.some((t) => t.titulo === descripcion)) break; // otra sección
+      if (!item || !ITEM_FILA.test(item)) continue; // filas en blanco entre medio
+      const resultado = leerFilaTarifa(hoja.getRow(n), columnas, tabla.tipo, item);
+      if (resultado.tarifa) tarifas.push(resultado.tarifa);
+      else errores.push(error(resultado.error!, n));
+    }
+    if (tarifas.length === tarifasAntes && errores.length === erroresAntes) errores.push(error(`la tabla "${tabla.nombre}" no tiene filas`));
+  }
+  return { tarifas, errores };
+};
+
 @Injectable()
 export class LectorExcelEpExceljs implements LectorExcelEpPort {
   async leer(contenido: Buffer): Promise<LecturaExcelEp | null> {
@@ -173,23 +300,8 @@ export class LectorExcelEpExceljs implements LectorExcelEpPort {
       return null;
     }
 
-    const hoja = libro.worksheets.find((h) => normalizar(h.name) === HOJA);
-    if (!hoja) return { registros: [], errores: [{ fila: null, mensaje: 'No se encontró la hoja "Base de datos"' }] };
-    const encabezado = buscarEncabezado(hoja);
-    if (!encabezado) {
-      return {
-        registros: [],
-        errores: [{ fila: null, mensaje: 'La hoja "Base de datos" debe tener las columnas N° Interno, Fecha y Diferencia' }],
-      };
-    }
-
-    const registros: RegistroEp[] = [];
-    const errores: ErrorFilaEp[] = [];
-    for (let n = encabezado.fila + 1; n <= hoja.rowCount; n++) {
-      const resultado = leerFila(hoja.getRow(n), encabezado.columnas);
-      if (resultado.registro) registros.push(resultado.registro);
-      else if (resultado.error) errores.push({ fila: n, mensaje: resultado.error });
-    }
-    return { registros, errores };
+    const base = leerBaseDeDatos(libro);
+    const { tarifas, errores } = leerTarifas(libro);
+    return { registros: base.registros, tarifas, errores: [...base.errores, ...errores] };
   }
 }

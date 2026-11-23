@@ -1,6 +1,31 @@
 import { Workbook } from 'exceljs';
 import { LectorExcelEpExceljs } from './lector-excel-ep.exceljs';
 
+// Hoja "EP #08 MLC" como la del EP real: encabezado en la fila 9 (con celdas combinadas arriba), las dos tablas de
+// tarifas con su título, otro bloque a la derecha (H a L) que no se lee, la Excavadora diferenciada en 0 como fórmula
+// sin resultado, otras secciones y las firmas
+const hojaEp = (libro: Workbook, nombre = 'EP #08 MLC') => {
+  const hoja = libro.addWorksheet(nombre);
+  hoja.addRow(['CONTRATO Nº 1', 'CONTRATO Nº 1', 'CONTRATO Nº 1']);
+  hoja.addRow([]);
+  hoja.addRow(['ESTADO DE PAGO Nº 08']);
+  hoja.addRow(['ITEM', 'DESCRIPCION', 'UNIDAD', 'CANTIDAD', 'P. UNITARIO', 'TOTAL']); // fila 4
+  hoja.addRow([]);
+  hoja.addRow([1, 'TARIFAS GARANTIZADAS', null, null, null, null, null, 'EQUIPOS', 'CANTIDAD', 'HRS MINIMAS']);
+  hoja.addRow([1.1, 'Cargador Frontal', 'H.M.', { formula: 'L7', result: 600 }, { formula: '1*2', result: 135951.6919 }, { formula: 'E7*D7', result: 81571015 }, null, 'CARGADOR FRONTAL', 3, 540]);
+  hoja.addRow(['1.2', 'Excavadora', 'H.M.', 184.70000000000073, 113277.1322, 20922286]);
+  hoja.addRow([null, null, null, null, null, null, null, null, null, null, null, { formula: 'SUM(L7:L8)', result: 1850.6 }]); // total a la derecha
+  hoja.addRow([2, 'Tarifas Diferenciadas']);
+  hoja.addRow([2.1, 'Cargador Frontal', 'H.M.', 442, 115558.4689, 51076843]);
+  hoja.addRow([2.2, 'Excavadora', 'H.M.', { formula: 'IF(L8-D8<0,0,L8-D8)' }, 96286.0317, { formula: 'ROUND(E12*D12,0)' }]);
+  hoja.addRow([]);
+  hoja.addRow([3, 'Camión aljibe']);
+  hoja.addRow([3.1, 'Costo fijo integral por Camión Aljibe', 'GL', 1, 1303448.286, 1303448.286]);
+  hoja.addRow([null, 'Total Neto Estado de Pago', null, null, null, 251856016]);
+  hoja.addRow([null, 'Persona de Prueba', null, null, 'Otra Persona']); // firmas
+  return hoja;
+};
+
 // Igual que el EP #08 (oct 2026): hojas con datos personales antes de "Base de datos", título y total arriba del
 // encabezado (fila 4), "Equipo" es el tipo y "N° Interno" el código (numérico o de texto), fechas como Date o como
 // número serial, horas como fracción del día y "Diferencia" como fórmula
@@ -20,6 +45,7 @@ const libroEp = async () => {
   hoja.addRow([6, 'Bulldozer', 6406, 329006, '27/05/2026', '20:00', '100,5', '108,5', { formula: 'H10-G10', result: 8 }, null]);
   hoja.addRow([7, 'Bulldozer', 6406, 329007, '28/05/2026', '08:00', 108.5, 108.5, { sharedFormula: 'I10', result: 0 }, 'Api. 3001']);
   hoja.addRow([]);
+  hojaEp(libro);
   return Buffer.from(await libro.xlsx.writeBuffer());
 };
 
@@ -65,6 +91,7 @@ describe('LectorExcelEpExceljs', () => {
 
   it('acepta "Diferencia" en 0 aunque sea una fórmula (exceljs pierde el resultado 0)', async () => {
     const libro = new Workbook();
+    hojaEp(libro);
     const hoja = libro.addWorksheet('Base de datos');
     hoja.addRow(['N° Interno', 'Fecha', 'Horometro Inicial', 'Horometro Final', 'Diferencia']);
     hoja.addRow([3239, '25/05/2026', 100, 100, { formula: 'D2-C2', result: 0 }]);
@@ -77,6 +104,7 @@ describe('LectorExcelEpExceljs', () => {
 
   it('guarda el ID del Excel y rechaza uno que no sea un número entero', async () => {
     const libro = new Workbook();
+    hojaEp(libro);
     const hoja = libro.addWorksheet('Base de datos');
     hoja.addRow(['ID', 'N° Interno', 'Fecha', 'Diferencia']);
     hoja.addRow([12, 3239, '25/05/2026', 9]);
@@ -96,7 +124,11 @@ describe('LectorExcelEpExceljs', () => {
     sinHoja.addWorksheet('Carátula EP').addRow(['CONTRATO']);
     expect(await lector.leer(Buffer.from(await sinHoja.xlsx.writeBuffer()))).toEqual({
       registros: [],
-      errores: [{ fila: null, mensaje: 'No se encontró la hoja "Base de datos"' }],
+      tarifas: [],
+      errores: [
+        { fila: null, mensaje: 'No se encontró la hoja "Base de datos"' },
+        { fila: null, mensaje: 'No se encontró la hoja del estado de pago ("EP #08 MLC", según el número del EP)' },
+      ],
     });
 
     const sinColumnas = new Workbook();
@@ -105,9 +137,43 @@ describe('LectorExcelEpExceljs', () => {
 
     // Formato anterior al EP #08: el código venía en "Equipo" y no había "N° Interno"
     const formatoAnterior = new Workbook();
+    hojaEp(formatoAnterior);
     formatoAnterior.addWorksheet('Base de datos').addRow(['ID', 'Equipo', 'Categoria', 'Fecha', 'Diferencia', 'Actividad']);
     expect((await lector.leer(Buffer.from(await formatoAnterior.xlsx.writeBuffer())))?.errores).toEqual([
       { fila: null, mensaje: 'La hoja "Base de datos" debe tener las columnas N° Interno, Fecha y Diferencia' },
+    ]);
+  });
+
+  it('lee las tablas de tarifas de la hoja "EP #NN MLC", cualquiera sea el número del EP', async () => {
+    const lectura = await lector.leer(await libroEp());
+    expect(lectura?.tarifas).toEqual([
+      { tipo: 'GARANTIZADA', fila: 7, item: '1.1', descripcion: 'Cargador Frontal', unidad: 'H.M.', cantidad: 600, precioUnitario: 135951.69, total: 81571015 },
+      { tipo: 'GARANTIZADA', fila: 8, item: '1.2', descripcion: 'Excavadora', unidad: 'H.M.', cantidad: 184.7, precioUnitario: 113277.13, total: 20922286 },
+      { tipo: 'DIFERENCIADA', fila: 11, item: '2.1', descripcion: 'Cargador Frontal', unidad: 'H.M.', cantidad: 442, precioUnitario: 115558.47, total: 51076843 },
+      // fórmulas en 0: exceljs pierde el resultado
+      { tipo: 'DIFERENCIADA', fila: 12, item: '2.2', descripcion: 'Excavadora', unidad: 'H.M.', cantidad: 0, precioUnitario: 96286.03, total: 0 },
+    ]);
+
+    const otroNumero = new Workbook();
+    otroNumero.addWorksheet('Base de datos').addRow(['N° Interno', 'Fecha', 'Diferencia']);
+    hojaEp(otroNumero, 'EP #12 MLC');
+    const lecturaOtro = await lector.leer(Buffer.from(await otroNumero.xlsx.writeBuffer()));
+    expect(lecturaOtro?.errores).toEqual([]);
+    expect(lecturaOtro?.tarifas).toHaveLength(4);
+  });
+
+  it('avisa si en la hoja "EP #NN MLC" falta una tabla de tarifas o una fila no tiene números', async () => {
+    const libro = new Workbook();
+    libro.addWorksheet('Base de datos').addRow(['N° Interno', 'Fecha', 'Diferencia']);
+    const hoja = libro.addWorksheet('EP #09 MLC');
+    hoja.addRow(['ITEM', 'DESCRIPCION', 'UNIDAD', 'CANTIDAD', 'P. UNITARIO', 'TOTAL']);
+    hoja.addRow([1, 'TARIFAS GARANTIZADAS']);
+    hoja.addRow([1.1, 'Cargador Frontal', 'H.M.', 'muchas', 100, 200]);
+    hoja.addRow([1.2, null, 'H.M.', 1, 100, 100]);
+    expect((await lector.leer(Buffer.from(await libro.xlsx.writeBuffer())))?.errores).toEqual([
+      { fila: null, mensaje: 'Hoja "EP #09 MLC", fila 3: Falta la cantidad o no es un número' },
+      { fila: null, mensaje: 'Hoja "EP #09 MLC", fila 4: Falta la descripción' },
+      { fila: null, mensaje: 'Hoja "EP #09 MLC": no tiene la tabla "Tarifas diferenciadas"' },
     ]);
   });
 
