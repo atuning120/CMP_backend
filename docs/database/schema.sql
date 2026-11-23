@@ -317,6 +317,20 @@ CREATE TABLE REFRESH_TOKEN (
 
 CREATE INDEX idx_refresh_token_usuario ON REFRESH_TOKEN(id_usuario);
 
+-- Historial de versiones de la app móvil para la página pública de descarga (migración 023). Archivos en el
+-- contenedor privado "apk" de Azure Blob Storage
+CREATE TABLE VERSION_APP (
+    id_version_app  SERIAL PRIMARY KEY,
+    version         VARCHAR(20) NOT NULL UNIQUE CHECK (version ~ '^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$'), -- "1.4.0", el version de app.json
+    notas           TEXT NOT NULL DEFAULT '', -- novedades de la versión, se muestran en la página pública
+    archivo         VARCHAR(200) NOT NULL UNIQUE, -- nombre del blob en el contenedor "apk"
+    tamano_bytes    BIGINT NOT NULL CHECK (tamano_bytes > 0),
+    publicada       BOOLEAN NOT NULL DEFAULT TRUE, -- false: retirada
+    subida_por      INT NULL,
+    subida_en       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_version_app_usuario FOREIGN KEY (subida_por) REFERENCES USUARIO(id_usuario) ON DELETE SET NULL
+);
+
 -- Reportes para Metabase (migraciones 016, 017 y 020 a 022): carga mensual del Excel del EP del contratista y views que
 -- leen los dashboards. Los usuarios de Postgres de Metabase (metabase_app, metabase_lector) se crean con la migración
 -- 016, no aquí; la 021 deja a metabase_lector viendo solo las views.

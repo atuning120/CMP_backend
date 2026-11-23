@@ -35,6 +35,16 @@ erDiagram
         timestamptz expira_en
         timestamptz revocado_en "null si vigente"
     }
+    VERSION_APP {
+        int id_version_app PK
+        string version UK "1.4.0"
+        text notas
+        string archivo UK "blob en el contenedor apk"
+        bigint tamano_bytes
+        boolean publicada "false = retirada"
+        int subida_por FK
+        timestamptz subida_en
+    }
     OPERADOR {
         int id_operador PK
         string nombre
@@ -231,6 +241,7 @@ erDiagram
     USUARIO |o--o| OPERADOR : "se vincula a"
     USUARIO ||--o{ AUDITORIA_GEOCERCA : "realiza"
     USUARIO ||--o{ REFRESH_TOKEN : "mantiene sesiones"
+    USUARIO |o--o{ VERSION_APP : "publica"
     USUARIO |o--o{ AREA : "modifica"
     USUARIO |o--o{ ZONA_TRABAJO : "modifica"
     USUARIO |o--o{ ALERTA : "atiende"
@@ -277,6 +288,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `DISPOSITIVO_GPS` | Equipo de telemetría | `imei` UNIQUE |
 | `BITACORA_JEFE_TURNO` | Acciones del jefe de turno sobre la flota con motivo y observación; junto con `TURNO` forma el historial | `accion` ∈ `INCORPORAR`, `EDITAR`, `HABILITAR`, `DESHABILITAR`, `CAMBIAR_ESTADO`, `REEMPLAZAR`, `DEVOLVER`; `motivo` obligatorio; `detalle` JSONB |
 | `REFRESH_TOKEN` | Sesiones de la app móvil (un registro por emisión; se rotan en cada `/auth/refresh`) | `token_hash` UNIQUE (nunca se guarda el token en claro); `revocado_en` NULL = vigente |
+| `VERSION_APP` | Historial de versiones de la app móvil para la página pública de descarga (migración `023`); el archivo vive en el contenedor privado `apk` de Azure Blob | `version` UNIQUE con formato `N.N.N`; `archivo` UNIQUE; `publicada` = FALSE: retirada (no se muestra ni se descarga) |
 | `ESTADO_OPERACIONAL` | Catálogo de estados del turno (con `descripcion` para la app) | `categoria` ∈ `PRODUCTIVO`, `DEMORA`, `MANTENCION`; `activo` default `TRUE` |
 
 ### Maquinaria, telemetría y alertas
@@ -317,6 +329,7 @@ Metabase lee solo las views de este schema con el usuario `metabase_lector` (mig
 |---|---|---|---|
 | `fk_usuario_operador` | `USUARIO.id_operador` | `OPERADOR.id_operador` | SET NULL |
 | `fk_refresh_usuario` | `REFRESH_TOKEN.id_usuario` | `USUARIO.id_usuario` | CASCADE |
+| `fk_version_app_usuario` | `VERSION_APP.subida_por` | `USUARIO.id_usuario` | SET NULL |
 | `fk_area_usuario` | `AREA.modificado_por` | `USUARIO.id_usuario` | SET NULL |
 | `fk_zona_area` | `ZONA_TRABAJO.id_area` | `AREA.id_area` | CASCADE |
 | `fk_zona_usuario` | `ZONA_TRABAJO.modificado_por` | `USUARIO.id_usuario` | SET NULL |

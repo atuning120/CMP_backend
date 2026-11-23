@@ -14,6 +14,7 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HistorialModule } from './modules/historial/historial.module';
 import { ReportesModule } from './modules/reportes/reportes.module';
+import { AppMovilModule } from './modules/app-movil/app-movil.module';
 import { HealthController } from './health.controller';
 import { leerDbPassword } from './shared/infrastructure/config/secretos';
 import { leerSslDb } from './shared/infrastructure/config/ssl-db';
@@ -47,6 +48,7 @@ import { TrazaRequestInterceptor } from './shared/infrastructure/observabilidad/
     AuthModule,
     HistorialModule,
     ReportesModule,
+    AppMovilModule,
   ],
   controllers: [HealthController],
   providers: [

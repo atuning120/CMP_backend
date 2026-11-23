@@ -70,6 +70,12 @@ const MATRIZ: Record<string, string> = {
   'POST /geocercas/areas/:idArea/zonas': 'ADMIN',
   'PATCH /geocercas/zonas/:idZona': 'ADMIN',
   'DELETE /geocercas/zonas/:idZona': 'ADMIN',
+  // Versiones de la app móvil (la página de descarga es pública, ver PUBLICAS)
+  'GET /app-movil/admin/versiones': 'ADMIN',
+  'POST /app-movil/admin/versiones/subida': 'ADMIN',
+  'POST /app-movil/admin/versiones': 'ADMIN',
+  'PATCH /app-movil/admin/versiones/:idVersion': 'ADMIN',
+  'DELETE /app-movil/admin/versiones/:idVersion': 'ADMIN',
 };
 
 // Sin JWT: login y sesión (con límite de intentos), sondas de salud y el adaptador (API key)
@@ -83,6 +89,10 @@ const PUBLICAS = new Set([
   'POST /auth/logout',
   'POST /auth/login/web',
   'POST /auth/login/web/credenciales',
+  // Página pública de descarga de la app móvil: historial de versiones publicadas y descarga (redirige a un SAS)
+  'GET /app-movil/versiones',
+  'GET /app-movil/descarga',
+  'GET /app-movil/versiones/:idVersion/descarga',
 ]);
 const CON_API_KEY = new Set(['POST /tracking/posiciones']);
 
