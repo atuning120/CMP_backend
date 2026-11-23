@@ -138,7 +138,7 @@ dashboards (`ConexionReportes`): el resto del Backend sigue en `cmp_db`.
 
 - Quien sube el EP debe existir en Aiven con el mismo correo (la carga queda a nombre de ese usuario); si no, 409
   `USUARIO_SIN_CUENTA_REPORTES`. El aviso "no está en la flota" se revisa contra `cmp_db`.
-- La base de Aiven debe tener las migraciones 021 y 022.
+- La base de Aiven debe tener las migraciones 021, 022 y 024.
 - Para volver a la normalidad (antes del piloto): apuntar Metabase a `cmp_db` y quitar las `REPORTES_DB_*`. Las
   cargas hechas en Aiven no pasan solas a `cmp_db`: volver a subir los EP.
 
@@ -147,10 +147,10 @@ dashboards (`ConexionReportes`): el resto del Backend sigue en `cmp_db`.
 | Dashboard | Fuente | Filtros |
 |---|---|---|
 | **Operación** (en vivo, no depende del Excel) | `v_horas_app`, `v_estados_app` | Fecha (rango), categoría, equipo |
-| **Estado de pago** (solo el Excel del contratista, no se compara con la app) | `v_horas_excel`, `v_horometros_excel` | `id_carga` (bloqueado), categoría, equipo, área |
+| **Estado de pago** (solo el Excel del contratista, no se compara con la app) | `v_horas_excel`, `v_horometros_excel`, `v_tarifas_garantizadas`, `v_tarifas_diferenciadas` | `id_carga` (bloqueado), categoría, equipo, área |
 
 Desde la migración 021 Metabase solo ve las views (`v_cargas`, `v_horas_excel`, `v_horometros_excel`, `v_horas_app`,
-`v_estados_app`), no las tablas base. Sumar siempre `horas`, no los horómetros (en `v_horas_app` se repiten si el turno
+`v_estados_app` y, desde la 024, `v_tarifas_garantizadas` y `v_tarifas_diferenciadas`), no las tablas base. Sumar siempre `horas`, no los horómetros (en `v_horas_app` se repiten si el turno
 pasó por varias áreas).
 
 `v_horas_excel` tiene la misma estructura que la hoja "Base de datos" del EP desde el #08 (migración 022): `ID`,
@@ -167,5 +167,12 @@ Tarjetas sugeridas del dashboard de estado de pago: horas totales y registros (n
 Equipo (barras), horas por área (barras), horas por fecha (línea o barras apiladas por categoría), Día vs Noche (suma de `Horas Dia` y `Horas Noche`),
 registros con 0 horas por equipo y la tabla de saltos de horómetro.
 
+`v_tarifas_garantizadas` y `v_tarifas_diferenciadas` (migración 024) son las dos tablas de tarifas de la hoja
+"EP #NN MLC" (el número cambia con cada EP: "EP #08 MLC 10.2026.xlsx" trae la hoja "EP #08 MLC"), con sus columnas
+`Item`, `Descripcion`, `Unidad`, `Cantidad`, `P. Unitario` y `Total`, más `id_carga`. Las cargas anteriores a la 024 no
+tienen tarifas: volver a subir el EP. Al agregar las views en Metabase: **Admin → Databases → Sync database schema** si
+no aparecen solas.
+
 La carga del Excel la hace la web (ADMIN y JEFE_TURNO) con `POST /dashboards/cargas/previsualizar` y
-`POST /dashboards/cargas`; del archivo solo se lee la hoja "Base de datos".
+`POST /dashboards/cargas`; del archivo solo se leen la hoja "Base de datos" y las tablas de tarifas de la hoja
+"EP #NN MLC" (una carga sin esa hoja o sin alguna de las dos tablas se rechaza).

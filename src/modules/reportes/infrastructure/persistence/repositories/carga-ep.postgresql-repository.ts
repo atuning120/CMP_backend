@@ -111,6 +111,26 @@ export class CargaEpPostgresqlRepository implements CargaEpRepositoryPort {
           ],
         );
 
+        const t = nueva.tarifas;
+        if (t.length) {
+          await manager.query(
+            `INSERT INTO reportes.carga_tarifa (id_carga, tipo, fila, item, descripcion, unidad, cantidad, precio_unitario, total)
+             SELECT $1, * FROM unnest($2::text[], $3::int[], $4::text[], $5::text[], $6::text[], $7::numeric[], $8::numeric[],
+                                      $9::numeric[])`,
+            [
+              id_carga,
+              t.map((x) => x.tipo),
+              t.map((x) => x.fila),
+              t.map((x) => x.item),
+              t.map((x) => x.descripcion),
+              t.map((x) => x.unidad),
+              t.map((x) => x.cantidad),
+              t.map((x) => x.precioUnitario),
+              t.map((x) => x.total),
+            ],
+          );
+        }
+
         return id_carga;
       });
     } catch (error) {

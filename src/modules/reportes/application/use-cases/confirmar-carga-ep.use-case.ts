@@ -12,7 +12,7 @@ export interface ConfirmarCargaEpDto extends SolicitudCargaEp {
   reemplazar?: boolean; // obligatorio si el mes ya tiene una carga
 }
 
-// Guarda el Excel del mes. Se rechaza entero si alguna fila tiene errores: un EP a medias daría indicadores falsos
+// Guarda el Excel del mes (filas de "Base de datos" y tarifas). Se rechaza entero si alguna fila tiene errores: un EP a medias daría indicadores falsos
 @Injectable()
 export class ConfirmarCargaEpUseCase {
   constructor(
@@ -40,6 +40,7 @@ export class ConfirmarCargaEpUseCase {
       hashSha256: resumen.hashSha256,
       idUsuario,
       registros: resumen.registros,
+      tarifas: resumen.tarifas,
     });
     if (!carga) throw reporteError('CARGA_SIMULTANEA');
     return carga;

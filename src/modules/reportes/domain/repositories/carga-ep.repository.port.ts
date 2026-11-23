@@ -15,6 +15,20 @@ export interface RegistroEp {
   area: string | null; // texto del contratista: "Area 84", "Tacho", "Api. 3001"...
 }
 
+export type TipoTarifaEp = 'GARANTIZADA' | 'DIFERENCIADA';
+
+// Una fila de las tablas "Tarifas garantizadas" y "Tarifas diferenciadas" de la hoja "EP #NN MLC" del Excel
+export interface TarifaEp {
+  tipo: TipoTarifaEp;
+  fila: number; // fila en la hoja "EP #NN MLC"
+  item: string; // "1.1", "2.3"...
+  descripcion: string; // Cargador Frontal, Excavadora, Bulldozer
+  unidad: string | null; // "H.M."
+  cantidad: number;
+  precioUnitario: number | null; // columna "P. Unitario"
+  total: number | null;
+}
+
 // Excel vigente de un mes (REPORTES.CARGA)
 export interface CargaEp {
   idCarga: number;
@@ -35,6 +49,7 @@ export interface NuevaCargaEp {
   hashSha256: string;
   idUsuario: number;
   registros: RegistroEp[];
+  tarifas: TarifaEp[];
 }
 
 export interface CargaEpRepositoryPort {
@@ -46,7 +61,7 @@ export interface CargaEpRepositoryPort {
   // Id con que el usuario de la sesión queda como autor de la carga. Si las cargas viven en otra base (temporal, ver
   // ConexionReportes) es el usuario de esa base con el mismo correo; null si allá no existe
   usuarioDeCarga(idUsuario: number): Promise<number | null>;
-  // En una transacción: deja la carga vigente del mes como reemplazada y guarda la nueva con sus filas. null si otra
+  // En una transacción: deja la carga vigente del mes como reemplazada y guarda la nueva con sus filas y tarifas. null si otra
   // carga del mismo mes se confirmó al mismo tiempo
   reemplazar(nueva: NuevaCargaEp): Promise<CargaEp | null>;
 }

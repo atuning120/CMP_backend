@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { CargaEp, CargaEpRepositoryPort, RegistroEp } from '../../domain/repositories/carga-ep.repository.port';
+import type { CargaEp, CargaEpRepositoryPort, RegistroEp, TarifaEp } from '../../domain/repositories/carga-ep.repository.port';
 import type { ErrorFilaEp, LectorExcelEpPort } from '../../domain/ports/lector-excel-ep.port';
 import { reporteError } from '../reporte.errors';
 
@@ -36,6 +36,7 @@ export interface ResumenCargaEp {
   archivo: string;
   hashSha256: string;
   registros: RegistroEp[]; // solo las filas válidas
+  tarifas: TarifaEp[]; // tablas "Tarifas garantizadas" y "Tarifas diferenciadas" de la hoja "EP #NN MLC"
   errores: ErrorFilaEp[]; // los primeros, ordenados por fila
   totalErrores: number;
   horas: number;
@@ -131,6 +132,7 @@ export const leerCargaEp = async (
     archivo: nombreArchivo(archivo.originalname),
     hashSha256: createHash('sha256').update(archivo.buffer).digest('hex'),
     registros,
+    tarifas: lectura.tarifas,
     errores: errores.slice(0, MAXIMO_ERRORES_INFORMADOS),
     totalErrores: errores.length,
     horas: redondear(registros.reduce((total, r) => total + r.horas, 0)),

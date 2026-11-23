@@ -1,4 +1,4 @@
-import type { CargaEp, CargaEpRepositoryPort, RegistroEp } from '../../domain/repositories/carga-ep.repository.port';
+import type { CargaEp, CargaEpRepositoryPort, RegistroEp, TarifaEp } from '../../domain/repositories/carga-ep.repository.port';
 import type { LecturaExcelEp, LectorExcelEpPort } from '../../domain/ports/lector-excel-ep.port';
 import type { FirmadorDashboardPort } from '../../domain/ports/firmador-dashboard.port';
 import { PrevisualizarCargaEpUseCase } from './previsualizar-carga-ep.use-case';
@@ -19,6 +19,11 @@ const registro = (fila: number, equipo: string, fecha: string, horas: number, ar
   horas,
   area,
 });
+
+const tarifas: TarifaEp[] = [
+  { tipo: 'GARANTIZADA', fila: 12, item: '1.1', descripcion: 'Cargador Frontal', unidad: 'H.M.', cantidad: 600, precioUnitario: 135951.69, total: 81571015 },
+  { tipo: 'DIFERENCIADA', fila: 18, item: '2.1', descripcion: 'Cargador Frontal', unidad: 'H.M.', cantidad: 442, precioUnitario: 115558.47, total: 51076843 },
+];
 
 const cargaJunio: CargaEp = {
   idCarga: 7,
@@ -79,6 +84,7 @@ describe('Carga del Excel del estado de pago', () => {
       registro(3, '3239', '2026-06-01', 8.5, 'Tacho'),
       registro(4, 'MA999', '2026-06-25', 4, null),
     ],
+    tarifas,
     errores: [],
   };
 
@@ -113,6 +119,7 @@ describe('Carga del Excel del estado de pago', () => {
         { equipo: '3239', registros: 2, horas: 17.5, enFlota: true },
         { equipo: 'MA999', registros: 1, horas: 4, enFlota: false },
       ],
+      tarifas,
       cargaExistente: cargaJunio,
       filasValidas: 3,
       puedeConfirmar: true,
@@ -123,6 +130,7 @@ describe('Carga del Excel del estado de pago', () => {
   it('las filas fuera del rango del EP son errores y bloquean la confirmación', async () => {
     const { previsualizar, confirmar, cargaRepo } = crear({
       registros: [registro(2, '3239', '2026-05-24', 9), registro(3, '3239', '2026-05-25', 9)],
+      tarifas,
       errores: [{ fila: 9, mensaje: 'Falta el equipo' }],
     });
     const vista = await previsualizar.execute(solicitud);
@@ -148,6 +156,7 @@ describe('Carga del Excel del estado de pago', () => {
       hashSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
       idUsuario: 3,
       registros: lecturaValida.registros,
+      tarifas,
     });
 
     cargaRepo.reemplazar.mockResolvedValueOnce(null);
@@ -168,7 +177,7 @@ describe('Carga del Excel del estado de pago', () => {
   });
 
   it('un Excel sin filas no se confirma', async () => {
-    const { confirmar } = crear({ registros: [], errores: [] });
+    const { confirmar } = crear({ registros: [], tarifas, errores: [] });
     expect(await codigoDe(confirmar.execute({ ...solicitud, idUsuario: 3 }))).toBe('EXCEL_CON_ERRORES');
   });
 

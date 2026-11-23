@@ -331,14 +331,15 @@ CREATE TABLE VERSION_APP (
     CONSTRAINT fk_version_app_usuario FOREIGN KEY (subida_por) REFERENCES USUARIO(id_usuario) ON DELETE SET NULL
 );
 
--- Reportes para Metabase (migraciones 016, 017 y 020 a 022): carga mensual del Excel del EP del contratista y views que
+-- Reportes para Metabase (migraciones 016, 017, 020 a 022 y 024): carga mensual del Excel del EP del contratista y views que
 -- leen los dashboards. Los usuarios de Postgres de Metabase (metabase_app, metabase_lector) se crean con la migración
 -- 016, no aquí; la 021 deja a metabase_lector viendo solo las views.
 -- 1. Schema `reportes`: todo lo que lee Metabase vive aquí. Su usuario solo ve este schema, nunca las tablas de la app
 --    (OPERADOR, USUARIO, etc.): las views de abajo leen la app con los permisos de su dueño.
 -- 2. Cargas del Excel: una por período EP (el EP de junio cubre p. ej. del 25-05 al 25-06), solo una vigente por mes.
---    Del Excel se guarda únicamente la hoja "Base de datos" (horas por equipo); las hojas con personas, tarifas y
---    montos nunca llegan a la base.
+--    Del Excel se guarda la hoja "Base de datos" (horas por equipo) y, de la hoja "EP #NN MLC", solo las tablas
+--    "Tarifas garantizadas" y "Tarifas diferenciadas"; las hojas con personas y el resto de los montos nunca llegan a
+--    la base.
 -- 3. Views: la app en vivo (dashboard de operación) y el Excel por sí solo (dashboard de estado de pago, que ya no se
 --    compara con la app).
 -- 1. Schema
@@ -378,6 +379,23 @@ CREATE TABLE IF NOT EXISTS reportes.carga_registro (
     id_excel          INT                   -- columna "ID"
 );
 CREATE INDEX IF NOT EXISTS ix_carga_registro_carga ON reportes.carga_registro (id_carga, equipo, fecha);
+
+-- Tablas "Tarifas garantizadas" (ítems 1.x) y "Tarifas diferenciadas" (ítems 2.x) de la hoja "EP #NN MLC" (el número
+-- cambia con cada EP)
+CREATE TABLE IF NOT EXISTS reportes.carga_tarifa (
+    id_tarifa       SERIAL PRIMARY KEY,
+    id_carga        INT NOT NULL REFERENCES reportes.carga(id_carga) ON DELETE CASCADE,
+    tipo            VARCHAR(12) NOT NULL,   -- GARANTIZADA | DIFERENCIADA
+    fila            INT NOT NULL,           -- fila en la hoja "EP #NN MLC"
+    item            VARCHAR(10) NOT NULL,   -- "1.1", "2.3"...
+    descripcion     VARCHAR(100) NOT NULL,  -- Cargador Frontal, Excavadora, Bulldozer
+    unidad          VARCHAR(20),            -- "H.M."
+    cantidad        NUMERIC(12,2) NOT NULL,
+    precio_unitario NUMERIC(14,2),          -- columna "P. Unitario"
+    total           NUMERIC(16,2),
+    CONSTRAINT ck_carga_tarifa_tipo CHECK (tipo IN ('GARANTIZADA', 'DIFERENCIADA')),
+    CONSTRAINT ux_carga_tarifa_fila UNIQUE (id_carga, fila)
+);
 
 -- 3. Views
 -- Horas de la app en vivo: una fila por turno cerrado y área (las horas se reparten según el tiempo en cada área;
@@ -516,3 +534,30 @@ FROM (
 ) h
 WHERE "Salto" <> 0 OR "Horometro Final" < "Horometro Inicial"
 ORDER BY id_carga, fila;
+
+-- Tarifas de las cargas vigentes con los nombres de columna del Excel, más id_carga (filtro bloqueado del dashboard)
+CREATE OR REPLACE VIEW reportes.v_tarifas_garantizadas AS
+SELECT t.item            AS "Item",
+       t.descripcion     AS "Descripcion",
+       t.unidad          AS "Unidad",
+       t.cantidad        AS "Cantidad",
+       t.precio_unitario AS "P. Unitario",
+       t.total           AS "Total",
+       c.id_carga
+FROM reportes.carga_tarifa t
+JOIN reportes.carga c ON c.id_carga = t.id_carga AND c.vigente
+WHERE t.tipo = 'GARANTIZADA'
+ORDER BY c.id_carga, t.fila;
+
+CREATE OR REPLACE VIEW reportes.v_tarifas_diferenciadas AS
+SELECT t.item            AS "Item",
+       t.descripcion     AS "Descripcion",
+       t.unidad          AS "Unidad",
+       t.cantidad        AS "Cantidad",
+       t.precio_unitario AS "P. Unitario",
+       t.total           AS "Total",
+       c.id_carga
+FROM reportes.carga_tarifa t
+JOIN reportes.carga c ON c.id_carga = t.id_carga AND c.vigente
+WHERE t.tipo = 'DIFERENCIADA'
+ORDER BY c.id_carga, t.fila;
