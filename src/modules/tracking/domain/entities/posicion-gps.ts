@@ -29,4 +29,6 @@ export interface PosicionMaquina {
   velocidad: number | null;
   rumbo: number | null;
   bateria: number | null;
+  // Es del GPS real (no del teléfono) que la máquina tiene hoy: detenido duerme, así que su última posición sigue valiendo
+  gpsReal: boolean;
 }

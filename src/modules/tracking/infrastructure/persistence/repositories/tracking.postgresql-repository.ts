@@ -11,6 +11,7 @@ interface FilaPosicion {
   velocidad: string | null;
   rumbo: string | null;
   bateria: string | null;
+  gps_real: boolean;
 }
 
 // NUMERIC llega como string desde pg
@@ -24,10 +25,16 @@ const aPosicion = (f: FilaPosicion): PosicionMaquina => ({
   velocidad: numero(f.velocidad),
   rumbo: numero(f.rumbo),
   bateria: numero(f.bateria),
+  gpsReal: f.gps_real,
 });
 
 const COLUMNAS_POSICION = `id_maquina, "timestamp" AS fecha_hora, ST_Y(ubicacion) AS latitud, ST_X(ubicacion) AS longitud,
-  velocidad, heading AS rumbo, nivel_bateria AS bateria`;
+  velocidad, heading AS rumbo, nivel_bateria AS bateria,
+  EXISTS (
+    SELECT 1 FROM asignacion_gps ar
+    JOIN dispositivo_gps gr ON gr.id_gps = ar.id_gps AND gr.modelo IS DISTINCT FROM 'APP_MOVIL'
+    WHERE ar.id_gps = tracking_history.id_gps AND ar.id_maquina = tracking_history.id_maquina AND ar.vigente_hasta IS NULL
+  ) AS gps_real`;
 
 @Injectable()
 export class TrackingPostgresqlRepository implements TrackingRepositoryPort {
@@ -116,13 +123,33 @@ export class TrackingPostgresqlRepository implements TrackingRepositoryPort {
     return guardadas.map(aPosicion);
   }
 
-  async ultimasPorMaquina(desde: Date): Promise<PosicionMaquina[]> {
+  async ultimasPorMaquina(desde: Date, desdeGpsReal: Date): Promise<PosicionMaquina[]> {
+    // La de los GPS reales se busca por dispositivo (índice id_gps, timestamp): su ventana es más larga
     const filas: FilaPosicion[] = await this.dataSource.query(
-      `SELECT DISTINCT ON (id_maquina) ${COLUMNAS_POSICION}
-       FROM tracking_history
-       WHERE "timestamp" >= $1 AND ubicacion IS NOT NULL
-       ORDER BY id_maquina, "timestamp" DESC`,
-      [desde],
+      `WITH recientes AS (
+         SELECT DISTINCT ON (id_maquina) ${COLUMNAS_POSICION}
+         FROM tracking_history
+         WHERE "timestamp" >= $1 AND ubicacion IS NOT NULL
+         ORDER BY id_maquina, "timestamp" DESC
+       ),
+       reales AS (
+         SELECT ultima.*
+         FROM asignacion_gps a
+         JOIN dispositivo_gps d ON d.id_gps = a.id_gps AND d.modelo IS DISTINCT FROM 'APP_MOVIL'
+         CROSS JOIN LATERAL (
+           SELECT ${COLUMNAS_POSICION}
+           FROM tracking_history
+           WHERE tracking_history.id_gps = a.id_gps AND tracking_history.id_maquina = a.id_maquina
+             AND "timestamp" >= $2 AND ubicacion IS NOT NULL
+           ORDER BY "timestamp" DESC
+           LIMIT 1
+         ) ultima
+         WHERE a.vigente_hasta IS NULL
+       )
+       SELECT DISTINCT ON (id_maquina) *
+       FROM (SELECT * FROM recientes UNION ALL SELECT * FROM reales) u
+       ORDER BY id_maquina, fecha_hora DESC`,
+      [desde, desdeGpsReal],
     );
     return filas.map(aPosicion);
   }

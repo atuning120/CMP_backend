@@ -22,7 +22,7 @@ const entrante = (cambios: Record<string, unknown> = {}) => ({
 const crear = () => {
   const trackingRepo = {
     guardar: jest.fn(async (posiciones: PosicionDispositivo[]): Promise<PosicionMaquina[]> =>
-      posiciones.map((p) => ({ idMaquina: 12, fechaHora: p.fechaHora, latitud: p.latitud, longitud: p.longitud, velocidad: p.velocidad, rumbo: p.rumbo, bateria: p.bateria })),
+      posiciones.map((p) => ({ idMaquina: 12, fechaHora: p.fechaHora, latitud: p.latitud, longitud: p.longitud, velocidad: p.velocidad, rumbo: p.rumbo, bateria: p.bateria, gpsReal: false })),
     ),
     ultimasPorMaquina: jest.fn(async () => []),
     recorrido: jest.fn(async () => []),
