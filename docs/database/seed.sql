@@ -290,6 +290,11 @@ INSERT INTO tracking_history (
 -- Los id_history del seed son fijos: la secuencia sigue después del mayor
 SELECT setval('tracking_history_id_history_seq', (SELECT MAX(id_history) FROM tracking_history));
 
+-- Los GPS sintéticos quedan fuera de uso (como en la migración 025): con un GPS real vigente en la máquina, las
+-- posiciones de la app se ignorarían
+UPDATE asignacion_gps SET vigente_hasta = CURRENT_TIMESTAMP WHERE vigente_hasta IS NULL;
+UPDATE dispositivo_gps SET estado = 'INACTIVO';
+
 -- GPS virtual de la app móvil para cada máquina (mientras llegan los LL301): IMEI '9' + id_maquina en 14 dígitos
 INSERT INTO dispositivo_gps (imei, modelo, estado)
 SELECT '9' || LPAD(id_maquina::text, 14, '0'), 'APP_MOVIL', 'ACTIVO' FROM maquina;

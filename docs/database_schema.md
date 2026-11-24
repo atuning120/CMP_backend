@@ -295,7 +295,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 
 | Tabla | Propósito | Restricciones |
 |---|---|---|
-| `ASIGNACION_GPS` | Qué GPS está instalado en qué máquina y desde cuándo | `vigente_hasta` NULL = asignación vigente |
+| `ASIGNACION_GPS` | Qué GPS está instalado en qué máquina y desde cuándo | `vigente_hasta` NULL = asignación vigente; índice único parcial: una vigente por GPS. Una máquina tiene a lo más un GPS real vigente (lo cuida el módulo `gps`) además del virtual de la app, cuyas posiciones se ignoran mientras tanto |
 | `ASIGNACION_OPERADOR` | Operador a cargo de cada máquina (preseleccionada al iniciar turno), con historial | `vigente_hasta` NULL = vigente; índices únicos parciales: un vigente por máquina y por operador |
 | `TRACKING_HISTORY` | Posiciones GPS recibidas | PK (`id_history`, `timestamp`); `id_maquina` se copia al ingerir; `payload_crudo` JSONB |
 | `ALERTA` | Reservada para alertas del GPS (p. ej. `RALENTI_EXCESIVO`); hoy sin uso | `atendida` default `FALSE`; `atendida_por`/`atendida_en` NULL hasta atenderla |
@@ -368,8 +368,9 @@ Metabase lee solo las views de este schema con el usuario `metabase_lector` (mig
 | `REFRESH_TOKEN` | `auth` |
 | `OPERADOR` | `operadores` |
 | `AREA`, `ZONA_TRABAJO`, `AUDITORIA_GEOCERCA` | `geocercas` |
-| `MAQUINA`, `MODELO_MAQUINA`, `DISPOSITIVO_GPS`, `ASIGNACION_GPS`, `ASIGNACION_OPERADOR` | `maquinas` |
-| `BITACORA_JEFE_TURNO` (escritura desde `maquinas`) | `historial` |
+| `MAQUINA`, `MODELO_MAQUINA`, `ASIGNACION_OPERADOR` | `maquinas` |
+| `DISPOSITIVO_GPS`, `ASIGNACION_GPS` | `gps` (los virtuales de la app, `tracking`) |
+| `BITACORA_JEFE_TURNO` (escritura desde `maquinas` y `gps`) | `historial` |
 | `TRACKING_HISTORY` | `tracking` |
 | `ALERTA`, `ATENCION_ALERTA` | `alertas` |
 | `TURNO`, `TURNO_UBICACION`, `TURNO_ESTADO`, `ESTADO_OPERACIONAL` | `turnos` |

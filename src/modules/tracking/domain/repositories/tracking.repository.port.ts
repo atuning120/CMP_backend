@@ -17,8 +17,8 @@ export interface TrackingRepositoryPort {
    * Devuelve las guardadas con su máquina.
    */
   guardar(posiciones: PosicionDispositivo[]): Promise<PosicionMaquina[]>;
-  // Última posición de cada máquina desde esa fecha
-  ultimasPorMaquina(desde: Date): Promise<PosicionMaquina[]>;
+  // Última posición de cada máquina desde esa fecha; la del GPS real que tiene hoy, desde `desdeGpsReal`
+  ultimasPorMaquina(desde: Date, desdeGpsReal: Date): Promise<PosicionMaquina[]>;
   // Posiciones de la máquina en [desde, hasta), de la más antigua a la más nueva, como máximo `limite`
   recorrido(idMaquina: number, desde: Date, hasta: Date, limite: number): Promise<PuntoRecorrido[]>;
   // null si el turno no existe
