@@ -183,6 +183,9 @@ CREATE UNIQUE INDEX ux_tracking_history_gps_timestamp ON TRACKING_HISTORY (id_gp
 -- Última posición de cada máquina
 CREATE INDEX ix_tracking_history_maquina_timestamp ON TRACKING_HISTORY (id_maquina, timestamp DESC);
 CREATE INDEX ix_asignacion_gps_gps ON ASIGNACION_GPS (id_gps);
+CREATE INDEX ix_asignacion_gps_maquina ON ASIGNACION_GPS (id_maquina);
+-- Un GPS está en una sola máquina a la vez
+CREATE UNIQUE INDEX ux_asignacion_gps_vigente ON ASIGNACION_GPS (id_gps) WHERE vigente_hasta IS NULL;
 
 CREATE TABLE ALERTA (
     id_alerta       SERIAL PRIMARY KEY,

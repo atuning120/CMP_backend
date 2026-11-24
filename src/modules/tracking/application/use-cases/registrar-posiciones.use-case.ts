@@ -77,7 +77,8 @@ export class RegistrarPosicionesUseCase {
 
     const descartadas = posiciones.length - guardadas.length;
     if (descartadas > 0) {
-      // Inválidas, repetidas o, lo más común, de un IMEI sin registrar en DISPOSITIVO_GPS o sin asignación vigente
+      // Inválidas, repetidas, de la app en una máquina con GPS real o, lo más común, de un IMEI sin registrar en
+      // DISPOSITIVO_GPS o sin asignación vigente
       const imeis = [...new Set(validas.map((p) => p.imei))].join(', ');
       this.logger.warn(`${descartadas} de ${posiciones.length} posiciones no se guardaron (IMEI válidos recibidos: ${imeis || 'ninguno'})`);
     }

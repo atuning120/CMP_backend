@@ -44,6 +44,7 @@ const CAMPOS_FICHA: Record<string, string> = {
   numeroChasis: 'N° de chasis',
   esContratista: 'Contratista',
   operador: 'Operador',
+  gps: 'GPS',
   regresoEstimado: 'Regreso estimado',
 };
 

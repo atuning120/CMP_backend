@@ -77,6 +77,8 @@ export class TrackingPostgresqlRepository implements TrackingRepositoryPort {
       trama_hex: p.tramaHex,
     }));
     // Cada posición va a la máquina a la que estaba asignado el dispositivo en su fecha (puede llegar atrasada).
+    // Las de la app se descartan si en esa fecha la máquina tenía un GPS real: dos fuentes harían saltar el marcador. Si
+    // el GPS real pasa a otra máquina, la app vuelve a servir de GPS sin tocar nada.
     // El índice único (id_gps, timestamp) evita duplicar una posición reenviada
     const guardadas: FilaPosicion[] = await this.dataSource.query(
       `WITH entrantes AS (
@@ -91,6 +93,16 @@ export class TrackingPostgresqlRepository implements TrackingRepositoryPort {
          JOIN asignacion_gps a ON a.id_gps = d.id_gps
           AND a.vigente_desde <= e.fecha_hora
           AND (a.vigente_hasta IS NULL OR a.vigente_hasta > e.fecha_hora)
+         WHERE NOT (
+           d.modelo IS NOT DISTINCT FROM 'APP_MOVIL'
+           AND EXISTS (
+             SELECT 1
+             FROM asignacion_gps r
+             JOIN dispositivo_gps dr ON dr.id_gps = r.id_gps AND dr.modelo IS DISTINCT FROM 'APP_MOVIL'
+             WHERE r.id_maquina = a.id_maquina AND r.vigente_desde <= e.fecha_hora
+               AND (r.vigente_hasta IS NULL OR r.vigente_hasta > e.fecha_hora)
+           )
+         )
          ORDER BY d.id_gps, e.fecha_hora, a.vigente_desde DESC
        )
        INSERT INTO tracking_history ("timestamp", id_gps, id_maquina, ubicacion, velocidad, heading, nivel_bateria, payload_crudo)
