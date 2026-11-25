@@ -12,6 +12,7 @@ import { ObtenerDashboardUseCase } from '../../../application/use-cases/obtener-
 import { TAMANO_MAXIMO_EXCEL } from '../../../application/use-cases/leer-carga-ep';
 import type { ArchivoEp } from '../../../application/use-cases/leer-carga-ep';
 import type { CargaEp } from '../../../domain/repositories/carga-ep.repository.port';
+import type { TipoDashboard } from '../../../domain/ports/firmador-dashboard.port';
 
 // Campos de texto del multipart/form-data que acompañan al archivo
 interface CamposCargaEp {
@@ -23,8 +24,8 @@ interface CamposCargaEp {
 
 const presentCarga = (carga: CargaEp) => ({ ...carga, subidoEn: carga.subidoEn.toISOString() });
 
-// /dashboards/operacion y /dashboards/estado-pago
-const TIPOS: Record<string, string> = { operacion: 'OPERACION', 'estado-pago': 'ESTADO_PAGO' };
+// /dashboards/operacion, /dashboards/estado-pago y /dashboards/comparacion
+const TIPOS: Record<string, TipoDashboard> = { operacion: 'OPERACION', 'estado-pago': 'ESTADO_PAGO', comparacion: 'COMPARACION' };
 
 // Con límite: multer corta la subida al pasar los 10 MB en vez de guardar el archivo entero en memoria
 const subidaExcel = FileInterceptor('archivo', { limits: { fileSize: TAMANO_MAXIMO_EXCEL, files: 1 } });
@@ -72,7 +73,7 @@ export class DashboardsController {
     return presentCarga(carga);
   }
 
-  // URL firmada para el <iframe>, válida por una hora. ?periodo=AAAA-MM para estado-pago
+  // URL firmada para el <iframe>, válida por una hora. ?periodo=AAAA-MM para estado-pago y comparacion
   @Get(':tipo')
   async dashboard(@Param('tipo') tipo: string, @Query('periodo') periodo: string | undefined, @CurrentUser() user: UsuarioAutenticado) {
     const { url, expiraEn, carga } = await this.obtenerDashboardUseCase.execute({ rol: user?.rol, tipo: TIPOS[tipo], periodo });

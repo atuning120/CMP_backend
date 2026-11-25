@@ -1,5 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
+import { TIPOS_DASHBOARD } from '../../domain/ports/firmador-dashboard.port';
+import type { TipoDashboard } from '../../domain/ports/firmador-dashboard.port';
 import { FirmadorDashboardMetabase } from './firmador-dashboard.metabase';
 
 const SECRETO = 'clave-de-incrustacion-de-prueba-0123456789abcdef';
@@ -13,6 +15,7 @@ describe('FirmadorDashboardMetabase', () => {
     METABASE_SECRET_KEY: SECRETO,
     METABASE_DASHBOARD_OPERACION: '2',
     METABASE_DASHBOARD_ESTADO_PAGO: '5',
+    METABASE_DASHBOARD_COMPARACION: '8',
   };
 
   it('firma el dashboard pedido con sus filtros bloqueados y una hora de vigencia', () => {
@@ -29,6 +32,14 @@ describe('FirmadorDashboardMetabase', () => {
       iat: Math.floor(ahora.getTime() / 1000),
       exp: Math.floor(new Date('2026-07-02T16:00:00.000Z').getTime() / 1000),
     });
+  });
+
+  it('cada tipo abre su propio dashboard', () => {
+    const idDe = (tipo: TipoDashboard) => {
+      const token = firmador(configurado).firmar(tipo, {}, ahora)!.url.split('#')[0].split('/').pop()!;
+      return (jwt.decode(token) as { resource: { dashboard: number } }).resource.dashboard;
+    };
+    expect(TIPOS_DASHBOARD.map(idDe)).toEqual([2, 5, 8]);
   });
 
   it('null si falta la URL, la clave o el id del dashboard', () => {

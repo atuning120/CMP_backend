@@ -44,7 +44,7 @@ export const reporteError = (code: ReporteErrorCode, errores?: ErrorFilaEp[]) =>
         message: 'Tu usuario no existe en la base de los dashboards: pide que lo creen allá con el mismo correo',
       });
     case 'DASHBOARD_INVALIDO':
-      return new BadRequestException({ statusCode: 400, code, message: 'El dashboard debe ser operacion o estado-pago' });
+      return new BadRequestException({ statusCode: 400, code, message: 'El dashboard debe ser operacion, estado-pago o comparacion' });
     case 'METABASE_NO_CONFIGURADO':
       return new ServiceUnavailableException({ statusCode: 503, code, message: 'Los dashboards no están configurados' });
     case 'METABASE_NO_DISPONIBLE':

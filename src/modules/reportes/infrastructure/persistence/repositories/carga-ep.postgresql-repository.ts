@@ -59,7 +59,7 @@ export class CargaEpPostgresqlRepository implements CargaEpRepositoryPort {
     const filas: { codigo: string }[] = await this.conexion.principal.query(
       `SELECT DISTINCT c.codigo
        FROM maquina m
-       CROSS JOIN LATERAL (VALUES (m.nombre), (m.codigo_ep)) AS c(codigo)
+       CROSS JOIN LATERAL (VALUES (m.nombre), (m.codigo_ep), (SUBSTRING(UPPER(TRIM(m.nombre)) FROM '^[A-Z]+[ -]*([0-9]+)$'))) AS c(codigo)
        WHERE UPPER(c.codigo) = ANY($1::text[])`,
       [codigos.map((c) => c.toUpperCase())],
     );

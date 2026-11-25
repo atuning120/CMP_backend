@@ -1,7 +1,9 @@
 export const FIRMADOR_DASHBOARD = Symbol('FIRMADOR_DASHBOARD');
 
-// Operación: datos de la app en vivo. Estado de pago: Excel del EP contra la app, filtrado por la carga elegida
-export type TipoDashboard = 'OPERACION' | 'ESTADO_PAGO';
+// Operación: datos de la app en vivo. Estado de pago: solo el Excel del EP. Comparación: el Excel del EP contra la app.
+// Los dos últimos, filtrados por la carga elegida
+export const TIPOS_DASHBOARD = ['OPERACION', 'ESTADO_PAGO', 'COMPARACION'] as const;
+export type TipoDashboard = (typeof TIPOS_DASHBOARD)[number];
 
 export interface DashboardEmbebido {
   url: string; // para el <iframe>
