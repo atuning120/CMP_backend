@@ -21,6 +21,8 @@ export class Turno {
     // Si lo cerró un jefe de turno (p. ej. la máquina falló en terreno): quién y por qué
     public cerradoPor: number | null = null,
     public motivoCierre: string | null = null,
+    // Si el sistema lo cerró sin horómetro: el jefe de turno que lo informó después
+    public horometroRegularizadoPor: number | null = null,
   ) {}
 
   get enCurso(): boolean {

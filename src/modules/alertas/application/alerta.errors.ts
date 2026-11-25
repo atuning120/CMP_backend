@@ -1,6 +1,15 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { MENSAJE_ACCION_VENCIDA } from '../../../shared/application/vigencia-accion';
 
-export type AlertaErrorCode = 'SIN_PERMISO' | 'ALERTA_NO_ENCONTRADA' | 'NOTA_VACIA' | 'COMENTARIO_LARGO' | 'DATOS_INVALIDOS';
+export type AlertaErrorCode =
+  | 'SIN_PERMISO'
+  | 'ALERTA_NO_ENCONTRADA'
+  | 'NOTA_VACIA'
+  | 'COMENTARIO_LARGO'
+  | 'DATOS_INVALIDOS'
+  | 'HOROMETRO_INVALIDO'
+  | 'HOROMETRO_YA_INFORMADO'
+  | 'ACCION_VENCIDA';
 
 export const LARGO_MAXIMO_COMENTARIO = 500;
 
@@ -17,5 +26,14 @@ export const alertaError = (code: AlertaErrorCode) => {
       return new BadRequestException({ statusCode: 400, code, message: 'Los datos de la atención no son válidos' });
     case 'COMENTARIO_LARGO':
       return new BadRequestException({ statusCode: 400, code, message: `El comentario puede tener hasta ${LARGO_MAXIMO_COMENTARIO} caracteres` });
+    case 'HOROMETRO_INVALIDO':
+      return new BadRequestException({ statusCode: 400, code, message: 'El horómetro ingresado no es válido' });
+    case 'HOROMETRO_YA_INFORMADO':
+      return new ConflictException({ statusCode: 409, code, message: 'El turno ya tiene horómetro final: otro jefe de turno o el operador lo informó antes' });
+    case 'ACCION_VENCIDA':
+      return new BadRequestException({ statusCode: 400, code, message: MENSAJE_ACCION_VENCIDA });
   }
 };
+
+// El horómetro no calza con las lecturas de la máquina: el mensaje dice cuál es el límite
+export const horometroFueraDeRango = (message: string) => new BadRequestException({ statusCode: 400, code: 'HOROMETRO_FUERA_DE_RANGO', message });

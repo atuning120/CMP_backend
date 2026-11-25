@@ -55,6 +55,7 @@ const MATRIZ: Record<string, string> = {
   'POST /gps/:idGps/desvinculacion': GESTION,
   'GET /alertas': GESTION,
   'POST /alertas/:idAlerta/atenciones': GESTION,
+  'POST /alertas/:idAlerta/horometro-final': GESTION,
   'GET /historial': GESTION,
   'GET /historial/excel': GESTION,
   'GET /dashboards/cargas': GESTION,
