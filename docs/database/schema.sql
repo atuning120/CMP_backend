@@ -84,6 +84,7 @@ CREATE TABLE MAQUINA (
     numero_chasis     VARCHAR(50), -- N° de chasis / serie (VIN)
     horometro_inicial NUMERIC(10,2), -- al incorporarse a planta; luego manda el horómetro de los turnos
     es_contratista    BOOLEAN NOT NULL DEFAULT FALSE, -- equipo de contratista o arriendo
+    codigo_ep         VARCHAR(50), -- equipo de contratista: "N° Interno" con que IMOPAC lo identifica en el EP
     regreso_estimado  TIMESTAMPTZ, -- en mantenimiento o fuera de servicio: cuándo se espera que vuelva a operar
     -- Tras un reemplazo: la máquina que la cubre y a qué estado vuelve ese respaldo al devolverla
     id_maquina_respaldo    INT,

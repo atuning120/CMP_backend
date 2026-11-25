@@ -98,6 +98,7 @@ erDiagram
         string numero_chasis
         decimal horometro_inicial
         boolean es_contratista
+        string codigo_ep "N° Interno del equipo de contratista en el EP"
         timestamptz regreso_estimado "si está en mantenimiento o fuera de servicio"
         int id_maquina_respaldo FK "máquina que la cubre tras un reemplazo"
         string estado_previo_respaldo "estado al que vuelve el respaldo al devolver"

@@ -44,6 +44,7 @@ const CAMPOS_FICHA: Record<string, string> = {
   patente: 'Patente',
   numeroChasis: 'N° de chasis',
   esContratista: 'Contratista',
+  codigoEp: 'Código en EP',
   operador: 'Operador',
   gps: 'GPS',
   regresoEstimado: 'Regreso estimado',

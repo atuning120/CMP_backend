@@ -74,7 +74,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
     const filas: FilaFlota[] = await this.ormRepository.query(
       `
       SELECT m.id_maquina, m.nombre, m.marca, m.modelo, m.tipo_maquina, m.estado, m.patente,
-             m.anio, m.numero_chasis, m.es_contratista,
+             m.anio, m.numero_chasis, m.es_contratista, m.codigo_ep,
              oa.id_operador AS id_operador_asignado, oa.nombre || ' ' || oa.apellido AS operador_asignado,
              baja.motivo AS motivo_baja, baja.observacion AS observacion_baja, baja.fecha AS fecha_baja,
              baja.reemplazada_por,
@@ -130,7 +130,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       ) ultimo ON TRUE
       WHERE ($1::text IS NULL
          OR m.nombre ILIKE $1 OR m.marca ILIKE $1 OR m.modelo ILIKE $1 OR m.tipo_maquina ILIKE $1
-         OR m.patente ILIKE $1)
+         OR m.patente ILIKE $1 OR m.codigo_ep ILIKE $1)
         AND ($2::int IS NULL OR m.id_maquina = $2)
       ORDER BY m.nombre ASC
       `,
@@ -147,6 +147,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       anio: fila.anio,
       numeroChasis: fila.numero_chasis,
       esContratista: fila.es_contratista,
+      codigoEp: fila.codigo_ep,
       operadorAsignado:
         fila.id_operador_asignado === null ? null : { idOperador: fila.id_operador_asignado, nombre: fila.operador_asignado ?? '' },
       motivoEstado:
@@ -276,6 +277,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
         numero_chasis: datos.numeroChasis,
         horometro_inicial: String(datos.horometroInicial),
         es_contratista: datos.esContratista,
+        codigo_ep: datos.codigoEp,
         actualizado_en: new Date(),
         actualizado_por: idUsuario,
         id_cliente: datos.idCliente ?? null,
@@ -399,6 +401,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
       patente: cambios.patente,
       numero_chasis: cambios.numeroChasis,
       es_contratista: cambios.esContratista,
+      codigo_ep: cambios.codigoEp,
       estado: cambios.estado,
       // En un estado sin regreso (de vuelta en operación, en reserva) ya no hay regreso pendiente
       regreso_estimado: cambios.estado && !ESTADOS_CON_REGRESO.includes(cambios.estado) ? null : cambios.regresoEstimado,
@@ -483,6 +486,7 @@ interface FilaFlota {
   anio: number | null;
   numero_chasis: string | null;
   es_contratista: boolean;
+  codigo_ep: string | null;
   id_operador_asignado: number | null;
   operador_asignado: string | null;
   motivo_baja: string | null;

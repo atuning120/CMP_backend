@@ -33,6 +33,7 @@ export interface MaquinaFlota extends MaquinaResumen {
   anio: number | null;
   numeroChasis: string | null;
   esContratista: boolean;
+  codigoEp: string | null; // equipo de contratista: "N° Interno" con que IMOPAC lo identifica en el EP
   operadorAsignado: OperadorAsignado | null; // a cargo de la máquina (ASIGNACION_OPERADOR vigente)
   // Solo si no está ACTIVA: el último cambio de estado (o reemplazo) de la bitácora, con su motivo
   motivoEstado: { motivo: string; observacion: string | null; fecha: Date; reemplazadaPor: string | null } | null;
@@ -82,6 +83,7 @@ export interface NuevaMaquina {
   numeroChasis: string | null;
   horometroInicial: number;
   esContratista: boolean;
+  codigoEp: string | null; // solo en equipos de contratista
   idOperador: number | null; // operador asignado (opcional)
   idCliente?: string | null; // UUID del cliente que la incorpora (hace idempotente el reintento)
 }
@@ -118,6 +120,7 @@ export interface FichaMaquina {
   patente: string | null;
   numeroChasis: string | null;
   esContratista: boolean;
+  codigoEp: string | null; // solo en equipos de contratista
   idOperador: number | null; // operador asignado
   estado: EstadoMaquina;
 }

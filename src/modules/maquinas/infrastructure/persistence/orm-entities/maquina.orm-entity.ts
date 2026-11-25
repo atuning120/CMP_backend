@@ -35,6 +35,9 @@ export class MaquinaOrmEntity {
   @Column('boolean', { name: 'es_contratista', default: false })
   es_contratista: boolean;
 
+  @Column('varchar', { name: 'codigo_ep', nullable: true })
+  codigo_ep: string | null;
+
   @Column('timestamp with time zone', { name: 'regreso_estimado', nullable: true })
   regreso_estimado: Date | null;
 

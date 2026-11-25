@@ -14,6 +14,7 @@ const maquina: MaquinaFlota = {
   anio: 2020,
   numeroChasis: null,
   esContratista: false,
+  codigoEp: null,
   operadorAsignado: null,
   motivoEstado: null,
   operadorActual: null,
@@ -225,6 +226,29 @@ describe('EditarMaquinaUseCase', () => {
     const [, , cambios, acciones] = maquinaRepo.actualizar.mock.calls[0] as unknown as [number, number, object, { accion: string }[]];
     expect(cambios).toEqual({ esContratista: true, estado: 'BAJA' });
     expect(acciones.map((a) => a.accion)).toEqual(['EDITAR', 'DESHABILITAR']);
+  });
+
+  it('código en EP: se guarda en mayúsculas al marcarla de contratista y queda en la bitácora', async () => {
+    const { maquinaRepo, editar } = crear();
+    await editar.execute({ ...base, esContratista: true, codigoEp: ' ma51525541 ' });
+    expect(maquinaRepo.actualizar).toHaveBeenCalledWith(3, 1, { esContratista: true, codigoEp: 'MA51525541' }, [
+      expect.objectContaining({
+        accion: 'EDITAR',
+        detalle: { antes: { esContratista: false, codigoEp: null }, despues: { esContratista: true, codigoEp: 'MA51525541' } },
+      }),
+    ]);
+    // Sin ser de contratista no se guarda
+    expect(await codigoDe(editar.execute({ ...base, codigoEp: 'MA1' }))).toBe('SIN_CAMBIOS');
+  });
+
+  it('código en EP: se conserva si no viene (app móvil) y se borra si deja de ser de contratista', async () => {
+    const { maquinaRepo, editar } = crear();
+    const deContratista = { ...maquina, esContratista: true, codigoEp: 'MA1' };
+    maquinaRepo.findFlotaById.mockResolvedValue(deContratista);
+    await editar.execute({ ...base, anio: 2021 });
+    expect(maquinaRepo.actualizar).toHaveBeenLastCalledWith(3, 1, { anio: 2021 }, expect.anything());
+    await editar.execute({ ...base, esContratista: false });
+    expect(maquinaRepo.actualizar).toHaveBeenLastCalledWith(3, 1, { esContratista: false, codigoEp: null }, expect.anything());
   });
 
   it('valida permisos, existencia, motivo y que haya cambios', async () => {

@@ -25,6 +25,7 @@ const crear = (existentes: { nombres?: string[]; patentes?: string[]; tipos?: st
       anio: datos.anio,
       numeroChasis: datos.numeroChasis,
       esContratista: datos.esContratista,
+      codigoEp: datos.codigoEp,
       operadorAsignado: null,
       motivoEstado: null,
       operadorActual: null,
@@ -69,7 +70,7 @@ const codigoDe = async (promise: Promise<unknown>) => {
 describe('CrearMaquinaUseCase', () => {
   it('crea la máquina normalizando código y patente', async () => {
     const { maquinaRepo, crearMaquina } = crear();
-    await crearMaquina.execute({ ...base, patente: 'ab-cd-12', numeroChasis: '  ', anio: '2024', esContratista: true });
+    await crearMaquina.execute({ ...base, patente: 'ab-cd-12', numeroChasis: '  ', anio: '2024', esContratista: true, codigoEp: ' ma51525541 ' });
     expect(maquinaRepo.create).toHaveBeenCalledWith({
       nombre: 'CF-06',
       marca: 'Komatsu',
@@ -80,9 +81,19 @@ describe('CrearMaquinaUseCase', () => {
       numeroChasis: null,
       horometroInicial: 12.5,
       esContratista: true,
+      codigoEp: 'MA51525541',
       idOperador: null,
       idCliente: null,
     }, { idUsuario: 7, motivo: 'Aumento de capacidad', observacion: null }, []);
+  });
+
+  it('el código en EP es opcional y solo se guarda en un equipo de contratista', async () => {
+    const { maquinaRepo, crearMaquina } = crear();
+    await crearMaquina.execute({ ...base, esContratista: true, codigoEp: ' ' });
+    expect(maquinaRepo.create).toHaveBeenLastCalledWith(expect.objectContaining({ esContratista: true, codigoEp: null }), expect.anything(), []);
+    await crearMaquina.execute({ ...base, codigoEp: 'MA51525541' });
+    expect(maquinaRepo.create).toHaveBeenLastCalledWith(expect.objectContaining({ esContratista: false, codigoEp: null }), expect.anything(), []);
+    expect(await codigoDe(crearMaquina.execute({ ...base, esContratista: true, codigoEp: 'X'.repeat(51) }))).toBe('DATOS_INVALIDOS');
   });
 
   it('un reintento con el mismo idCliente devuelve la máquina ya creada sin duplicarla', async () => {
