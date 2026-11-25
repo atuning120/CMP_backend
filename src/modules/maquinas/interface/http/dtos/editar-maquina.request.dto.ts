@@ -8,6 +8,7 @@ export class EditarMaquinaRequestDto {
   patente?: string | null;
   numeroChasis?: string | null;
   esContratista?: boolean;
+  codigoEp?: string | null; // se borra si deja de ser de contratista
   idOperador?: number | null; // null deja la máquina sin operador
   estado?: 'ACTIVA' | 'BAJO_OBSERVACION' | 'EN_MANTENIMIENTO' | 'EN_RESERVA' | 'BAJA';
   regresoEstimado?: string | null; // ISO; solo en mantenimiento o fuera de servicio

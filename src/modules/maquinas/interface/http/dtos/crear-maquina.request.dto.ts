@@ -8,6 +8,7 @@ export class CrearMaquinaRequestDto {
   numeroChasis?: string;
   horometroInicial: number;
   esContratista?: boolean;
+  codigoEp?: string | null; // solo se guarda si es de contratista
   idOperador?: number | null; // opcional: operador a cargo
   motivo: string;
   observacion?: string;

@@ -26,7 +26,7 @@ export interface EquipoCargaEp {
   equipo: string;
   registros: number;
   horas: number;
-  enFlota: boolean; // existe una máquina con ese código interno (si no, puede ser un código mal escrito)
+  enFlota: boolean; // existe una máquina con ese código interno o código en EP (si no, puede ser un código mal escrito)
 }
 
 export interface ResumenCargaEp {

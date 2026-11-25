@@ -56,10 +56,14 @@ export class CargaEpPostgresqlRepository implements CargaEpRepositoryPort {
   }
 
   async equiposConocidos(codigos: string[]): Promise<string[]> {
-    const filas: { nombre: string }[] = await this.conexion.principal.query(`SELECT nombre FROM maquina WHERE UPPER(nombre) = ANY($1::text[])`, [
-      codigos.map((c) => c.toUpperCase()),
-    ]);
-    return filas.map((f) => f.nombre);
+    const filas: { codigo: string }[] = await this.conexion.principal.query(
+      `SELECT DISTINCT c.codigo
+       FROM maquina m
+       CROSS JOIN LATERAL (VALUES (m.nombre), (m.codigo_ep)) AS c(codigo)
+       WHERE UPPER(c.codigo) = ANY($1::text[])`,
+      [codigos.map((c) => c.toUpperCase())],
+    );
+    return filas.map((f) => f.codigo);
   }
 
   async usuarioDeCarga(idUsuario: number): Promise<number | null> {

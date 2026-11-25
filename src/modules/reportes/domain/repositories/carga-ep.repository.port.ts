@@ -56,7 +56,7 @@ export interface CargaEpRepositoryPort {
   // De la más reciente a la más antigua
   listarVigentes(): Promise<CargaEp[]>;
   buscarVigente(periodo: string): Promise<CargaEp | null>;
-  // De los códigos recibidos, los que existen como máquina (comparados sin distinguir mayúsculas)
+  // De los códigos recibidos, los que existen como código interno o código en EP de una máquina (comparados sin distinguir mayúsculas)
   equiposConocidos(codigos: string[]): Promise<string[]>;
   // Id con que el usuario de la sesión queda como autor de la carga. Si las cargas viven en otra base (temporal, ver
   // ConexionReportes) es el usuario de esa base con el mismo correo; null si allá no existe

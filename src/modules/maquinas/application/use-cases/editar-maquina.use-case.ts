@@ -49,6 +49,7 @@ export interface EditarMaquinaDto {
   patente?: unknown;
   numeroChasis?: unknown;
   esContratista?: unknown;
+  codigoEp?: unknown; // si deja de ser de contratista, se borra
   idOperador?: unknown; // null deja la máquina sin operador asignado
   estado?: unknown;
   // Solo en mantenimiento o fuera de servicio: ISO; null o '' la borra
@@ -64,7 +65,7 @@ export interface EditarMaquinaDto {
 }
 
 type CampoFicha = Exclude<keyof FichaMaquina, 'estado'>;
-const CAMPOS_FICHA: CampoFicha[] = ['nombre', 'marca', 'modelo', 'anio', 'tipoMaquina', 'patente', 'numeroChasis', 'esContratista', 'idOperador'];
+const CAMPOS_FICHA: CampoFicha[] = ['nombre', 'marca', 'modelo', 'anio', 'tipoMaquina', 'patente', 'numeroChasis', 'esContratista', 'codigoEp', 'idOperador'];
 
 // Cómo se nombra cada campo en el mensaje de conflicto
 const NOMBRE_CAMPO: Record<CampoFicha, string> = {
@@ -76,6 +77,7 @@ const NOMBRE_CAMPO: Record<CampoFicha, string> = {
   patente: 'la patente',
   numeroChasis: 'el chasis',
   esContratista: 'si es contratista',
+  codigoEp: 'el código en EP',
   idOperador: 'el operador',
 };
 
@@ -126,6 +128,7 @@ export class EditarMaquinaUseCase {
       patente: actual.patente,
       numeroChasis: actual.numeroChasis,
       esContratista: actual.esContratista,
+      codigoEp: actual.codigoEp,
       idOperador: actual.operadorAsignado?.idOperador ?? null,
       estado: esEstadoMaquina(actual.estado) ? actual.estado : 'ACTIVA',
     };
@@ -247,6 +250,9 @@ export class EditarMaquinaUseCase {
       throw maquinaError('DATOS_INVALIDOS', 'El campo contratista no es válido');
     }
 
+    const esContratista = dto.esContratista === undefined ? antes.esContratista : dto.esContratista;
+    const codigoEp = dto.codigoEp === undefined ? antes.codigoEp : textoMayusculas('codigoEp', dto.codigoEp);
+
     const marcaIngresada = dto.marca === undefined ? antes.marca : texto('marca', dto.marca);
     const tipoIngresado = dto.tipoMaquina === undefined ? antes.tipoMaquina : texto('tipoMaquina', dto.tipoMaquina);
     // Si no vienen marca ni tipo (p. ej. un cambio de estado) se mantienen los guardados sin consultar los catálogos
@@ -265,7 +271,8 @@ export class EditarMaquinaUseCase {
       tipoMaquina: marcaYTipo.tipoMaquina,
       patente: dto.patente === undefined ? antes.patente : textoMayusculas('patente', dto.patente),
       numeroChasis: dto.numeroChasis === undefined ? antes.numeroChasis : texto('numeroChasis', dto.numeroChasis),
-      esContratista: dto.esContratista === undefined ? antes.esContratista : dto.esContratista,
+      esContratista,
+      codigoEp: esContratista ? codigoEp : null,
       idOperador: operador === undefined ? antes.idOperador : (operador?.idOperador ?? null),
       estado,
     };
