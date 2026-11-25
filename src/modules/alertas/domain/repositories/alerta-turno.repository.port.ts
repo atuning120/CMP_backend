@@ -46,6 +46,8 @@ export interface AlertaTurno {
     horaTermino: Date | null;
     horometroInicial: number | null;
     horometroFinal: number | null;
+    // Cierre automático sin horómetro: el inicial del turno siguiente de la máquina (valor sugerido y máximo al regularizar)
+    horometroSiguiente?: number | null;
   };
   // Última ubicación registrada del turno
   area: string | null;

@@ -58,15 +58,18 @@ export class FinalizarTurnoUseCase {
 
   /**
    * El turno ya estaba cerrado. Si lo cerró el operador (o el sistema con el horómetro ya informado) es un reintento
-   * del mismo cierre. Si lo cerró un jefe de turno, su cierre se mantiene, pero el horómetro del operador es la
-   * lectura física: reemplaza al que informó el jefe y el turno queda marcado para revisión (nunca se descarta).
+   * del mismo cierre. Si un jefe de turno lo cerró o regularizó su horómetro, el cierre se mantiene, pero el horómetro
+   * del operador es la lectura física: reemplaza al que informó el jefe y el turno queda marcado para revisión (nunca
+   * se descarta).
    */
   private async cierreTardio(turno: Turno, horometroOperador: number): Promise<Turno> {
-    if (turno.cerradoPor === null || horometroOperador === turno.horometroFinal) return turno;
+    const regularizado = turno.horometroRegularizadoPor !== null;
+    if ((turno.cerradoPor === null && !regularizado) || horometroOperador === turno.horometroFinal) return turno;
     const valido = Number.isFinite(horometroOperador) && horometroOperador >= turno.horometroInicial;
+    const accionJefe = regularizado ? 'Regularizado' : 'Cerrado';
     const detalle = valido
-      ? `Cerrado por el jefe de turno con horómetro ${turno.horometroFinal ?? '(sin informar)'}; el operador informó ${horometroOperador} al cerrar desde la app`
-      : `El operador informó un horómetro final no válido (${horometroOperador}) después del cierre del jefe de turno`;
+      ? `${accionJefe} por el jefe de turno con horómetro ${turno.horometroFinal ?? '(sin informar)'}; el operador informó ${horometroOperador} al cerrar desde la app`
+      : `El operador informó un horómetro final no válido (${horometroOperador}) después de que el jefe de turno ${regularizado ? 'lo regularizara' : 'cerrara el turno'}`;
     // Reintento de un cierre tardío ya registrado
     if (turno.conflictoDetalle?.includes(detalle)) return turno;
     if (valido) turno.horometroFinal = horometroOperador;

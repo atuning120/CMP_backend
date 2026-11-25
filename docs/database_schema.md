@@ -108,7 +108,7 @@ erDiagram
     }
     BITACORA_JEFE_TURNO {
         int id_bitacora PK
-        string accion "INCORPORAR, EDITAR, HABILITAR, DESHABILITAR, CAMBIAR_ESTADO, REEMPLAZAR o DEVOLVER"
+        string accion "INCORPORAR, EDITAR, HABILITAR, DESHABILITAR, CAMBIAR_ESTADO, REEMPLAZAR, DEVOLVER o REGULARIZAR"
         int id_maquina FK
         int id_usuario FK
         string motivo
@@ -193,6 +193,7 @@ erDiagram
         int cerrado_por FK "jefe de turno que lo cerró por el operador"
         string motivo_cierre
         uuid id_cliente_cierre UK "cierre del jefe desde la app"
+        int horometro_regularizado_por FK "jefe que informó el horómetro de un cierre automático"
     }
     TURNO_UBICACION {
         int id_turno_ubicacion PK
@@ -286,7 +287,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJO_OBSERVACION`, `EN_MANTENIMIENTO`, `EN_RESERVA`, `BAJA` ("Sin operador" se deduce de la asignación); `nombre` y `patente` únicos (sin distinguir mayúsculas); `id_cliente` UNIQUE (incorporación idempotente) |
 | `MODELO_MAQUINA` | Modelo genérico por tipo de máquina ("Datos Previos" al incorporar una máquina); sin relaciones | (`marca`, `modelo`) únicos sin distinguir mayúsculas; `activo` default `TRUE` |
 | `DISPOSITIVO_GPS` | Equipo de telemetría | `imei` UNIQUE |
-| `BITACORA_JEFE_TURNO` | Acciones del jefe de turno sobre la flota con motivo y observación; junto con `TURNO` forma el historial | `accion` ∈ `INCORPORAR`, `EDITAR`, `HABILITAR`, `DESHABILITAR`, `CAMBIAR_ESTADO`, `REEMPLAZAR`, `DEVOLVER`; `motivo` obligatorio; `detalle` JSONB |
+| `BITACORA_JEFE_TURNO` | Acciones del jefe de turno sobre la flota con motivo y observación; junto con `TURNO` forma el historial | `accion` ∈ `INCORPORAR`, `EDITAR`, `HABILITAR`, `DESHABILITAR`, `CAMBIAR_ESTADO`, `REEMPLAZAR`, `DEVOLVER`, `REGULARIZAR` (horómetro de un cierre automático, escrita desde `alertas`; migración `026`); `motivo` obligatorio; `detalle` JSONB |
 | `REFRESH_TOKEN` | Sesiones de la app móvil (un registro por emisión; se rotan en cada `/auth/refresh`) | `token_hash` UNIQUE (nunca se guarda el token en claro); `revocado_en` NULL = vigente |
 | `VERSION_APP` | Historial de versiones de la app móvil para la página pública de descarga (migración `023`); el archivo vive en el contenedor privado `apk` de Azure Blob | `version` UNIQUE con formato `N.N.N`; `archivo` UNIQUE; `publicada` = FALSE: retirada (no se muestra ni se descarga) |
 | `ESTADO_OPERACIONAL` | Catálogo de estados del turno (con `descripcion` para la app) | `categoria` ∈ `PRODUCTIVO`, `DEMORA`, `MANTENCION`; `activo` default `TRUE` |

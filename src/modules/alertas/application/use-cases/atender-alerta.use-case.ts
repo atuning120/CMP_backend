@@ -20,10 +20,10 @@ export interface AtenderAlertaDto {
   fechaAccion?: unknown;
 }
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Las notas de una alerta no vencen: se acepta cualquier fecha pasada. Una futura (reloj del teléfono adelantado) queda en ahora
-const fechaDeAccion = (fechaAccion: unknown): Date | null => {
+export const fechaDeAccion = (fechaAccion: unknown): Date | null => {
   if (fechaAccion === undefined || fechaAccion === null) return null;
   const fecha = typeof fechaAccion === 'string' ? new Date(fechaAccion) : null;
   if (!fecha || Number.isNaN(fecha.getTime())) throw alertaError('DATOS_INVALIDOS');

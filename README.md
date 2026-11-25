@@ -57,6 +57,112 @@ $ pnpm run test:e2e
 $ pnpm run test:cov
 ```
 
+## Configurar un GPS (Jimi LL301)
+
+Cada máquina lleva un GPS Jimi LL301 (4G, a batería) que envía su posición por TCP con el protocolo GT06:
+
+```
+LL301 ── TCP 5023 ──▶ adaptador (VM) ── POST /tracking/posiciones ──▶ Backend ──▶ PostgreSQL + mapa web
+```
+
+El adaptador es el repo `CMP_adaptadorTCP`; en su README están el protocolo y el despliegue.
+
+### 1. Antes de empezar
+
+- El **IMEI** de la etiqueta del equipo (15 dígitos).
+- Un **chip con datos y SMS**. Los comandos se envían por SMS al número de ese chip y terminan siempre en `#`.
+- El equipo con batería y en un lugar con señal celular.
+- Solo la primera vez en cada base de datos: la migración
+  [`025_gps_por_maquina.sql`](docs/database/migrations/025_gps_por_maquina.sql), **antes** de desplegar el Backend.
+
+### 2. Registrar y vincular en el panel web
+
+Hacerlo antes de conectar el equipo: **las posiciones anteriores a la vinculación se descartan**. Lo puede hacer un jefe
+de turno o un administrador, solo en el panel web (la app móvil no administra GPS).
+
+1. **Flota → GPS → Registrar GPS**, con el IMEI. Si un dígito está mal copiado, lo rechaza.
+2. **Vincular** el GPS a su máquina, con un motivo (queda en el historial).
+
+### 3. Configurar el equipo por SMS
+
+Enviar los comandos de a uno y esperar la respuesta antes del siguiente. Los datos del APN son los de Entel Chile; con
+otra compañía se cambian por los suyos.
+
+| # | Comando | Respuesta esperada |
+|---|---|---|
+| 1 | `PARAM#` | El IMEI del equipo: debe ser el registrado |
+| 2 | `APN,imovil.entelpcs.cl,entelpcs,entelpcs#` | `APN set OK!` (el equipo se reinicia en 10 s: esperar un minuto) |
+| 3 | `SERVER,0,57.156.71.98,5023,0#` | `SERVER set OK!` |
+| 4 | `RESET#` | `The terminal will restart after 20 seconds!` |
+| 5 | `STATUS#`, a los 2 o 3 minutos | Ya no debe decir `GPRS:Link Down` |
+
+- `57.156.71.98` es la IP estática de la VM `cmp-adaptador-vm` (`cmp-adaptador.chilecentral.cloudapp.azure.com`). El
+  `0` del principio indica que el servidor es una IP y el del final, TCP.
+- **No enviar el comando `GMT`**: las tramas ya llegan en UTC, que es lo que espera el Backend. `PARAM#` muestra la zona
+  horaria del equipo (por ejemplo `W,4,0 (AUTO)`) y no hay que cambiarla.
+- Si `SERVER` responde un error, el equipo puede estar bloqueado a la plataforma del fabricante: pedir al proveedor que
+  lo libere.
+
+### 4. Comprobar
+
+1. Al aire libre y en movimiento unos minutos, la máquina aparece en `/mapa`, tenga o no un turno.
+2. En **Flota → GPS** se ven su última posición y su batería.
+3. Si no aparece, mirar el log del adaptador en la VM: debe verse `Login <IMEI>` y después líneas `RX`.
+
+   ```bash
+   sudo docker logs -ft adaptador 2>&1 | grep -v 'Login 9'   # sin la app móvil
+   ```
+
+   Sin SSH:
+
+   ```bash
+   az vm run-command invoke -g CMP_Capstone -n cmp-adaptador-vm --command-id RunShellScript \
+     --scripts 'docker logs -t --since 20m adaptador 2>&1 | grep <IMEI> | tail -40' --query "value[0].message" -o tsv
+   ```
+
+4. Para ver lo que se guardó:
+
+   ```sql
+   SELECT th."timestamp", m.nombre, ST_Y(th.ubicacion) AS lat, ST_X(th.ubicacion) AS lon, th.velocidad, th.nivel_bateria
+   FROM tracking_history th
+   JOIN dispositivo_gps d USING (id_gps)
+   JOIN maquina m ON m.id_maquina = th.id_maquina
+   WHERE d.imei = '<IMEI>'
+   ORDER BY th."timestamp" DESC
+   LIMIT 20;
+   ```
+
+### 5. Cambiar un GPS de máquina
+
+Instalar el equipo en la otra máquina y usar **Flota → GPS → Cambiar**. No hay que volver a configurarlo por SMS. Si una
+máquina con GPS se reemplaza en Flota, el panel ofrece pasar el GPS a la que entra. El recorrido anterior queda en la
+máquina vieja y las posiciones desde el cambio van a la nueva, según la hora de cada posición.
+
+### Cómo funciona
+
+- **El GPS manda sobre el teléfono.** Mientras una máquina tiene un GPS real vinculado, se descartan las posiciones que
+  la app móvil envía para ella. Al desvincularlo, la app vuelve a servir de GPS durante los turnos. Si el GPS se queda
+  sin batería, el teléfono no lo reemplaza hasta desvincularlo.
+- **Detenido, calla.** Quieto deja de enviar posiciones y puede dormirse por horas. Pasados 15 minutos, el mapa conserva
+  su última posición atenuada, con el texto "Sin datos desde…" (hasta 7 días). No distingue una máquina detenida de un
+  equipo sin batería o sin señal.
+- **Sin conexión, guarda.** Las posiciones que no pudo enviar llegan al reconectarse, con su hora real y a veces
+  desordenadas. Comprobado en un corte de pocos minutos; falta probar cortes largos y cuántas posiciones le caben. El
+  Backend descarta las de más de 7 días y no duplica las repetidas.
+- **Línea punteada en el trayecto:** más de 5 minutos sin posiciones. No es un recorrido real.
+- **Por revisar** (Flota → GPS): más de 24 h sin reportar o batería de 20 % o menos.
+
+### Problemas frecuentes
+
+| Síntoma | Causa probable | Qué hacer |
+|---|---|---|
+| `GPRS:Link Down` | APN mal escrito, chip sin datos o sin señal | Repetir los comandos 2 a 4 y revisar el saldo del chip |
+| No hay `Login <IMEI>` en el log | El equipo apunta a otro servidor, o el puerto no responde | Repetir `SERVER` y `RESET`; probar `nc -vz 57.156.71.98 5023` |
+| Hay `Login` y posiciones, pero no aparece en el mapa | El IMEI no está registrado o vinculado | Flota → GPS. El log del Backend dice `posiciones no se guardaron` con el IMEI |
+| Hay `Login` pero ninguna posición | Está detenido o sin cielo abierto | Moverlo al aire libre unos minutos |
+| El log dice `la hora GPS difiere…` | Cambió la hora del equipo | Revisar si se envió `GMT` |
+| La máquina se ve atenuada | No reporta hace más de 15 minutos | Normal si está detenida; si se mueve, revisar batería y señal |
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
