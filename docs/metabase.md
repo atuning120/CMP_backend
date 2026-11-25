@@ -114,10 +114,11 @@ credenciales que Metabase guarda; si se pierde hay que volver a ingresar la cont
    | `METABASE_SECRET_KEY` | la clave de incrustación (como secret) |
    | `METABASE_DASHBOARD_OPERACION` | id del dashboard Operación: el número de su URL (`/dashboard/2-operacion` → `2`) |
    | `METABASE_DASHBOARD_ESTADO_PAGO` | id del dashboard Estado de pago |
+   | `METABASE_DASHBOARD_COMPARACION` | id del dashboard Comparación |
 
    Sin ellas, `GET /dashboards/:tipo` responde 503 `METABASE_NO_CONFIGURADO`.
 2. En cada dashboard: **Compartir → Incrustar → Incrustación para invitados** → configurar parámetros → **Publicar**.
-   - Estado de pago: un filtro **Número** llamado exactamente `id_carga`, conectado a la columna `id_carga` de cada
+   - Estado de pago y Comparación: un filtro **Número** llamado exactamente `id_carga`, conectado a la columna `id_carga` de cada
      gráfico, en modo **Bloqueado**. La web lo fija con la carga vigente del mes elegido (`PARAMETRO_CARGA` en
      `obtener-dashboard.use-case.ts`).
    - Filtros de equipo, categoría o fecha que el usuario puede tocar: **Editable**.
@@ -138,7 +139,8 @@ dashboards (`ConexionReportes`): el resto del Backend sigue en `cmp_db`.
 
 - Quien sube el EP debe existir en Aiven con el mismo correo (la carga queda a nombre de ese usuario); si no, 409
   `USUARIO_SIN_CUENTA_REPORTES`. El aviso "no está en la flota" se revisa contra `cmp_db`.
-- La base de Aiven debe tener las migraciones 021, 022 y 024.
+- La base de Aiven debe tener las migraciones 021, 022, 024, 027 y 028. La comparación cruza con los turnos y máquinas de
+  **esa** base (Aiven), no con los de producción.
 - Para volver a la normalidad (antes del piloto): apuntar Metabase a `cmp_db` y quitar las `REPORTES_DB_*`. Las
   cargas hechas en Aiven no pasan solas a `cmp_db`: volver a subir los EP.
 
@@ -147,10 +149,11 @@ dashboards (`ConexionReportes`): el resto del Backend sigue en `cmp_db`.
 | Dashboard | Fuente | Filtros |
 |---|---|---|
 | **Operación** (en vivo, no depende del Excel) | `v_horas_app`, `v_estados_app` | Fecha (rango), categoría, equipo |
-| **Estado de pago** (solo el Excel del contratista, no se compara con la app) | `v_horas_excel`, `v_horometros_excel`, `v_tarifas_garantizadas`, `v_tarifas_diferenciadas` | `id_carga` (bloqueado), categoría, equipo, área |
+| **Estado de pago** (solo el Excel del contratista) | `v_horas_excel`, `v_horometros_excel`, `v_tarifas_garantizadas`, `v_tarifas_diferenciadas` | `id_carga` (bloqueado), categoría, equipo, área |
+| **Comparación** (el Excel del contratista contra la app en vivo) | `v_comparacion` | `id_carga` (bloqueado), categoría, equipo, estado |
 
 Desde la migración 021 Metabase solo ve las views (`v_cargas`, `v_horas_excel`, `v_horometros_excel`, `v_horas_app`,
-`v_estados_app` y, desde la 024, `v_tarifas_garantizadas` y `v_tarifas_diferenciadas`), no las tablas base. Sumar siempre `horas`, no los horómetros (en `v_horas_app` se repiten si el turno
+`v_estados_app` y, desde la 024, `v_tarifas_garantizadas` y `v_tarifas_diferenciadas` y, desde la 028, `v_comparacion`), no las tablas base. Sumar siempre `horas`, no los horómetros (en `v_horas_app` se repiten si el turno
 pasó por varias áreas).
 
 `v_horas_excel` tiene la misma estructura que la hoja "Base de datos" del EP desde el #08 (migración 022): `ID`,
@@ -172,6 +175,38 @@ registros con 0 horas por equipo y la tabla de saltos de horómetro.
 `Item`, `Descripcion`, `Unidad`, `Cantidad`, `P. Unitario` y `Total`, más `id_carga`. Las cargas anteriores a la 024 no
 tienen tarifas: volver a subir el EP. Al agregar las views en Metabase: **Admin → Databases → Sync database schema** si
 no aparecen solas.
+
+### Dashboard Comparación
+
+`v_comparacion` (migración 028) trae una fila por EP, equipo y jornada, así que todo se arma sumando:
+
+- `horas_excel`, `horas_app` y `diferencia` (Excel − app: positiva = el contratista cobra más horas de las que registró la
+  app).
+- `estado`: `Coincide` (hasta 0,5 h de diferencia), `Difiere`, `Solo Excel`, `Solo app` o `Falta horómetro en la app` (un
+  turno cerrado por el sistema al que falta ponerle el horómetro final, en Alertas).
+- `en_flota` = falso: el "N° Interno" del Excel no calza con ninguna máquina. Se arregla poniendo su código EP en la ficha.
+- `horometro_inicial_*` y `horometro_final_*` de los dos lados (el menor y el mayor de la jornada), para ver dónde se
+  separan. No sumarlos.
+
+La jornada es la "Fecha" del Excel: parte con el turno de noche de la tarde anterior. En la app, un turno que empieza a
+las 12:00 o después cuenta para el día siguiente. No se compara por turno de día/noche: la "Hora Inicio" del Excel no es
+confiable (trae 20:00 por defecto). Tampoco por área: el contratista usa sus propios nombres.
+
+Tarjetas sugeridas (filtro `id_carga` bloqueado en todas):
+
+| Tarjeta | Tipo | Datos |
+|---|---|---|
+| Horas Excel, Horas app, Diferencia | números | `SUM(horas_excel)`, `SUM(horas_app)`, `SUM(diferencia)` |
+| % de jornadas que coinciden | número | jornadas con `estado = 'Coincide'` / total |
+| Jornadas por estado | barras | conteo por `estado` |
+| Excel vs app por equipo | barras agrupadas | `SUM(horas_excel)` y `SUM(horas_app)` por `equipo` |
+| Diferencia por equipo | barras horizontales | `SUM(diferencia)` por `equipo` |
+| Excel vs app por jornada | líneas | `SUM(horas_excel)` y `SUM(horas_app)` por `jornada` |
+| Detalle de diferencias | tabla | filas con `estado <> 'Coincide'`, ordenadas por `ABS(diferencia)` |
+| Equipos sin máquina en la app | tabla | `codigo_excel`, `categoria`, `SUM(horas_excel)` con `en_flota = false` |
+
+La diferencia total puede ocultar errores que se compensan (+3 h un día, −3 h otro): por eso van también las jornadas por
+estado y el detalle.
 
 La carga del Excel la hace la web (ADMIN y JEFE_TURNO) con `POST /dashboards/cargas/previsualizar` y
 `POST /dashboards/cargas`; del archivo solo se leen la hoja "Base de datos" y las tablas de tarifas de la hoja

@@ -200,7 +200,7 @@ describe('Dashboards', () => {
     expect(await codigoDe(dashboard.execute({ rol: 'OPERADOR', tipo: 'OPERACION' }, ahora))).toBe('SIN_PERMISO');
   });
 
-  it('operación va sin filtros bloqueados; estado de pago bloquea la carga vigente del mes', async () => {
+  it('operación va sin filtros bloqueados; estado de pago y comparación bloquean la carga vigente del mes', async () => {
     const { dashboard, firmador, cargaRepo } = crear(null, cargaJunio);
     await expect(dashboard.execute({ rol: 'JEFE_TURNO', tipo: 'OPERACION' }, ahora)).resolves.toMatchObject({ carga: null });
     expect(firmador.firmar).toHaveBeenLastCalledWith('OPERACION', {}, ahora);
@@ -209,12 +209,17 @@ describe('Dashboards', () => {
     expect(firmador.firmar).toHaveBeenLastCalledWith('ESTADO_PAGO', { id_carga: 7 }, ahora);
     expect(cargaRepo.buscarVigente).toHaveBeenCalledWith('2026-06');
     expect(estadoPago).toMatchObject({ carga: cargaJunio, expiraEn: new Date('2026-07-02T16:00:00.000Z') });
+
+    const comparacion = await dashboard.execute({ rol: 'JEFE_TURNO', tipo: 'COMPARACION', periodo: '2026-06' }, ahora);
+    expect(firmador.firmar).toHaveBeenLastCalledWith('COMPARACION', { id_carga: 7 }, ahora);
+    expect(comparacion).toMatchObject({ carga: cargaJunio });
   });
 
   it('errores: tipo desconocido, mes sin carga, Metabase sin configurar o arrancando', async () => {
     const { dashboard, firmador } = crear(null, null);
     expect(await codigoDe(dashboard.execute({ rol: 'ADMIN', tipo: 'OTRO' }, ahora))).toBe('DASHBOARD_INVALIDO');
     expect(await codigoDe(dashboard.execute({ rol: 'ADMIN', tipo: 'ESTADO_PAGO' }, ahora))).toBe('PERIODO_INVALIDO');
+    expect(await codigoDe(dashboard.execute({ rol: 'ADMIN', tipo: 'COMPARACION' }, ahora))).toBe('PERIODO_INVALIDO');
     expect(await codigoDe(dashboard.execute({ rol: 'ADMIN', tipo: 'ESTADO_PAGO', periodo: '2026-06' }, ahora))).toBe('CARGA_NO_ENCONTRADA');
     firmador.firmar.mockReturnValueOnce(null as never);
     expect(await codigoDe(dashboard.execute({ rol: 'ADMIN', tipo: 'OPERACION' }, ahora))).toBe('METABASE_NO_CONFIGURADO');

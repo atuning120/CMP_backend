@@ -315,7 +315,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 
 ### Reportes (schema `reportes`, dashboards de Metabase)
 
-Metabase lee solo las views de este schema con el usuario `metabase_lector` (migraciones `016` y `021`); las views leen las tablas de la app con los permisos de su dueño, así que Metabase nunca ve `OPERADOR`, `USUARIO`, etc. Guía de Metabase: [`metabase.md`](metabase.md).
+Metabase lee solo las views de este schema con el usuario `metabase_lector` (migraciones `016`, `021` y `028`); las views leen las tablas de la app con los permisos de su dueño, así que Metabase nunca ve `OPERADOR`, `USUARIO`, etc. Guía de Metabase: [`metabase.md`](metabase.md).
 
 | Tabla / view | Propósito | Restricciones |
 |---|---|---|
@@ -323,8 +323,9 @@ Metabase lee solo las views de este schema con el usuario `metabase_lector` (mig
 | `carga_registro` | Filas de la hoja "Base de datos" del Excel (horas por equipo) | formato del EP desde el #08: `equipo` = "N° Interno" (código interno, `MAQUINA.nombre`), `categoria` = "Equipo" (tipo), `area` = "Area" (texto libre del contratista, no se cruza con `AREA`); `id_excel` = "ID"; `fila` = fila del Excel |
 | `carga_tarifa` | Tablas "Tarifas garantizadas" y "Tarifas diferenciadas" de la hoja "EP #NN MLC" del Excel (migración `024`) | `tipo` ∈ `GARANTIZADA`, `DIFERENCIADA`; `item` ("1.1"), `descripcion`, `unidad`, `cantidad`, `precio_unitario`, `total`; único por (`id_carga`, `fila`); Metabase no la ve, solo sus views |
 | `v_horas_app` / `v_estados_app` | Horas por turno y área / tiempo por estado operacional, en vivo | las horas de un turno con varias áreas se reparten según el tiempo en cada una; `jornada` = día del EP (migración `017`): en el Excel la jornada D empieza con el turno de noche de la tarde del día D-1, así que un turno que empieza a las 12:00 o después cuenta para el día siguiente |
-| `v_horas_excel` | Filas del Excel de las cargas vigentes, con los mismos nombres y orden de columnas que la hoja "Base de datos" (migración `022`; la comparación con la app se eliminó en la `021`) | columnas entre comillas (`"N° Interno"`); al final `"Horas Dia"` y `"Horas Noche"` (la Diferencia repartida por reloj desde la hora de inicio; suman la Diferencia) e `id_carga` |
+| `v_horas_excel` | Filas del Excel de las cargas vigentes, con los mismos nombres y orden de columnas que la hoja "Base de datos" (migración `022`) | columnas entre comillas (`"N° Interno"`); al final `"Horas Dia"` y `"Horas Noche"` (la Diferencia repartida por reloj desde la hora de inicio; suman la Diferencia) e `id_carga` |
 | `v_tarifas_garantizadas` / `v_tarifas_diferenciadas` | Tarifas de las cargas vigentes, con los nombres de columna del Excel (`"Item"`, `"Descripcion"`, `"Unidad"`, `"Cantidad"`, `"P. Unitario"`, `"Total"`) e `id_carga` | mismo orden que la hoja |
+| `v_comparacion` | Excel del EP contra las horas de la app, una fila por EP, equipo y jornada (migración `028`): `horas_excel`, `horas_app`, `diferencia` (Excel − app), horómetros de los dos lados y `estado` | `estado` ∈ `Coincide` (hasta 0,5 h), `Difiere`, `Solo Excel`, `Solo app`, `Falta horómetro en la app`; el equipo calza por `codigo_ep`, `nombre` o el número de `nombre` (3228 = CF-3228), si no `en_flota` = FALSE; usa la app en vivo, así que cambia si llega un turno atrasado o se regulariza un horómetro |
 | `v_horometros_excel` / `v_cargas` | Horómetros del Excel que no cuadran / cargas vigentes con etiqueta para el filtro | horómetros encadenados por horómetro inicial (no por fecha: el turno de noche de la jornada D va antes que el de día) |
 
 ## Relaciones (foreign keys)
