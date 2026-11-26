@@ -51,7 +51,7 @@ const crearRepos = () => {
   const turnoRepo = {
     save: jest.fn(async (turno: Turno) => Object.assign(turno, { id: turno.id ?? 99 })),
     cerrar: jest.fn<Promise<Turno | null>, [Turno, boolean, (string | null)?]>(async (turno) => turno),
-    iniciar: jest.fn(async (turno: Turno, _ubicacion: UbicacionTurno) => Object.assign(turno, { id: 99 })),
+    iniciar: jest.fn(async (turno: Turno, _ubicacion: UbicacionTurno, _activarMaquina?: boolean) => Object.assign(turno, { id: 99 })),
     findUbicacionVigente: jest.fn<Promise<UbicacionTurno | null>, [number]>(async () => ubicacionValida),
     findById: jest.fn<Promise<Turno | null>, [number]>(async () => null),
     findByIdCliente: jest.fn<Promise<Turno | null>, [string]>(async () => null),
@@ -237,6 +237,25 @@ describe('IniciarTurnoUseCase', () => {
     const result = await iniciar(repos).execute(datos);
 
     expect(result.turno?.conflicto).toBe(true);
+  });
+
+  it('una máquina "Sin operador" inicia turno sin conflicto y pasa a operativa', async () => {
+    const repos = crearRepos();
+    repos.maquinaRepo.findById.mockResolvedValueOnce({ ...maquina, estado: 'SIN_OPERADOR' }).mockResolvedValueOnce({ ...maquina, estado: 'ACTIVA' });
+
+    const result = await iniciar(repos).execute(datos);
+
+    expect(result.turno?.conflicto).toBe(false);
+    expect(repos.turnoRepo.iniciar.mock.calls[0][2]).toBe(true);
+    expect(result.maquina?.estado).toBe('ACTIVA');
+  });
+
+  it('en cualquier otro estado no cambia la máquina al iniciar', async () => {
+    const repos = crearRepos();
+
+    await iniciar(repos).execute(datos);
+
+    expect(repos.turnoRepo.iniciar.mock.calls[0][2]).toBe(false);
   });
 
   it('un turno olvidado de más de 13 h se cierra y no genera conflicto', async () => {

@@ -43,8 +43,9 @@ export interface ReemplazarMaquinaDto {
   versionBase?: unknown; // versión de la saliente que vio el jefe de turno
 }
 
-// La entrante que estaba fuera de servicio o en reserva entra a operar
-const habilitar = (maquina: MaquinaFlota) => maquina.estado === 'BAJA' || maquina.estado === 'EN_RESERVA';
+// La entrante que estaba fuera de servicio, en reserva o sin operador entra a operar (recibe al operador de la saliente;
+// al devolverla vuelve a su estado anterior)
+const habilitar = (maquina: MaquinaFlota) => maquina.estado === 'BAJA' || maquina.estado === 'EN_RESERVA' || maquina.estado === 'SIN_OPERADOR';
 
 const ESTADOS_SALIENTE: readonly EstadoSaliente[] = ['EN_MANTENIMIENTO', 'BAJA'];
 

@@ -43,7 +43,7 @@ export class MaquinaPostgresqlRepository implements MaquinaRepositoryPort {
         ORDER BY t.hora_inicio DESC
         LIMIT 1
       ) ultimo ON TRUE
-      WHERE m.estado IN ('ACTIVA', 'BAJO_OBSERVACION')
+      WHERE m.estado IN ('ACTIVA', 'BAJO_OBSERVACION', 'SIN_OPERADOR')
       ORDER BY m.nombre ASC
     `);
     return filas.map((fila) => ({

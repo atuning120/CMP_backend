@@ -92,10 +92,12 @@ export class IniciarTurnoUseCase {
       nuevoTurno.marcarConflicto(`La máquina tenía abierto el turno #${turnoMaquina.id} de otro operador`);
     }
 
-    const guardado = await this.turnoRepo.iniciar(nuevoTurno, { idArea: area.idArea, idZona: zona?.idZona ?? null });
+    // Llegó alguien a operar la máquina "Sin operador": vuelve a quedar operativa
+    const activarMaquina = maquina.estado === 'SIN_OPERADOR';
+    const guardado = await this.turnoRepo.iniciar(nuevoTurno, { idArea: area.idArea, idZona: zona?.idZona ?? null }, activarMaquina);
     return {
       turno: guardado,
-      maquina,
+      maquina: activarMaquina ? ((await this.maquinaRepo.findById(dto.idMaquina)) ?? maquina) : maquina,
       ubicacion: { area, zona },
       historialEstados: [],
       turnoCerradoAutomaticamente: null,

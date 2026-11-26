@@ -10,7 +10,7 @@ export class EditarMaquinaRequestDto {
   esContratista?: boolean;
   codigoEp?: string | null; // se borra si deja de ser de contratista
   idOperador?: number | null; // null deja la máquina sin operador
-  estado?: 'ACTIVA' | 'BAJO_OBSERVACION' | 'EN_MANTENIMIENTO' | 'EN_RESERVA' | 'BAJA';
+  estado?: 'ACTIVA' | 'BAJO_OBSERVACION' | 'EN_MANTENIMIENTO' | 'EN_RESERVA' | 'SIN_OPERADOR' | 'BAJA';
   regresoEstimado?: string | null; // ISO; solo en mantenimiento o fuera de servicio
   motivo: string;
   observacion?: string | null;

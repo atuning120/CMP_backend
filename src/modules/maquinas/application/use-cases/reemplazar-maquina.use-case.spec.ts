@@ -192,14 +192,15 @@ describe('ReemplazarMaquinaUseCase', () => {
     expect(maquinaRepo.reemplazar).not.toHaveBeenCalled();
   });
 
-  it('una entrante en reserva pasa a operativa', async () => {
+  it.each(['EN_RESERVA', 'SIN_OPERADOR'])('una entrante en %s pasa a operativa', async (estado) => {
     const { maquinaRepo, reemplazar } = crear();
-    const reserva = maquina(8, 'CF-08', { estado: 'EN_RESERVA' });
+    const reserva = maquina(8, 'CF-08', { estado });
     maquinaRepo.findFlotaById.mockImplementation(async (id: number) => (id === 8 ? reserva : id === 3 ? saliente : maquina(id, `X-${id}`)));
     await reemplazar.execute({ ...base, idMaquinaEntrante: 8 });
     const [r] = maquinaRepo.reemplazar.mock.calls[0];
     expect(r.entrante).toEqual({ idMaquina: 8, habilitar: true });
-    expect(r.accionesEntrante[0]).toMatchObject({ accion: 'CAMBIAR_ESTADO', detalle: { antes: { estado: 'EN_RESERVA' }, despues: { estado: 'ACTIVA' } } });
+    expect(r.estadoPrevioEntrante).toBe(estado);
+    expect(r.accionesEntrante[0]).toMatchObject({ accion: 'CAMBIAR_ESTADO', detalle: { antes: { estado }, despues: { estado: 'ACTIVA' } } });
   });
 
   it('sin operador si se envía null', async () => {

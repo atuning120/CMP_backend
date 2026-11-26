@@ -93,7 +93,7 @@ erDiagram
         string modelo
         int anio
         string tipo_maquina
-        string estado "ACTIVA, BAJO_OBSERVACION, EN_MANTENIMIENTO, EN_RESERVA o BAJA"
+        string estado "ACTIVA, BAJO_OBSERVACION, EN_MANTENIMIENTO, EN_RESERVA, SIN_OPERADOR o BAJA"
         string patente
         string numero_chasis
         decimal horometro_inicial
@@ -285,7 +285,7 @@ Todas las PK son `SERIAL` salvo `TRACKING_HISTORY` (PK compuesta). Los polígono
 | `AREA` | Geocerca principal de la faena | `estado` en uso: `ACTIVA`, `INACTIVA` |
 | `ZONA_TRABAJO` | Subdivisión de un área | `estado` en uso: `ACTIVA`, `INACTIVA` |
 | `AUDITORIA_GEOCERCA` | Historial de cambios de áreas y zonas | `entidad` ∈ `AREA`, `ZONA`; `accion` ∈ `CREAR`, `EDITAR`, `DESACTIVAR`; `id_entidad` es polimórfico (sin FK) |
-| `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJO_OBSERVACION`, `EN_MANTENIMIENTO`, `EN_RESERVA`, `BAJA` ("Sin operador" se deduce de la asignación); `nombre` y `patente` únicos (sin distinguir mayúsculas); `id_cliente` UNIQUE (incorporación idempotente) |
+| `MAQUINA` | Equipo de la flota | `estado` ∈ `ACTIVA`, `BAJO_OBSERVACION`, `EN_MANTENIMIENTO`, `EN_RESERVA`, `SIN_OPERADOR`, `BAJA` ("Sin asignar" se deduce de la asignación); `nombre` y `patente` únicos (sin distinguir mayúsculas); `id_cliente` UNIQUE (incorporación idempotente) |
 | `MODELO_MAQUINA` | Modelo genérico por tipo de máquina ("Datos Previos" al incorporar una máquina); sin relaciones | (`marca`, `modelo`) únicos sin distinguir mayúsculas; `activo` default `TRUE` |
 | `DISPOSITIVO_GPS` | Equipo de telemetría | `imei` UNIQUE |
 | `BITACORA_JEFE_TURNO` | Acciones del jefe de turno sobre la flota con motivo y observación; junto con `TURNO` forma el historial | `accion` ∈ `INCORPORAR`, `EDITAR`, `HABILITAR`, `DESHABILITAR`, `CAMBIAR_ESTADO`, `REEMPLAZAR`, `DEVOLVER`, `REGULARIZAR` (horómetro de un cierre automático, escrita desde `alertas`; migración `026`); `motivo` obligatorio; `detalle` JSONB |
@@ -394,7 +394,7 @@ Metabase lee solo las views de este schema con el usuario `metabase_lector` (mig
 - Un turno abierto más de 13 h pasa a `CERRADO_AUTO` con `hora_termino` = `hora_inicio` + 13 h y `horometro_final` NULL (`CerrarTurnosExcedidosUseCase` + scheduler cada 5 min).
 - Al cerrar un turno (manual o automático) se cierra su `TURNO_UBICACION` vigente.
 - `TURNO_UBICACION.id_zona`, si viene, debe pertenecer al `id_area` del mismo registro (validado en la aplicación, no en la BD).
-- Una máquina `EN_MANTENIMIENTO`, `EN_RESERVA` o `BAJA` no trabaja: no aparece para iniciar turno (si llega un inicio offline, se acepta como conflicto) y no se puede pasar a esos estados con un turno en curso. `BAJO_OBSERVACION` sí opera.
+- Una máquina `EN_MANTENIMIENTO`, `EN_RESERVA` o `BAJA` no trabaja: no aparece para iniciar turno (si llega un inicio offline, se acepta como conflicto) y no se puede pasar a esos estados con un turno en curso. `BAJO_OBSERVACION` sí opera. `SIN_OPERADOR` también puede iniciar turno: al iniciarlo, la máquina pasa sola a `ACTIVA` (bitácora `CAMBIAR_ESTADO`, motivo "Inicio de turno"); no se puede pasar a `SIN_OPERADOR` con un turno en curso.
 - Para sacar de operación una máquina con turno en curso, el jefe de turno primero cierra ese turno (`POST /turnos/maquina/:id/cierre`, con `horometro_final` y motivo); queda en `cerrado_por` / `motivo_cierre` y la app del operador lo informa. Desde la app se puede hacer sin señal: envía el `id_turno` que vio, la hora en que tomó el horómetro e `id_cliente_cierre`; gana el primer cierre que llega al servidor y, si perdió, responde `TURNO_YA_CERRADO` con quién y a qué hora.
 - Reemplazo: la saliente queda `EN_MANTENIMIENTO` o `BAJA` (con `regreso_estimado` opcional), apunta a su respaldo en `id_maquina_respaldo` y guarda en `estado_previo_respaldo` el estado que tenía el respaldo. La devolución (`POST /maquinas/:id/devolucion`) la deja `ACTIVA` con el operador del respaldo, devuelve el respaldo a ese estado y borra el enlace. `regreso_estimado` se borra al volver a un estado operativo.
 - Fatiga por jornada: los turnos de un operador separados por menos de 8 h de descanso forman una jornada; al sumar 10 h trabajadas en una jornada de varios turnos se genera la alerta `JORNADA_EXTENDIDA` (calculada desde `TURNO`, no se guarda).
