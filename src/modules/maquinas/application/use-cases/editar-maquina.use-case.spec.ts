@@ -97,7 +97,7 @@ describe('EditarMaquinaUseCase', () => {
     expect(maquinaRepo.actualizar).toHaveBeenLastCalledWith(3, 1, { estado: 'EN_MANTENIMIENTO' }, [
       { ...registro, accion: 'CAMBIAR_ESTADO', detalle: { antes: { estado: 'ACTIVA' }, despues: { estado: 'EN_MANTENIMIENTO' } } },
     ]);
-    expect(await codigoDe(editar.execute({ ...base, estado: 'SIN_OPERADOR' }))).toBe('DATOS_INVALIDOS');
+    expect(await codigoDe(editar.execute({ ...base, estado: 'OTRO' }))).toBe('DATOS_INVALIDOS');
   });
 
   it('un cambio solo de estado no consulta catálogos y relee la máquina para entregar su nueva versión', async () => {
@@ -316,7 +316,7 @@ describe('EditarMaquinaUseCase', () => {
     ]);
   });
 
-  it.each(['EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA'])('no pasa a %s una máquina con turno en curso', async (estado) => {
+  it.each(['EN_MANTENIMIENTO', 'EN_RESERVA', 'SIN_OPERADOR', 'BAJA'])('no pasa a %s una máquina con turno en curso', async (estado) => {
     const { maquinaRepo, editar } = crear({ enUso: true });
     expect(await codigoDe(editar.execute({ ...base, estado }))).toBe('MAQUINA_EN_USO');
     expect(maquinaRepo.actualizar).not.toHaveBeenCalled();
@@ -326,6 +326,12 @@ describe('EditarMaquinaUseCase', () => {
     const { maquinaRepo, editar } = crear({ enUso: true });
     await editar.execute({ ...base, estado: 'BAJO_OBSERVACION' });
     expect(maquinaRepo.actualizar).toHaveBeenCalled();
+  });
+
+  it('sin operador no lleva fecha estimada de regreso', async () => {
+    const { editar } = crear();
+    const futura = new Date(Date.now() + 40 * 3600_000).toISOString();
+    expect(await codigoDe(editar.execute({ ...base, estado: 'SIN_OPERADOR', regresoEstimado: futura }))).toBe('DATOS_INVALIDOS');
   });
 
   it('en mantenimiento guarda la fecha estimada de regreso y la deja en la bitácora', async () => {

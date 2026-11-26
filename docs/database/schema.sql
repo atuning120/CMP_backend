@@ -79,7 +79,7 @@ CREATE TABLE MAQUINA (
     modelo          VARCHAR(50),
     anio            INT,
     tipo_maquina    VARCHAR(50),
-    estado          VARCHAR(20) CHECK (estado IN ('ACTIVA', 'BAJO_OBSERVACION', 'EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA')),
+    estado          VARCHAR(20) CHECK (estado IN ('ACTIVA', 'BAJO_OBSERVACION', 'EN_MANTENIMIENTO', 'EN_RESERVA', 'SIN_OPERADOR', 'BAJA')),
     patente           VARCHAR(15),
     numero_chasis     VARCHAR(50), -- N° de chasis / serie (VIN)
     horometro_inicial NUMERIC(10,2), -- al incorporarse a planta; luego manda el horómetro de los turnos
@@ -97,7 +97,7 @@ CREATE TABLE MAQUINA (
     CONSTRAINT fk_maquina_respaldo FOREIGN KEY (id_maquina_respaldo) REFERENCES MAQUINA(id_maquina) ON DELETE SET NULL,
     CONSTRAINT fk_maquina_actualizado_por FOREIGN KEY (actualizado_por) REFERENCES USUARIO(id_usuario) ON DELETE SET NULL,
     CONSTRAINT ck_maquina_estado_previo_respaldo
-        CHECK (estado_previo_respaldo IN ('ACTIVA', 'BAJO_OBSERVACION', 'EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA'))
+        CHECK (estado_previo_respaldo IN ('ACTIVA', 'BAJO_OBSERVACION', 'EN_MANTENIMIENTO', 'EN_RESERVA', 'SIN_OPERADOR', 'BAJA'))
 );
 
 -- El código interno (nombre) y la patente identifican a la máquina en faena: no se pueden repetir

@@ -96,8 +96,8 @@ export interface RegistroBitacora {
 }
 
 // ACTIVA = Operativo; BAJA = Fuera de servicio (no puede iniciar turno; es la única que se puede reemplazar).
-// "Sin operador" no es un estado: se deduce de que la máquina no tenga operador asignado
-export const ESTADOS_MAQUINA = ['ACTIVA', 'BAJO_OBSERVACION', 'EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA'] as const;
+// SIN_OPERADOR = parada porque no hay quien la opere. "Sin asignar" (nadie la tiene asignada) no es un estado: se deduce
+export const ESTADOS_MAQUINA = ['ACTIVA', 'BAJO_OBSERVACION', 'EN_MANTENIMIENTO', 'EN_RESERVA', 'SIN_OPERADOR', 'BAJA'] as const;
 export type EstadoMaquina = (typeof ESTADOS_MAQUINA)[number];
 export const esEstadoMaquina = (valor: unknown): valor is EstadoMaquina => ESTADOS_MAQUINA.includes(valor as EstadoMaquina);
 
@@ -105,6 +105,9 @@ export const esEstadoMaquina = (valor: unknown): valor is EstadoMaquina => ESTAD
 // ni pasarla a ellos con un turno en curso. "Bajo observación" sí opera, vigilada
 export const ESTADOS_SIN_OPERAR: readonly EstadoMaquina[] = ['EN_MANTENIMIENTO', 'EN_RESERVA', 'BAJA'];
 export const operaEnEstado = (estado: string | null) => !ESTADOS_SIN_OPERAR.includes(estado as EstadoMaquina);
+// "Sin operador" sí puede iniciar turno (y al iniciarlo pasa sola a ACTIVA), pero no tiene sentido marcarla así
+// mientras alguien la está operando: primero se cierra ese turno
+export const admiteTurnoEnCurso = (estado: EstadoMaquina) => operaEnEstado(estado) && estado !== 'SIN_OPERADOR';
 // Estados con fecha estimada de regreso (una reparación de 40 h, una falla mayor)
 export const ESTADOS_CON_REGRESO: readonly EstadoMaquina[] = ['EN_MANTENIMIENTO', 'BAJA'];
 // Estado de la máquina que sale en un reemplazo

@@ -71,7 +71,7 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
     await manager.update(TurnoEstadoOrmEntity, { id_turno: idTurno, fin: IsNull() }, { fin });
   }
 
-  async iniciar(turno: Turno, ubicacion: UbicacionTurno): Promise<Turno> {
+  async iniciar(turno: Turno, ubicacion: UbicacionTurno, activarMaquina = false): Promise<Turno> {
     const iniciado = await this.ormRepository.manager.transaction(async (manager) => {
       const saved = await this.saveWith(manager, turno);
       await manager.save(
@@ -83,10 +83,35 @@ export class TurnoPostgresqlRepository implements TurnoRepositoryPort {
           fin: null,
         }),
       );
+      if (activarMaquina) await this.activarMaquinaSinOperador(manager, saved);
       return this.mapToDomain(saved);
     });
     this.avisarCambio();
     return iniciado;
+  }
+
+  /**
+   * Llegó alguien a operar una máquina "Sin operador": vuelve a ACTIVA. No se toca si un jefe de turno la cambió después
+   * de que empezó el turno (un inicio sin señal que llega tarde no pisa ese cambio). La versión sube para que un jefe con
+   * la flota desactualizada vea el conflicto. En la bitácora queda a nombre del usuario del operador (si tiene uno)
+   */
+  private async activarMaquinaSinOperador(manager: EntityManager, turno: TurnoOrmEntity) {
+    await manager.query(
+      `WITH activada AS (
+         UPDATE maquina SET estado = 'ACTIVA', version = version + 1
+         WHERE id_maquina = $1 AND estado = 'SIN_OPERADOR' AND (actualizado_en IS NULL OR actualizado_en <= $3)
+         RETURNING id_maquina
+       )
+       INSERT INTO bitacora_jefe_turno (accion, id_maquina, id_usuario, motivo, detalle, fecha)
+       SELECT 'CAMBIAR_ESTADO', a.id_maquina, u.id_usuario, 'Inicio de turno', $4::jsonb, $3
+       FROM activada a JOIN usuario u ON u.id_operador = $2`,
+      [
+        turno.id_maquina,
+        turno.id_operador,
+        turno.hora_inicio,
+        JSON.stringify({ antes: { estado: 'SIN_OPERADOR' }, despues: { estado: 'ACTIVA' }, idTurno: turno.id_turno }),
+      ],
+    );
   }
 
   async findUbicacionVigente(idTurno: number): Promise<UbicacionTurno | null> {

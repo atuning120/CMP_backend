@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
+  admiteTurnoEnCurso,
   ESTADOS_CON_REGRESO,
   esEstadoMaquina,
   MAQUINA_REPOSITORY,
-  operaEnEstado,
 } from '../../domain/repositories/maquina.repository.port';
 import type {
   AccionBitacora,
@@ -157,8 +157,9 @@ export class EditarMaquinaUseCase {
       throw maquinaError('PATENTE_DUPLICADA', despues.patente);
     }
     // Un operador la está usando: sacarla de operación dejaría su turno en una máquina que no trabaja.
-    // El jefe de turno primero cierra ese turno (con el horómetro final) y luego cambia el estado
-    if (cambiaEstado && !operaEnEstado(despues.estado) && (await this.maquinaRepo.tieneTurnoEnCurso(idMaquina))) {
+    // El jefe de turno primero cierra ese turno (con el horómetro final) y luego cambia el estado. Lo mismo para
+    // marcarla sin operador: alguien la está operando
+    if (cambiaEstado && !admiteTurnoEnCurso(despues.estado) && (await this.maquinaRepo.tieneTurnoEnCurso(idMaquina))) {
       throw maquinaError('MAQUINA_EN_USO', antes.nombre);
     }
 

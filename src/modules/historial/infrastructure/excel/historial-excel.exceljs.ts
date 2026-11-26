@@ -29,6 +29,7 @@ const ESTADOS_MAQUINA: Record<string, string> = {
   BAJO_OBSERVACION: 'Operativa bajo observación',
   EN_MANTENIMIENTO: 'En mantenimiento',
   EN_RESERVA: 'En reserva',
+  SIN_OPERADOR: 'Sin operador',
   BAJA: 'Fuera de servicio',
 };
 
@@ -166,12 +167,13 @@ interface Color {
 
 // Color de cada movimiento según cómo queda el equipo (mismos colores de estado que el panel web); los que no
 // cambian el estado son una incorporación o una edición de la ficha
-type ClaseMovimiento = 'ACTIVA' | 'BAJO_OBSERVACION' | 'EN_MANTENIMIENTO' | 'EN_RESERVA' | 'BAJA' | 'INCORPORAR' | 'EDITAR';
+type ClaseMovimiento = 'ACTIVA' | 'BAJO_OBSERVACION' | 'EN_MANTENIMIENTO' | 'EN_RESERVA' | 'SIN_OPERADOR' | 'BAJA' | 'INCORPORAR' | 'EDITAR';
 const CLASES_MOVIMIENTO: Record<ClaseMovimiento, Color> = {
   ACTIVA: { etiqueta: 'Operativa', fuerte: 'FF1E8E3E', texto: 'FFFFFFFF', medio: 'FFCEEAD6' },
   BAJO_OBSERVACION: { etiqueta: 'Operativa bajo observación', fuerte: 'FFF9AB00', texto: 'FF000000', medio: 'FFFEEFC3' },
   EN_MANTENIMIENTO: { etiqueta: 'En mantenimiento', fuerte: 'FF1A73E8', texto: 'FFFFFFFF', medio: 'FFD2E3FC' },
   EN_RESERVA: { etiqueta: 'En reserva', fuerte: 'FF80868B', texto: 'FFFFFFFF', medio: 'FFDADCE0' },
+  SIN_OPERADOR: { etiqueta: 'Sin operador', fuerte: 'FFE8710A', texto: 'FFFFFFFF', medio: 'FFFEDFC8' },
   BAJA: { etiqueta: 'Fuera de servicio', fuerte: 'FFD93025', texto: 'FFFFFFFF', medio: 'FFFAD2CF' },
   INCORPORAR: { etiqueta: 'Incorporación', fuerte: 'FF8E24AA', texto: 'FFFFFFFF', medio: 'FFEBD7F0' },
   EDITAR: { etiqueta: 'Edición de ficha', fuerte: 'FF5F6368', texto: 'FFFFFFFF', medio: 'FFF1F3F4' },
@@ -654,13 +656,14 @@ export class HistorialExcelExceljs implements HistorialExcelPort {
       encabezadoHoja(hoja, {
         titulo: 'Movimientos de flota',
         resumen: `Rango: ${rango}  ·  ${movimientos.length} movimientos  ·  ${generado}`,
-        nota: 'Color según cómo queda el equipo:',
+        nota: 'Color según cómo queda:',
         columnas: COLUMNAS_MOVIMIENTOS.length,
         pestana: 'FFF9AB00',
       });
       escribirTabla(hoja, COLUMNAS_MOVIMIENTOS, movimientos, (i) => CLASES_MOVIMIENTO[clases[i]].medio);
-      // La nota hace de título de la leyenda: ocupa las columnas anteriores, alineada hacia ella
-      const desdeLeyenda = hoja.getColumn('tipo').number;
+      // La nota hace de título de la leyenda: ocupa las columnas anteriores, alineada hacia ella. La leyenda parte en
+      // Equipo para que sus 8 colores quepan en el ancho de la tabla
+      const desdeLeyenda = hoja.getColumn('equipo').number;
       hoja.mergeCells(3, 1, 3, desdeLeyenda - 1);
       hoja.getCell('A3').alignment = { vertical: 'middle', horizontal: 'right' };
       hoja.getCell('A3').font = { bold: true, color: { argb: COLOR_NOTA } };

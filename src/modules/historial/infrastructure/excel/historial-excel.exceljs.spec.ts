@@ -233,13 +233,14 @@ describe('HistorialExcelExceljs', () => {
     expect(flota.getCell('J').value).toBe('Cambió el estado de 3239 · regreso estimado 10-10-2026');
     // Color según cómo queda el equipo (en mantenimiento: azul), con la leyenda sobre la tabla
     expect(flota.getCell('A').fill).toMatchObject({ fgColor: { argb: 'FFD2E3FC' } });
-    expect(hojaFlota.getCell('A3').value).toBe('Color según cómo queda el equipo:');
-    expect(['D3', 'F3', 'I3', 'J3'].map((c) => hojaFlota.getCell(c).value)).toEqual([
+    expect(hojaFlota.getCell('A3').value).toBe('Color según cómo queda:');
+    expect(['C3', 'E3', 'G3', 'J3'].map((c) => hojaFlota.getCell(c).value)).toEqual([
       'Operativa',
       'En mantenimiento',
-      'Incorporación',
+      'Sin operador',
       'Edición de ficha',
     ]);
+    expect(hojaFlota.getCell('K3').value).toBeNull();
   });
 
   it('cada tipo lleva solo sus hojas', async () => {

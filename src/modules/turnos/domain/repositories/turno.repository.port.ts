@@ -15,8 +15,9 @@ export interface TurnoRepositoryPort {
   findUltimoRegistro(idTurno: number): Promise<Date | null>;
   // Quién cerró el turno (operador, jefe de turno o el sistema) y cuándo; null si sigue abierto
   findCierre(idTurno: number): Promise<{ por: string; fecha: Date } | null>;
-  // Crea el turno junto a su ubicación inicial en una sola transacción.
-  iniciar(turno: Turno, ubicacion: UbicacionTurno): Promise<Turno>;
+  // Crea el turno junto a su ubicación inicial en una sola transacción. Con activarMaquina, si la máquina sigue
+  // "Sin operador" y nadie la cambió después del inicio del turno, pasa a ACTIVA (queda en la bitácora)
+  iniciar(turno: Turno, ubicacion: UbicacionTurno, activarMaquina?: boolean): Promise<Turno>;
   findById(id: number): Promise<Turno | null>;
   findByIdCliente(idCliente: string): Promise<Turno | null>;
   findActivoByMaquina(idMaquina: number): Promise<Turno | null>;
